@@ -1,0 +1,373 @@
+/* ==========================================================================
+   POS TERMINAL PAGE STYLES
+   ========================================================================== */
+
+.pos-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-canvas);
+  overflow: hidden;
+}
+
+/* Header */
+.pos-header {
+  height: var(--header-height);
+  background-color: var(--brand-900);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.pos-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pos-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.pos-time {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--brand-300);
+  letter-spacing: 0.02em;
+}
+
+.pos-header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pos-user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--brand-200);
+}
+
+.pos-divider {
+  color: var(--brand-500);
+}
+
+/* 2-Column POS Body */
+.pos-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Left Pane (Cart & Tabs) - 68% */
+.pos-cart-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.pos-cart-tabs {
+  padding: 8px 12px 4px 12px;
+  background-color: var(--brand-50);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.pos-cart-searchbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background-color: #ffffff;
+}
+
+.pos-cart-table-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+}
+
+.pos-cart-footer {
+  height: 48px;
+  padding: 0 16px;
+  background-color: var(--brand-50);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.pos-note-input {
+  flex: 1;
+  height: 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 0 8px;
+  font-size: 12px;
+  background-color: #ffffff;
+  outline: none;
+}
+.pos-note-input:focus {
+  border-color: var(--primary-600);
+}
+
+/* Table controls */
+.cart-qty-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--brand-100);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--brand-800);
+  cursor: pointer;
+}
+.cart-qty-btn:hover {
+  background-color: var(--brand-200);
+}
+
+.cart-delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-xs);
+  font-size: 13px;
+}
+.cart-delete-btn:hover {
+  background-color: var(--danger-50);
+  color: var(--danger-600);
+}
+
+/* Right Pane (Payment) - 32% (Min 340px, Max 420px) */
+.pos-payment-panel {
+  width: 380px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--brand-50);
+  padding: 14px 16px;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.pos-customer-box {
+  background-color: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pos-calc-box {
+  background-color: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pos-calc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.pos-discount-input {
+  width: 100px;
+  height: 28px;
+  text-align: right;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 0 6px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  outline: none;
+}
+.pos-discount-input:focus {
+  border-color: var(--primary-600);
+}
+
+.pos-calc-divider {
+  height: 1px;
+  background-color: var(--border-subtle);
+  margin: 4px 0;
+}
+
+.pos-total-row {
+  padding-top: 4px;
+}
+
+.pos-total-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand-900);
+}
+
+.pos-total-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--success-700);
+}
+
+/* Payment Methods */
+.pos-method-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pos-method-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.pos-method-btn {
+  padding: 8px 4px;
+  font-size: 12px;
+  font-weight: 500;
+  background-color: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--brand-700);
+  transition: all 0.15s ease;
+}
+
+.pos-method-btn.active {
+  background-color: var(--primary-50);
+  border-color: var(--primary-600);
+  color: var(--primary-700);
+  font-weight: 600;
+}
+
+/* Cash Tender Box */
+.pos-cash-box {
+  background-color: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pos-received-input {
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 0 24px 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  text-align: right;
+  outline: none;
+}
+.pos-received-input:focus {
+  border-color: var(--primary-600);
+}
+
+.pos-input-currency {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.pos-quick-cash {
+  display: flex;
+  gap: 6px;
+}
+
+.pos-cash-chip {
+  flex: 1;
+  padding: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  background-color: var(--brand-100);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  color: var(--brand-800);
+}
+.pos-cash-chip:hover {
+  background-color: var(--brand-200);
+}
+
+.pos-change-row {
+  border-top: 1px dashed var(--border-subtle);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+/* Action Buttons Box */
+.pos-actions-box {
+  margin-top: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.pos-btn-cancel {
+  flex: 1;
+}
+
+.pos-btn-pay {
+  flex: 2;
+  font-size: 16px !important;
+}
+
+/* Footer Hotkeys */
+.pos-footer {
+  height: var(--bottombar-height);
+  background-color: var(--brand-900);
+  color: var(--brand-200);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.pos-hotkey-list {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.pos-hotkey-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}

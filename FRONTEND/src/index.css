@@ -1,111 +1,171 @@
+/* ==========================================================================
+   POS & INVENTORY MANAGEMENT - DESIGN SYSTEM & BASE TOKENS
+   Strictly adheres to Human UI Design Skill & Desktop Electron Ergonomics
+   ========================================================================== */
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  /* Brand & Neutrals (Slate/Navy) */
+  --brand-900: #0f172a;
+  --brand-800: #1e293b;
+  --brand-700: #334155;
+  --brand-600: #475569;
+  --brand-500: #64748b;
+  --brand-400: #94a3b8;
+  --brand-300: #cbd5e1;
+  --brand-200: #e2e8f0;
+  --brand-100: #f1f5f9;
+  --brand-50:  #f8fafc;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /* Primary Accent (Blue for back-office links & active tabs) */
+  --primary-600: #2563eb;
+  --primary-700: #1d4ed8;
+  --primary-50:  #eff6ff;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
+  /* Functional Status Colors (Restrained, no neon) */
+  --success-600: #059669; /* Thanh toán, Còn hàng, Online */
+  --success-700: #047857;
+  --success-50:  #ecfdf5;
+  --success-border: #a7f3d0;
+
+  --warning-600: #d97706; /* Tồn kho thấp, Chờ thanh toán */
+  --warning-700: #b45309;
+  --warning-50:  #fffbeb;
+  --warning-border: #fde68a;
+
+  --danger-600:  #dc2626; /* Hết hàng, Xóa dòng, Hủy đơn */
+  --danger-700:  #b91c1c;
+  --danger-50:   #fef2f2;
+  --danger-border: #fecaca;
+
+  /* Surface & Text */
+  --bg-canvas:   #f8fafc;
+  --bg-surface:  #ffffff;
+  --bg-subtle:   #f1f5f9;
+  --text-main:   #0f172a;
+  --text-muted:  #64748b;
+  --text-light:  #94a3b8;
+  --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Radii (Restrained 4px - 8px, strictly avoid generic AI pill/balloon shapes) */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+
+  /* Elevation (Subtle, clean 1px border over heavy box-shadow) */
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+  --shadow-modal: 0 20px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.08);
+
+  /* Layout Dimensions */
+  --titlebar-height: 38px;
+  --header-height: 52px;
+  --sidebar-width: 240px;
+  --bottombar-height: 38px;
+}
+
+/* ==========================================================================
+   Base Resets for Desktop Application
+   ========================================================================== */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* Desktop apps manage their own scroll areas */
+  background-color: var(--bg-canvas);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 14px; /* Optimal reading & data density for POS */
+  line-height: 1.45;
+  font-feature-settings: "cv02", "cv03", "tnum"; /* Enable tabular numbers for prices */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  user-select: none; /* Prevent accidental text selection during fast touchscreen/mouse clicks */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
-body {
-  margin: 0;
+/* Allow text selection specifically for data cells and code */
+input, textarea, [contenteditable="true"], .selectable {
+  user-select: text;
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+/* ==========================================================================
+   Scrollbar styling (Subtle desktop scrollbars)
+   ========================================================================== */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
+::-webkit-scrollbar-thumb {
+  background: var(--brand-300);
+  border-radius: var(--radius-xs);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-400);
+}
+
+/* ==========================================================================
+   Keyboard Shortcut Badges (KBD)
+   ========================================================================== */
+
+kbd {
   display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 5px;
+  background-color: var(--brand-100);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  color: var(--brand-700);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.1);
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+/* ==========================================================================
+   Utility Classes & Tabular Data
+   ========================================================================== */
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
+
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+
+.text-muted { color: var(--text-muted); }
+.text-danger { color: var(--danger-600); }
+.text-success { color: var(--success-600); }
+.text-warning { color: var(--warning-600); }

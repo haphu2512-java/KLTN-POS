@@ -1,0 +1,134 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Modal, Input, Table, Badge, Button } from '../../components/common';
+import { formatCurrency } from '../../utils/formatters';
+
+export default function ProductSearchModal({
+  isOpen,
+  onClose,
+  products = [],
+  onSelectProduct
+}) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSearchTerm('');
+      setTimeout(() => inputRef.current?.focus(), 80);
+    }
+  }, [isOpen]);
+
+  const filtered = products.filter((p) => {
+    const term = searchTerm.toLowerCase().trim();
+    if (!term) return true;
+    return (
+      p.name.toLowerCase().includes(term) ||
+      p.barcode.includes(term) ||
+      p.category.toLowerCase().includes(term)
+    );
+  });
+
+  const columns = [
+    {
+      key: 'barcode',
+      title: 'Mã vạch (Barcode)',
+      width: '130px',
+      render: (val) => (
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
+          {val}
+        </span>
+      )
+    },
+    {
+      key: 'name',
+      title: 'Tên hàng hóa',
+      render: (val, row) => (
+        <div>
+          <div className="font-medium">{val}</div>
+          <span className="text-muted" style={{ fontSize: '11px' }}>
+            {row.category} • ĐVT: {row.unit}
+          </span>
+        </div>
+      )
+    },
+    {
+      key: 'stock',
+      title: 'Tồn kho',
+      width: '110px',
+      align: 'center',
+      render: (val) => {
+        if (val <= 0) return <Badge variant="danger">Hết hàng</Badge>;
+        if (val <= 5) return <Badge variant="warning">{val} (Sắp hết)</Badge>;
+        return <Badge variant="success">{val}</Badge>;
+      }
+    },
+    {
+      key: 'salePrice',
+      title: 'Giá bán',
+      width: '110px',
+      align: 'right',
+      render: (val) => (
+        <span className="font-semibold tabular-nums text-success">
+          {formatCurrency(val)}
+        </span>
+      )
+    },
+    {
+      key: 'action',
+      title: '',
+      width: '90px',
+      align: 'center',
+      render: (_, row) => (
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={row.stock <= 0}
+          onClick={() => {
+            onSelectProduct(row);
+            onClose();
+          }}
+        >
+          Chọn
+        </Button>
+      )
+    }
+  ];
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Tra cứu & Chọn sản phẩm (F2)"
+      maxWidth="720px"
+      footer={
+        <Button variant="secondary" onClick={onClose}>
+          Đóng (Esc)
+        </Button>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <Input
+          ref={inputRef}
+          placeholder="Nhập tên hàng hóa, mã vạch hoặc danh mục..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          prefix="🔍"
+          autoFocus
+        />
+
+        <Table
+          columns={columns}
+          data={filtered}
+          maxHeight="380px"
+          emptyText="Không tìm thấy sản phẩm nào phù hợp"
+          onRowClick={(row) => {
+            if (row.stock > 0) {
+              onSelectProduct(row);
+              onClose();
+            }
+          }}
+        />
+      </div>
+    </Modal>
+  );
+}

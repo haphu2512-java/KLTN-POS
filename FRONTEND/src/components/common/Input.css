@@ -1,0 +1,82 @@
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.input-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--brand-700);
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input-wrapper:focus-within {
+  border-color: var(--primary-600);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.input-wrapper.has-error {
+  border-color: var(--danger-600);
+}
+
+.input-wrapper.has-error:focus-within {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+.input-control {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 8px 12px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-main);
+  outline: none;
+}
+
+.input-control::placeholder {
+  color: var(--text-light);
+}
+
+.input-control:disabled {
+  background-color: var(--brand-50);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* Sizing */
+.input-sm .input-control {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.input-lg .input-control {
+  padding: 10px 14px;
+  font-size: 16px;
+}
+
+/* Prefix / Suffix */
+.input-prefix, .input-suffix {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.input-error-msg {
+  font-size: 12px;
+  color: var(--danger-600);
+}
