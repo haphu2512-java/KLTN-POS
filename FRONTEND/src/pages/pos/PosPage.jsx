@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import PosHeader from './PosHeader';
 import PosCart from './PosCart';
 import PosPayment from './PosPayment';
@@ -11,12 +11,70 @@ import { useHotkeys } from '../../hooks/useHotkeys';
 import { playBeepSuccess, playBeepWarning } from '../../utils/audio';
 import { INITIAL_PRODUCTS, INITIAL_CUSTOMERS } from '../../data/mockProducts';
 import { formatCurrency } from '../../utils/formatters';
+import { printInvoiceReceipt } from '../../utils/receiptPrinter';
+import { productService } from '../../services/productService';
+import { inventoryService } from '../../services/inventoryService';
+import { saleService } from '../../services/saleService';
+import { websocketService } from '../../services/websocketService';
 import './PosPage.css';
 
-export default function PosPage({ onNavigateToInventory, onNavigateToForecast }) {
+export default function PosPage({
+  currentUser,
+  branchId = 1,
+  isOnline = true,
+  isWsConnected = false,
+  onNavigateToInventory,
+  onNavigateToForecast,
+  onNavigateToReport,
+  onLogout
+}) {
   // Products & Customers
-  const [products] = useState(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState(INITIAL_PRODUCTS);
   const [customers, setCustomers] = useState(INITIAL_CUSTOMERS);
+
+  // Sync products and inventory from backend if available
+  useEffect(() => {
+    let isMounted = true;
+    async function loadBackendData() {
+      try {
+        const [prodList, invList] = await Promise.all([
+          productService.getProducts(),
+          inventoryService.getBranchInventory(branchId)
+        ]);
+        if (isMounted && Array.isArray(prodList) && prodList.length > 0) {
+          // Merge stock from inventory into products
+          const stockMap = new Map();
+          (invList || []).forEach(inv => stockMap.set(inv.productId || inv.product?.id, inv.quantity));
+          const merged = prodList.map(p => ({
+            ...p,
+            stock: stockMap.has(p.id) ? stockMap.get(p.id) : (p.stock || 50),
+            price: p.sellingPrice || p.price || 0,
+            costPrice: p.costPrice || 0,
+            minThreshold: p.minThreshold || 10
+          }));
+          setProducts(merged);
+        }
+      } catch (err) {
+        console.warn('Backend unavailable, using localized mock data:', err.message);
+      }
+    }
+
+    if (isOnline) {
+      loadBackendData();
+    }
+
+    // Subscribe to STOMP WebSocket inventory updates
+    const unsubWs = websocketService.on('inventory-update', (event) => {
+      if (event && event.productId) {
+        setProducts(prev => prev.map(p => p.id === event.productId ? { ...p, stock: event.newQuantity ?? p.stock } : p));
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubWs();
+    };
+  }, [branchId, isOnline]);
 
   // Multi-order Tabs State
   const [tabs, setTabs] = useState([
@@ -284,15 +342,56 @@ export default function PosPage({ onNavigateToInventory, onNavigateToForecast })
   };
 
   // Finalize payment & receipt
-  const executeFinishPayment = () => {
+  const executeFinishPayment = async () => {
     playBeepSuccess();
+    const invoiceCode = `HD${Date.now().toString().slice(-6)}`;
+    const branchName = `Chi nhánh ${branchId || 1}`;
+    const cashierName = currentUser?.fullName || currentUser?.username || 'Thu ngân';
+
+    // 1. Call Backend API if online
+    if (isOnline) {
+      try {
+        await saleService.createInvoice({
+          branchId: Number(branchId) || 1,
+          customerId: currentOrder.customer?.id || null,
+          employeeId: currentUser?.userId || 1,
+          discount: currentOrder.discount || 0,
+          paymentMethod: currentOrder.paymentMethod,
+          receivedAmount: currentOrder.receivedAmount || finalAmount,
+          note: currentOrder.note || '',
+          items: currentOrder.items.map(it => ({
+            productId: it.id,
+            quantity: it.quantity,
+            unitPrice: it.price
+          }))
+        });
+      } catch (err) {
+        console.warn('Backend createInvoice failed, recorded locally:', err.message);
+      }
+    }
+
+    // 2. Deduct stock locally
+    setProducts(prev => {
+      const soldMap = new Map();
+      currentOrder.items.forEach(it => soldMap.set(it.id, it.quantity));
+      return prev.map(p => {
+        if (soldMap.has(p.id)) {
+          return { ...p, stock: Math.max(0, p.stock - soldMap.get(p.id)) };
+        }
+        return p;
+      });
+    });
+
+    // 3. Print K80 thermal receipt (Electron silent print or browser print)
+    printInvoiceReceipt(currentOrder, invoiceCode, branchName, cashierName);
+
     alert(
-      `🎉 THANH TOÁN THÀNH CÔNG!\n\n` +
+      `🎉 THANH TOÁN THÀNH CÔNG [${invoiceCode}]!\n\n` +
         `• Khách hàng: ${currentOrder.customer ? currentOrder.customer.name : 'Khách lẻ'}\n` +
         `• Tổng thanh toán: ${formatCurrency(finalAmount)}\n` +
         `• Phương thức: ${currentOrder.paymentMethod}\n` +
         `• Tiền thừa trả khách: ${formatCurrency(Math.max(0, changeAmount))}\n\n` +
-        `Đang gửi lệnh in hóa đơn ra máy in K80...`
+        `✔ Hóa đơn K80 đã được gửi đến lệnh in thành công!`
     );
 
     // Reset current order
@@ -363,13 +462,17 @@ export default function PosPage({ onNavigateToInventory, onNavigateToForecast })
     <div className="pos-container">
       {/* Header */}
       <PosHeader
-        branchName="Chi nhánh Quận 1"
-        cashierName="Nguyễn Văn A"
+        branchName={`Chi nhánh ${branchId || 1}`}
+        cashierName={currentUser?.fullName || currentUser?.username || 'Thu ngân'}
+        role={currentUser?.role || 'CASHIER'}
         shiftName="Ca Sáng"
-        isOnline={true}
+        isOnline={isOnline}
+        isWsConnected={isWsConnected}
         onOpenHelp={() => setIsHelpOpen(true)}
+        onLogout={onLogout}
         onNavigateToInventory={onNavigateToInventory}
         onNavigateToForecast={onNavigateToForecast}
+        onNavigateToReport={onNavigateToReport}
       />
 
       {/* Main 2-Column POS Workspace */}

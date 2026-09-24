@@ -24,12 +24,12 @@
 - Git
 ```
 
-### Bước 1.2: Tạo cấu trúc thư mục dự án tổng
-```
+### Bước 1.2: Cấu trúc thư mục dự án tổng
+```text
 pos-inventory-system/
-├── backend/          # Spring Boot project
-├── frontend-pos/      # Electron app (bán hàng)
-├── docs/              # Tài liệu, ERD, SRS
+├── BACKEND/          # Spring Boot 3.3.x Modular Monolith API
+├── FRONTEND/         # Electron + React + Vite POS Desktop App
+├── docs/             # Tài liệu thiết kế, ERD, SRS, chat_history
 └── README.md
 ```
 
@@ -37,93 +37,128 @@ pos-inventory-system/
 
 ## PHẦN 2 — Thiết kế Database
 
-### Bước 2.1: Các bảng chính (MySQL)
+### Bước 2.1: Các bảng chính (MySQL 8.x)
 ```sql
-CREATE DATABASE pos_inventory;
+CREATE DATABASE IF NOT EXISTS pos_inventory CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE pos_inventory;
 
+-- 1. Chi nhánh
 CREATE TABLE branch (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
-  address VARCHAR(255)
+  address VARCHAR(255),
+  phone VARCHAR(20),
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE employee (
+-- 2. Người dùng & Phân quyền (Admin / Manager / Cashier)
+CREATE TABLE users (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   branch_id BIGINT,
   username VARCHAR(50) UNIQUE NOT NULL,
   password VARCHAR(255) NOT NULL,
-  full_name VARCHAR(100),
-  role VARCHAR(20) DEFAULT 'STAFF',
+  full_name VARCHAR(100) NOT NULL,
+  role ENUM('ROLE_ADMIN', 'ROLE_MANAGER', 'ROLE_CASHIER') DEFAULT 'ROLE_CASHIER',
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (branch_id) REFERENCES branch(id)
 );
 
+-- 3. Khách hàng thân thiết & Tích điểm
+CREATE TABLE customer (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  phone VARCHAR(20) UNIQUE NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  points INT DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. Danh mục & Sản phẩm
 CREATE TABLE product (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   barcode VARCHAR(50) UNIQUE NOT NULL,
   name VARCHAR(150) NOT NULL,
   category VARCHAR(100),
-  cost_price DECIMAL(12,2),
-  sale_price DECIMAL(12,2),
-  unit VARCHAR(20) DEFAULT 'cái'
+  cost_price DECIMAL(12,2) NOT NULL,
+  sale_price DECIMAL(12,2) NOT NULL,
+  unit VARCHAR(20) DEFAULT 'cái',
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 5. Quản lý tồn kho theo Chi nhánh
 CREATE TABLE inventory (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  product_id BIGINT,
-  branch_id BIGINT,
+  product_id BIGINT NOT NULL,
+  branch_id BIGINT NOT NULL,
   quantity INT DEFAULT 0,
   min_threshold INT DEFAULT 5,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (product_id) REFERENCES product(id),
   FOREIGN KEY (branch_id) REFERENCES branch(id),
   UNIQUE KEY uk_product_branch (product_id, branch_id)
 );
 
+-- 6. Nhà cung cấp
 CREATE TABLE supplier (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(150),
+  name VARCHAR(150) NOT NULL,
   phone VARCHAR(20),
-  address VARCHAR(255)
+  address VARCHAR(255),
+  email VARCHAR(100)
 );
 
+-- 7. Phiếu nhập kho
 CREATE TABLE stock_in (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  branch_id BIGINT,
+  branch_id BIGINT NOT NULL,
   supplier_id BIGINT,
-  employee_id BIGINT,
+  user_id BIGINT NOT NULL,
+  total_amount DECIMAL(12,2) DEFAULT 0,
+  note TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (branch_id) REFERENCES branch(id),
   FOREIGN KEY (supplier_id) REFERENCES supplier(id),
-  FOREIGN KEY (employee_id) REFERENCES employee(id)
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+-- 8. Chi tiết phiếu nhập
 CREATE TABLE stock_in_detail (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  stock_in_id BIGINT,
-  product_id BIGINT,
-  quantity INT,
-  unit_cost DECIMAL(12,2),
+  stock_in_id BIGINT NOT NULL,
+  product_id BIGINT NOT NULL,
+  quantity INT NOT NULL,
+  unit_cost DECIMAL(12,2) NOT NULL,
   FOREIGN KEY (stock_in_id) REFERENCES stock_in(id),
   FOREIGN KEY (product_id) REFERENCES product(id)
 );
 
+-- 9. Hóa đơn bán hàng
 CREATE TABLE invoice (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  branch_id BIGINT,
-  employee_id BIGINT,
-  total_amount DECIMAL(12,2),
+  invoice_code VARCHAR(30) UNIQUE NOT NULL,
+  branch_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  customer_id BIGINT,
+  total_amount DECIMAL(12,2) NOT NULL,
   discount DECIMAL(12,2) DEFAULT 0,
+  final_amount DECIMAL(12,2) NOT NULL,
+  payment_method VARCHAR(20) DEFAULT 'CASH', -- CASH / TRANSFER / QR
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (branch_id) REFERENCES branch(id),
-  FOREIGN KEY (employee_id) REFERENCES employee(id)
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (customer_id) REFERENCES customer(id)
 );
 
+-- 10. Chi tiết hóa đơn
 CREATE TABLE invoice_detail (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  invoice_id BIGINT,
-  product_id BIGINT,
-  quantity INT,
-  unit_price DECIMAL(12,2),
+  invoice_id BIGINT NOT NULL,
+  product_id BIGINT NOT NULL,
+  quantity INT NOT NULL,
+  unit_price DECIMAL(12,2) NOT NULL,
+  total_price DECIMAL(12,2) NOT NULL,
   FOREIGN KEY (invoice_id) REFERENCES invoice(id),
   FOREIGN KEY (product_id) REFERENCES product(id)
 );
@@ -134,244 +169,279 @@ CREATE TABLE invoice_detail (
 
 ---
 
-## PHẦN 3 — Xây dựng Backend (Spring Boot)
+## PHẦN 3 — Xây dựng Backend (Spring Boot 3.3.x Modular Monolith)
 
 ### Bước 3.1: Khởi tạo project
-Vào [start.spring.io](https://start.spring.io) chọn:
-- Project: Maven
-- Dependencies: Spring Web, Spring Data JPA, MySQL Driver, Spring Security, Validation, Lombok, Spring WebSocket
+Chọn:
+- **Project:** Maven | **Language:** Java 21 | **Spring Boot:** 3.3.3
+- **Dependencies:** Spring Web, Spring Data JPA, MySQL Driver, Spring Security, Validation (`jakarta.validation`), Lombok, Spring WebSocket, SpringDoc OpenAPI (Swagger UI).
+- Thư mục dự án: `BACKEND/`.
 
-Tải về, giải nén vào `backend/`.
-
-### Bước 3.2: Cấu trúc thư mục
-```
-backend/src/main/java/com/pos/
-├── config/            # SecurityConfig, WebSocketConfig, CORS
-├── controller/         # REST endpoints
-├── dto/                # Request/Response objects
-├── entity/             # JPA Entities
-├── repository/         # Spring Data JPA interfaces
-├── service/             # Business logic
-├── security/            # JWT filter, provider
-└── forecast/             # Module dự báo tồn kho
+### Bước 3.2: Cấu trúc thư mục theo tính năng (Feature-based Modular Monolith)
+Tuân theo chuẩn Clean Architecture / Modular Monolith:
+```text
+BACKEND/src/main/java/com/pos/
+├── config/            # SecurityConfig, WebSocketConfig, CorsConfig, OpenApiConfig, DatabaseInitializer
+├── security/          # JwtTokenProvider, JwtAuthFilter, CustomUserDetailsService
+├── common/            # ApiResponse<T>, BusinessException, GlobalExceptionHandler
+├── user/              # User, UserRepository, Role
+├── branch/            # Branch, BranchRepository
+├── customer/          # Customer, CustomerRepository, CustomerService, CustomerController
+├── product/           # Product, ProductRepository, ProductService, ProductController, DTOs
+├── inventory/         # Inventory, InventoryRepository, InventoryService, InventoryController, DTOs
+├── sale/              # Invoice, InvoiceDetail, InvoiceRepository, InvoiceService, InvoiceController, DTOs
+├── purchase/          # StockIn, StockInDetail, StockInRepository, StockInService, StockInController, DTOs
+├── forecast/          # ForecastService, ForecastController, DTOs
+└── PosBackendApplication.java
 ```
 
 ### Bước 3.3: Cấu hình `application.properties`
 ```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/pos_inventory
-spring.datasource.username=root
-spring.datasource.password=yourpassword
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
+spring.application.name=pos-backend
 server.port=8080
-jwt.secret=your-secret-key-here
+
+# Database Connection
+spring.datasource.url=jdbc:mysql://localhost:3306/pos_inventory?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true
+spring.datasource.username=root
+spring.datasource.password=
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# JPA / Hibernate
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=false
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
+
+# JWT Security
+jwt.secret=9a3f4e8b2d1c7f0a5e8c3b6d9e2a1f4a7c0b8e6d3f2a1c5b8e9d0f3a6b2c5e8d
 jwt.expiration=86400000
+
+# OpenAPI / Swagger UI
+springdoc.swagger-ui.path=/swagger-ui/index.html
+springdoc.api-docs.path=/v3/api-docs
 ```
 
-### Bước 3.4: Tạo Entity (ví dụ `Product.java`)
+### Bước 3.4: Tạo Entity (Ví dụ `Product.java`)
 ```java
 @Entity
 @Table(name = "product")
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Product {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(unique = true, nullable = false, length = 50)
     private String barcode;
+
+    @Column(nullable = false, length = 150)
     private String name;
+
     private String category;
+
+    @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal costPrice;
+
+    @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal salePrice;
+
     private String unit;
+    private Boolean isActive;
+    private LocalDateTime createdAt;
 }
 ```
-- [ ] Lặp lại tương tự cho: `Branch`, `Employee`, `Inventory`, `Supplier`, `StockIn`, `StockInDetail`, `Invoice`, `InvoiceDetail`
 
-### Bước 3.5: Tạo Repository
+### Bước 3.5: Tạo Repository với Atomic Concurrency Protection
+Để chống Race Condition khi nhiều quầy POS cùng bán 1 sản phẩm:
 ```java
-public interface ProductRepository extends JpaRepository<Product, Long> {
-    Optional<Product> findByBarcode(String barcode);
+public interface InventoryRepository extends JpaRepository<Inventory, Long> {
+    Optional<Inventory> findByProductIdAndBranchId(Long productId, Long branchId);
+
+    // Trừ kho nguyên tử cấp DB - Chống âm kho tuyệt đối
+    @Modifying
+    @Query("UPDATE Inventory i SET i.quantity = i.quantity - :qty " +
+           "WHERE i.product.id = :productId AND i.branch.id = :branchId AND i.quantity >= :qty")
+    int deductStock(@Param("productId") Long productId, @Param("branchId") Long branchId, @Param("qty") Integer qty);
+
+    // Cộng kho nguyên tử
+    @Modifying
+    @Query("UPDATE Inventory i SET i.quantity = i.quantity + :qty " +
+           "WHERE i.product.id = :productId AND i.branch.id = :branchId")
+    int addStock(@Param("productId") Long productId, @Param("branchId") Long branchId, @Param("qty") Integer qty);
 }
 ```
 
-### Bước 3.6: Tạo Service (ví dụ logic bán hàng — trừ kho tự động)
+### Bước 3.6: Tạo Service bán hàng (@Transactional & Realtime WebSocket)
 ```java
 @Service
 @RequiredArgsConstructor
 public class InvoiceService {
     private final InvoiceRepository invoiceRepo;
     private final InventoryRepository inventoryRepo;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
-    public Invoice createInvoice(InvoiceRequest req) {
+    public Invoice checkout(CreateInvoiceRequest req, User cashier) {
+        // 1. Khởi tạo hóa đơn
         Invoice invoice = new Invoice();
-        invoice.setBranchId(req.getBranchId());
-        invoice.setEmployeeId(req.getEmployeeId());
-        BigDecimal total = BigDecimal.ZERO;
+        // ... set branch, cashier, customer, discount ...
 
+        // 2. Duyệt từng sản phẩm & Trừ kho nguyên tử
         for (var item : req.getItems()) {
-            Inventory inv = inventoryRepo.findByProductIdAndBranchId(item.getProductId(), req.getBranchId())
-                .orElseThrow(() -> new RuntimeException("Sản phẩm không có trong kho"));
-            if (inv.getQuantity() < item.getQuantity())
-                throw new RuntimeException("Không đủ tồn kho: " + item.getProductId());
-            inv.setQuantity(inv.getQuantity() - item.getQuantity());
-            inventoryRepo.save(inv);
-            total = total.add(item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+            int updated = inventoryRepo.deductStock(item.getProductId(), req.getBranchId(), item.getQuantity());
+            if (updated == 0) {
+                throw new BusinessException("INSUFFICIENT_STOCK", "Sản phẩm ID " + item.getProductId() + " không đủ tồn kho!");
+            }
         }
-        invoice.setTotalAmount(total);
-        return invoiceRepo.save(invoice);
+
+        // 3. Lưu hóa đơn & Chi tiết hóa đơn
+        Invoice saved = invoiceRepo.save(invoice);
+
+        // 4. Bắn WebSocket thông báo biến động kho realtime
+        messagingTemplate.convertAndSend("/topic/inventory-updates", "STOCK_CHANGED");
+
+        return saved;
     }
 }
 ```
 
-### Bước 3.7: Tạo Controller
+### Bước 3.7: Tạo Controller & Swagger Documentation
 ```java
 @RestController
 @RequestMapping("/api/invoices")
 @RequiredArgsConstructor
+@Tag(name = "Sale & Invoices", description = "Quản lý Hóa đơn & Bán hàng POS")
 public class InvoiceController {
     private final InvoiceService invoiceService;
 
-    @PostMapping
-    public ResponseEntity<Invoice> create(@RequestBody InvoiceRequest req) {
-        return ResponseEntity.ok(invoiceService.createInvoice(req));
+    @PostMapping("/checkout")
+    public ResponseEntity<ApiResponse<InvoiceResponse>> checkout(@Valid @RequestBody CreateInvoiceRequest req) {
+        return ResponseEntity.ok(ApiResponse.success(invoiceService.checkout(req)));
     }
 }
 ```
-- [ ] Lặp lại cho các controller: `ProductController`, `InventoryController`, `StockInController`, `ReportController`, `AuthController`
 
-### Bước 3.8: Cấu hình bảo mật JWT
-- [ ] Tạo `JwtUtil` (sinh & xác thực token)
-- [ ] Tạo `JwtAuthFilter` (OncePerRequestFilter) kiểm tra token mỗi request
-- [ ] Cấu hình `SecurityConfig`: public endpoint `/api/auth/**`, các endpoint còn lại yêu cầu token
-- [ ] Endpoint đăng nhập trả về JWT khi username/password đúng
+### Bước 3.8: Tự động khởi tạo dữ liệu mẫu (DatabaseInitializer)
+Khi ứng dụng khởi chạy lần đầu, `DatabaseInitializer` tự động sinh:
+- Tài khoản: `admin` / `admin123` (Admin), `cashier1` / `cashier123` (Thu ngân).
+- 2 chi nhánh: Chi nhánh Trung tâm & Chi nhánh Quận 1.
+- Dữ liệu sản phẩm và số lượng tồn kho ban đầu để có thể test ngay mà không cần nhập tay.
 
-### Bước 3.9: Chạy thử backend
+### Bước 3.9: Chạy thử backend & Xem Swagger UI
 ```bash
-cd backend
+cd BACKEND
 ./mvnw spring-boot:run
+# hoặc chạy file .jar đã đóng gói:
+java -jar target/pos-backend-1.0.0.jar
 ```
-Kiểm tra bằng Postman: `POST http://localhost:8080/api/auth/login`
+- **Swagger UI:** `http://localhost:8080/swagger-ui/index.html`
+- **Postman Test Login:** `POST http://localhost:8080/api/auth/login` với body: `{"username":"admin", "password":"admin123"}`
 
 ---
 
-## PHẦN 4 — Xây dựng Frontend (Electron)
+## PHẦN 4 — Xây dựng Frontend (Electron + React + Vite POS)
 
-### Bước 4.1: Khởi tạo project
+### Bước 4.1: Cấu trúc thư mục Frontend
+```text
+FRONTEND/
+├── src/
+│   ├── components/
+│   │   ├── common/          # Button, Input, Table, Badge, Modal, Tabs
+│   │   └── forecast/        # SalesTrendChart (interactive SVG)
+│   ├── pages/
+│   │   ├── pos/             # PosPage, PosHeader, PosCart, PosPayment, ProductSearchModal, CustomerModal, VietQRModal
+│   │   ├── inventory/       # InventoryPage, StockInModal, StockInDetailModal, StockTransferModal
+│   │   └── forecast/        # ForecastPage (Dự báo nhu cầu & đề xuất nhập hàng)
+│   ├── hooks/               # useBarcodeScanner (HID <50ms buffer), useHotkeys (F1-F9, Esc)
+│   └── utils/               # formatters.js, audio.js (Web Audio API sound), forecasting.js
+├── electron/
+│   ├── main.cjs             # Electron Main Process (quản lý BrowserWindow, IPC)
+│   └── preload.cjs          # ContextBridge an toàn cách ly (contextIsolation: true)
+└── package.json
+```
+
+### Bước 4.2: Khởi tạo project
 ```bash
-cd frontend-pos
-npm create vite@latest . -- --template react
+cd FRONTEND
 npm install
-npm install electron electron-builder --save-dev
-npm install axios react-router-dom
+npm run dev                  # Chạy giao diện trên trình duyệt tại http://localhost:5173
 ```
 
-### Bước 4.2: Thêm file `electron/main.js`
+### Bước 4.3: Cấu hình gọi API (Axios instance)
 ```javascript
-const { app, BrowserWindow } = require('electron');
-const path = require('path');
-
-function createWindow() {
-  const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    webPreferences: { preload: path.join(__dirname, 'preload.js') }
-  });
-  win.loadURL('http://localhost:5173'); // dev; build sẽ load file tĩnh
-}
-
-app.whenReady().then(createWindow);
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-```
-
-### Bước 4.3: Cấu hình gọi API (axios instance)
-```javascript
-// src/api/client.js
+// src/services/api.js
 import axios from 'axios';
-const client = axios.create({ baseURL: 'http://localhost:8080/api' });
-client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token'); // lưu ý: dùng cơ chế lưu an toàn hơn khi triển khai thật
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+
+const api = axios.create({
+  baseURL: 'http://localhost:8080/api',
+  timeout: 10000,
+});
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('pos_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   return config;
 });
-export default client;
+
+export default api;
 ```
 
-### Bước 4.4: Giao diện màn hình bán hàng (component chính)
-- [ ] Ô input ẩn luôn focus để nhận dữ liệu từ máy quét mã vạch (gõ nhanh + Enter)
-- [ ] Danh sách sản phẩm trong hóa đơn hiện tại (thêm/sửa số lượng/xóa)
-- [ ] Hiển thị tổng tiền, nút Thanh toán
-- [ ] Gọi `POST /api/invoices` khi thanh toán, xử lý lỗi thiếu tồn kho
+### Bước 4.4: Giao diện màn hình bán hàng (POS Terminal - Keyboard First)
+- Hệ thống phím tắt nhanh: `F1` (Tập trung quét mã), `F2` (Tìm sản phẩm), `F3` (Khách hàng), `F4` (In lại hóa đơn), `F9` (Thanh toán), `Esc` (Đóng modal).
+- Âm thanh phản hồi qua **Web Audio API**: tiếng *beep* 800Hz khi quét trúng hàng, tiếng *buzz* 220Hz khi lỗi/hết hàng.
+- Tích hợp động **VietQR Napas247** chuyển khoản ngân hàng trực tiếp.
 
-### Bước 4.5: Tích hợp máy quét mã vạch (HID)
+### Bước 4.5: Tích hợp máy quét mã vạch (HID Hardware Scanner)
 ```javascript
-// Lắng nghe input nhanh liên tiếp + Enter để phân biệt máy quét với gõ tay
-let buffer = '';
-let lastTime = Date.now();
+// src/hooks/useBarcodeScanner.js
+import { useEffect, useRef } from 'react';
 
-window.addEventListener('keypress', (e) => {
-  const now = Date.now();
-  if (now - lastTime > 50) buffer = ''; // reset nếu gõ chậm (người dùng thật)
-  lastTime = now;
-  if (e.key === 'Enter') {
-    if (buffer.length > 3) handleBarcodeScanned(buffer);
-    buffer = '';
-  } else {
-    buffer += e.key;
-  }
-});
-```
+export function useBarcodeScanner({ onScan, minLength = 3, maxInterval = 50 }) {
+  const bufferRef = useRef('');
+  const lastKeyTimeRef = useRef(0);
 
-### Bước 4.6: Tích hợp máy in hóa đơn (ESC/POS)
-```bash
-npm install node-thermal-printer
-```
-```javascript
-const { printer: ThermalPrinter, types } = require('node-thermal-printer');
-const printer = new ThermalPrinter({ type: types.EPSON, interface: 'usb' });
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const now = Date.now();
+      if (now - lastKeyTimeRef.current > maxInterval) {
+        bufferRef.current = ''; // Reset nếu gõ chậm bằng tay
+      }
+      lastKeyTimeRef.current = now;
 
-async function printInvoice(invoice) {
-  printer.alignCenter();
-  printer.println('CỬA HÀNG ABC');
-  printer.drawLine();
-  invoice.items.forEach(i => printer.println(`${i.name} x${i.quantity} - ${i.total}đ`));
-  printer.drawLine();
-  printer.println(`Tổng: ${invoice.totalAmount}đ`);
-  await printer.execute();
+      if (e.key === 'Enter') {
+        if (bufferRef.current.length >= minLength) {
+          onScan(bufferRef.current);
+        }
+        bufferRef.current = '';
+      } else if (e.key.length === 1) {
+        bufferRef.current += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onScan, minLength, maxInterval]);
 }
 ```
 
-### Bước 4.7 (Tùy chọn): Quét mã vạch bằng camera điện thoại/webcam
-```bash
-npm install html5-qrcode
-```
-```javascript
-import { Html5Qrcode } from "html5-qrcode";
-const scanner = new Html5Qrcode("reader");
-scanner.start(
-  { facingMode: "environment" },
-  { fps: 10, qrbox: 250 },
-  (decodedText) => handleBarcodeScanned(decodedText)
-);
-```
-- [ ] Nếu quét bằng điện thoại riêng: viết app di động nhỏ (hoặc mở web app trên trình duyệt điện thoại) dùng thư viện trên, gửi kết quả quét qua API/WebSocket về hệ thống
-
 ---
 
-## PHẦN 5 — Module Kho (mở rộng backend + frontend)
+## PHẦN 5 — Module Kho (Inventory & Stock-In)
 
-- [ ] API `POST /api/stock-in` — tạo phiếu nhập kho, cộng tồn kho tương ứng
-- [ ] API `GET /api/inventory?branchId=` — xem tồn kho theo chi nhánh
-- [ ] API `GET /api/inventory/low-stock` — danh sách sản phẩm dưới ngưỡng tồn kho
-- [ ] Giao diện Electron: màn hình Quản lý sản phẩm, Nhập kho, Danh sách cảnh báo hết hàng
-- [ ] Sinh mã vạch tự động cho sản phẩm mới (nếu chưa có mã từ nhà sản xuất):
-```bash
-# Backend
-implementation 'net.sourceforge.barbecue:barbecue:1.5-beta1' // hoặc dùng ZXing để generate
-```
-```java
-BitMatrix bitMatrix = new Code128Writer().encode(productId.toString(), BarcodeFormat.CODE_128, 300, 100);
-BufferedImage barcodeImage = MatrixToImageWriter.toBufferedImage(bitMatrix);
-```
+### Các API chính của Module Kho:
+- `POST /api/purchases/stock-in` — Tạo phiếu nhập kho từ nhà cung cấp & cộng tồn kho tự động.
+- `GET /api/inventory?branchId=` — Xem danh sách tồn kho theo chi nhánh (lọc theo danh mục, sắp hết hàng).
+- `GET /api/inventory/low-stock` — Danh sách sản phẩm dưới ngưỡng an toàn (`quantity <= min_threshold`).
+- `POST /api/inventory/transfer` — Điều chuyển hàng hóa giữa 2 chi nhánh trong cùng 1 transaction an toàn.
+
+### Giao diện Quản lý kho:
+- 4 thẻ thống kê: Tổng mã hàng, Tổng tồn kho, Cảnh báo sắp hết hàng, Tổng giá trị tồn (VND).
+- Modal nhập kho hỗ trợ nhiều mặt hàng, tự động tính tổng tiền nhập.
+- Modal điều chuyển hàng liên chi nhánh (chọn chi nhánh xuất và chi nhánh nhập).
 
 ---
 
@@ -391,59 +461,42 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     }
 }
 ```
-- [ ] Khi tồn kho thay đổi, publish message tới `/topic/inventory-update`
-- [ ] Electron client subscribe kênh này (dùng thư viện `@stomp/stompjs`) để cập nhật giao diện realtime
+- Khi tồn kho thay đổi (thanh toán POS, nhập hàng, chuyển kho), backend publish message tới `/topic/inventory-updates`.
+- Khi có đơn hàng mới phát sinh, backend publish tới `/topic/sales-updates`.
+- Electron client subscribe các kênh này (dùng thư viện `@stomp/stompjs`) để cập nhật giao diện realtime không cần F5.
 
 ### Bước 6.2: Xử lý offline
 - [ ] Electron lưu hóa đơn vào SQLite local (`better-sqlite3`) khi mất mạng
 - [ ] Khi có mạng lại, đồng bộ các hóa đơn chưa gửi lên server (hàng đợi retry)
 
 ### Bước 6.3: Điều chuyển hàng hóa giữa chi nhánh
-- [ ] API `POST /api/stock-transfer` — trừ kho chi nhánh A, cộng kho chi nhánh B trong 1 transaction
+- API `POST /api/inventory/transfer` — trừ kho chi nhánh xuất, cộng kho chi nhánh nhập trong 1 `@Transactional` nguyên tử.
 
 ---
 
-## PHẦN 7 — Dự báo AI tồn kho
+## PHẦN 7 — Dự báo AI tồn kho & Phân tích bán hàng
 
-### Bước 7.1: Chuẩn bị dữ liệu
-- [ ] Query lịch sử bán hàng theo ngày cho từng sản phẩm (từ `invoice_detail` + `invoice.created_at`)
+### Bước 7.1: Thuật toán dự báo
+Hệ thống triển khai kết hợp 2 phương pháp dự báo:
+1. **Exponential Smoothing ($\alpha = 0.35$):** Đánh trọng số cao hơn cho các ngày bán gần nhất.
+2. **Moving Average (7 ngày):** Lấy trung bình trượt 7 ngày gần nhất để làm mịn dữ liệu.
+3. **Đánh giá sai số MAE (Mean Absolute Error):** So sánh giữa giá trị dự báo và số lượng bán thực tế để đánh giá độ chính xác.
 
-### Bước 7.2: Thuật toán dự báo đơn giản (Moving Average) — code mẫu Java
-```java
-public double predictNextDemand(List<Integer> last7DaysSales) {
-    return last7DaysSales.stream().mapToInt(Integer::intValue).average().orElse(0);
-}
-```
+### Bước 7.2: Các Endpoint Backend
+- `GET /api/forecast/demand/{productId}?days=7` — Trả về chuỗi dữ liệu dự báo bán ra trong 7-14 ngày tới.
+- `GET /api/forecast/recommendations` — Tự động tính toán khoảng chênh lệch giữa nhu cầu dự báo và tồn kho hiện tại để xuất danh sách đề xuất nhập hàng (kèm mức độ ưu tiên: Khẩn cấp / Cao / Bình thường).
 
-### Bước 7.3: Nâng cấp (nếu còn thời gian) — Exponential Smoothing
-```java
-public double exponentialSmoothing(List<Double> sales, double alpha) {
-    double forecast = sales.get(0);
-    for (double actual : sales) forecast = alpha * actual + (1 - alpha) * forecast;
-    return forecast;
-}
-```
-
-### Bước 7.4: Sinh gợi ý nhập hàng
-```java
-if (predictedDemand > currentStock) {
-    suggestedQty = Math.ceil(predictedDemand - currentStock);
-}
-```
-- [ ] Chạy job định kỳ mỗi đêm bằng `@Scheduled(cron = "0 0 1 * * ?")` để cập nhật dự báo
-- [ ] Hiển thị gợi ý nhập hàng trên dashboard Electron
-
-### Bước 7.5: Đánh giá mô hình
-- [ ] Tính MAE (Mean Absolute Error) giữa dự báo và thực tế trên tập dữ liệu test
+### Bước 7.3: Giao diện Trực quan hóa
+- Biểu đồ tương tác SVG: đường doanh số thực tế vs đường dự báo AI.
+- Bảng gợi ý nhập hàng thông minh: hỗ trợ bấm 1 click để tạo ngay đơn nhập kho.
 
 ---
 
 ## PHẦN 8 — Kiểm thử
 
-- [ ] Unit test Service layer (JUnit 5 + Mockito) cho `InvoiceService`, `InventoryService`
-- [ ] Test API bằng Postman Collection (lưu lại file `.postman_collection.json` trong `docs/`)
-- [ ] Test giao diện Electron thủ công theo checklist chức năng
-- [ ] Test tích hợp máy in/máy quét thật
+- [ ] Unit test Service layer (JUnit 5 + Mockito) cho `InvoiceService`, `InventoryService`, `ForecastService`.
+- [ ] Test API bằng Swagger UI (`http://localhost:8080/swagger-ui/index.html`) hoặc Postman Collection.
+- [ ] Test giao diện Electron thủ công theo checklist chức năng: Quét mã vạch <50ms, Phím tắt F1-F9, VietQR Napas247, Nhập kho nhiều sản phẩm.
 
 ---
 
@@ -451,16 +504,17 @@ if (predictedDemand > currentStock) {
 
 ### Bước 9.1: Đóng gói Electron
 ```bash
+cd FRONTEND
 npm run build          # build React
 npx electron-builder --win   # tạo file .exe cài đặt
 ```
 
 ### Bước 9.2: Đóng gói & chạy backend
 ```bash
-./mvnw clean package
-java -jar target/pos-backend-0.0.1.jar
+cd BACKEND
+./mvnw clean package -DskipTests
+java -jar target/pos-backend-1.0.0.jar
 ```
-- [ ] Cân nhắc host backend trên máy chủ trung tâm (VPS hoặc máy tính tại 1 chi nhánh chính) để các chi nhánh khác kết nối vào
 
 ### Bước 9.3: Triển khai thử nghiệm thực tế
 - [ ] Cài Electron app lên máy tính cửa hàng
@@ -476,8 +530,8 @@ java -jar target/pos-backend-0.0.1.jar
 
 ### Bước 10.1: Viết Dockerfile cho Spring Boot backend
 ```dockerfile
-# backend/Dockerfile
-FROM eclipse-temurin:17-jdk-alpine AS build
+# BACKEND/Dockerfile
+FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /app
 COPY .mvn/ .mvn
 COPY mvnw pom.xml ./
@@ -485,16 +539,16 @@ RUN ./mvnw dependency:go-offline
 COPY src ./src
 RUN ./mvnw clean package -DskipTests
 
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=build /app/target/pos-backend-1.0.0.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
 ```
-- [ ] Dùng multi-stage build (build jar ở stage 1, chỉ copy jar chạy ở stage 2) để image nhỏ gọn hơn
+- Dùng multi-stage build (build jar ở stage 1, chỉ copy jar chạy ở stage 2) để image nhỏ gọn và bảo mật.
 
 ### Bước 10.2: Viết `.dockerignore`
-```
+```text
 target/
 .git/
 .idea/
@@ -511,7 +565,7 @@ services:
     container_name: pos-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
       MYSQL_DATABASE: pos_inventory
     ports:
       - "3306:3306"
@@ -524,17 +578,17 @@ services:
       retries: 5
 
   backend:
-    build: ./backend
+    build: ./BACKEND
     container_name: pos-backend
     restart: unless-stopped
     depends_on:
       mysql:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/pos_inventory
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/pos_inventory?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-root}
+      JWT_SECRET: ${JWT_SECRET:-9a3f4e8b2d1c7f0a5e8c3b6d9e2a1f4a7c0b8e6d3f2a1c5b8e9d0f3a6b2c5e8d}
     ports:
       - "8080:8080"
 

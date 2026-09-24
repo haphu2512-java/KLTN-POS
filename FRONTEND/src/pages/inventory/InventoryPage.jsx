@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button, Input, Table, Badge } from '../../components/common';
 import StockInModal from './StockInModal';
 import StockTransferModal from './StockTransferModal';
@@ -10,17 +10,99 @@ import {
   INITIAL_STOCK_IN_HISTORY
 } from '../../data/mockProducts';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { productService } from '../../services/productService';
+import { inventoryService } from '../../services/inventoryService';
+import { purchaseService } from '../../services/purchaseService';
+import { websocketService } from '../../services/websocketService';
 import './InventoryPage.css';
 
-export default function InventoryPage({ onNavigateToPos, onNavigateToForecast }) {
+export default function InventoryPage({
+  currentUser,
+  branchId = 1,
+  isOnline = true,
+  isWsConnected = false,
+  onNavigateToPos,
+  onNavigateToForecast,
+  onNavigateToReport,
+  onLogout
+}) {
   // State
   const [products, setProducts] = useState(INITIAL_PRODUCTS);
-  const [suppliers] = useState(INITIAL_SUPPLIERS);
+  const [suppliers, setSuppliers] = useState(INITIAL_SUPPLIERS);
   const [branches] = useState(INITIAL_BRANCHES);
   const [stockInHistory, setStockInHistory] = useState(INITIAL_STOCK_IN_HISTORY);
 
-  const [currentBranchId, setCurrentBranchId] = useState(1);
+  const [currentBranchId, setCurrentBranchId] = useState(branchId || 1);
   const [activeTab, setActiveTab] = useState('inventory'); // 'inventory' | 'history'
+
+  // Sync data from Backend
+  useEffect(() => {
+    let isMounted = true;
+    async function loadData() {
+      try {
+        const [prodList, invList, supList, slipList] = await Promise.all([
+          productService.getProducts(),
+          inventoryService.getBranchInventory(currentBranchId),
+          purchaseService.getSuppliers(),
+          purchaseService.getStockIns(currentBranchId)
+        ]);
+
+        if (isMounted) {
+          if (Array.isArray(prodList) && prodList.length > 0) {
+            const stockMap = new Map();
+            (invList || []).forEach(inv => stockMap.set(inv.productId || inv.product?.id, inv.quantity));
+            const merged = prodList.map(p => ({
+              ...p,
+              stock: stockMap.has(p.id) ? stockMap.get(p.id) : (p.stock || 50),
+              costPrice: p.costPrice || 0,
+              salePrice: p.sellingPrice || p.price || 0,
+              minThreshold: p.minThreshold || 10
+            }));
+            setProducts(merged);
+          }
+
+          if (Array.isArray(supList) && supList.length > 0) {
+            setSuppliers(supList);
+          }
+
+          if (Array.isArray(slipList) && slipList.length > 0) {
+            const mappedHistory = slipList.map(s => ({
+              id: s.code || `NK-${s.id}`,
+              supplierId: s.supplier?.id || s.supplierId,
+              supplierName: s.supplier?.name || 'Nhà cung cấp',
+              branchId: s.branch?.id || currentBranchId,
+              branchName: s.branch?.name || `Chi nhánh ${currentBranchId}`,
+              createdDate: s.createdDate ? new Date(s.createdDate).toLocaleString('vi-VN') : new Date().toLocaleString('vi-VN'),
+              employeeName: s.employee?.fullName || currentUser?.fullName || 'Quản trị viên',
+              totalItems: s.items?.reduce((sum, it) => sum + it.quantity, 0) || 0,
+              totalCost: s.totalAmount || s.items?.reduce((sum, it) => sum + it.quantity * it.unitCost, 0) || 0,
+              items: s.items || [],
+              note: s.note || ''
+            }));
+            setStockInHistory(mappedHistory);
+          }
+        }
+      } catch (err) {
+        console.warn('Backend unavailable for inventory, using fallback mock data:', err.message);
+      }
+    }
+
+    if (isOnline) {
+      loadData();
+    }
+
+    // Subscribe to STOMP WebSocket inventory updates
+    const unsubWs = websocketService.on('inventory-update', (event) => {
+      if (event && event.productId) {
+        setProducts(prev => prev.map(p => p.id === event.productId ? { ...p, stock: event.newQuantity ?? p.stock } : p));
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubWs();
+    };
+  }, [currentBranchId, isOnline]);
 
   // Filter states
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -80,8 +162,31 @@ export default function InventoryPage({ onNavigateToPos, onNavigateToForecast })
   }, [products, selectedCategory, stockStatusFilter, searchTerm]);
 
   // Handle Save New Stock-In
-  const handleSaveStockIn = (newStockIn) => {
-    // Increase stock for each product
+  const handleSaveStockIn = async (newStockIn) => {
+    // 1. Call Backend API if online
+    if (isOnline) {
+      try {
+        const payload = {
+          branchId: Number(currentBranchId) || 1,
+          supplierId: Number(newStockIn.supplierId) || 1,
+          employeeId: currentUser?.userId || 1,
+          note: newStockIn.note || '',
+          items: newStockIn.items.map(it => ({
+            productId: it.productId,
+            quantity: it.quantity,
+            unitCost: it.unitCost
+          }))
+        };
+        const created = await purchaseService.createStockIn(payload);
+        if (created && created.id) {
+          newStockIn.id = created.code || `NK-${created.id}`;
+        }
+      } catch (err) {
+        console.warn('Backend createStockIn failed, saved locally:', err.message);
+      }
+    }
+
+    // 2. Increase stock for each product locally
     setProducts((prev) =>
       prev.map((prod) => {
         const matchingItem = newStockIn.items.find(
@@ -98,9 +203,9 @@ export default function InventoryPage({ onNavigateToPos, onNavigateToForecast })
       })
     );
 
-    // Append to history
+    // 3. Append to history
     setStockInHistory([newStockIn, ...stockInHistory]);
-    alert(`Đã hoàn tất nhập kho phiếu: ${newStockIn.id}! Tồn kho đã được cộng tự động.`);
+    alert(`✔ Đã hoàn tất nhập kho phiếu: ${newStockIn.id}! Tồn kho đã được cộng tự động.`);
   };
 
   // Handle Stock Transfer
@@ -363,6 +468,14 @@ export default function InventoryPage({ onNavigateToPos, onNavigateToForecast })
             📈 Dự báo AI
           </Button>
           <Button
+            variant="secondary"
+            size="md"
+            onClick={onNavigateToReport}
+            title="Xem báo cáo doanh thu & sản phẩm bán chạy"
+          >
+            📊 Báo cáo
+          </Button>
+          <Button
             variant="primary"
             size="md"
             onClick={onNavigateToPos}
@@ -370,6 +483,17 @@ export default function InventoryPage({ onNavigateToPos, onNavigateToForecast })
           >
             🏪 Màn hình Bán hàng (POS)
           </Button>
+
+          {onLogout && (
+            <Button
+              variant="danger"
+              size="md"
+              onClick={onLogout}
+              title="Đăng xuất khỏi ca làm việc"
+            >
+              Đăng xuất
+            </Button>
+          )}
         </div>
       </header>
 

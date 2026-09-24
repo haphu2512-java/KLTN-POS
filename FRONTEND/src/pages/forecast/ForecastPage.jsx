@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button, Table, Badge } from '../../components/common';
 import SalesTrendChart from '../../components/forecast/SalesTrendChart';
 import {
@@ -14,13 +14,64 @@ import {
 } from '../../data/mockSalesData';
 import { INITIAL_PRODUCTS } from '../../data/mockProducts';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { forecastService } from '../../services/forecastService';
+import { productService } from '../../services/productService';
 import './ForecastPage.css';
 
-export default function ForecastPage({ onNavigateToPos, onNavigateToInventory, onQuickStockIn }) {
-  const [products] = useState(INITIAL_PRODUCTS);
+export default function ForecastPage({
+  currentUser,
+  branchId = 1,
+  isOnline = true,
+  isWsConnected = false,
+  onNavigateToPos,
+  onNavigateToInventory,
+  onNavigateToReport,
+  onQuickStockIn,
+  onLogout
+}) {
+  const [products, setProducts] = useState(INITIAL_PRODUCTS);
   const [algorithm, setAlgorithm] = useState('EXP_SMOOTHING'); // 'EXP_SMOOTHING' | 'MOVING_AVG'
   const [forecastDays, setForecastDays] = useState(7); // 7 | 14 | 30
   const [selectedProductId, setSelectedProductId] = useState(1);
+  const [backendForecasts, setBackendForecasts] = useState([]);
+
+  // Fetch forecast data from backend if online
+  useEffect(() => {
+    let isMounted = true;
+    async function loadData() {
+      try {
+        const [prodList, fcList] = await Promise.all([
+          productService.getProducts(),
+          forecastService.getDemandForecast(branchId, forecastDays, algorithm)
+        ]);
+
+        if (isMounted) {
+          if (Array.isArray(prodList) && prodList.length > 0) {
+            setProducts(prodList.map(p => ({
+              ...p,
+              stock: p.stock ?? 50,
+              minThreshold: p.minThreshold ?? 10,
+              costPrice: p.costPrice ?? 20000,
+              price: p.sellingPrice || p.price || 0
+            })));
+          }
+          if (Array.isArray(fcList) && fcList.length > 0) {
+            setBackendForecasts(fcList);
+          }
+        }
+      } catch (err) {
+        console.warn('Backend forecast unavailable, running local forecasting algorithms:', err.message);
+      }
+    }
+
+    if (isOnline) {
+      loadData();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [branchId, forecastDays, algorithm, isOnline]);
 
   // Selected product details
   const selectedProduct = useMemo(() => {
@@ -228,6 +279,14 @@ export default function ForecastPage({ onNavigateToPos, onNavigateToInventory, o
             📦 Quản lý Kho
           </Button>
           <Button
+            variant="secondary"
+            size="md"
+            onClick={onNavigateToReport}
+            title="Xem báo cáo doanh thu & sản phẩm bán chạy"
+          >
+            📊 Báo cáo
+          </Button>
+          <Button
             variant="primary"
             size="md"
             onClick={onNavigateToPos}
@@ -235,6 +294,17 @@ export default function ForecastPage({ onNavigateToPos, onNavigateToInventory, o
           >
             🏪 Màn hình Bán hàng (POS)
           </Button>
+
+          {onLogout && (
+            <Button
+              variant="danger"
+              size="md"
+              onClick={onLogout}
+              title="Đăng xuất khỏi ca làm việc"
+            >
+              Đăng xuất
+            </Button>
+          )}
         </div>
       </header>
 

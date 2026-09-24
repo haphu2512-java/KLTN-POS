@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: pos-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_NAME:-pos_inventory}
+      MYSQL_USER: ${DB_USER:-posuser}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-pospass123}
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pos-network
+
+  backend:
+    build:
+      context: ./BACKEND
+      dockerfile: Dockerfile
+    container_name: pos-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME:-pos_inventory}?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-posuser}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-pospass123}
+      JWT_SECRET: ${JWT_SECRET:-9a3f4e8b2d1c7f0a5e8c3b6d9e2a1f4a7c0b8e6d3f2a1c5b8e9d0f3a6b2c5e8d}
+      SERVER_PORT: 8080
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "8080:8080"
+    networks:
+      - pos-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  pos-network:
+    driver: bridge

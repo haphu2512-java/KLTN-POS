@@ -5,11 +5,15 @@ import { formatDateTime } from '../../utils/formatters';
 export default function PosHeader({
   branchName = 'Chi nhánh Quận 1',
   cashierName = 'Nguyễn Văn A',
+  role = 'CASHIER',
   shiftName = 'Ca Sáng',
   isOnline = true,
+  isWsConnected = false,
   onOpenHelp,
+  onLogout,
   onNavigateToInventory,
-  onNavigateToForecast
+  onNavigateToForecast,
+  onNavigateToReport
 }) {
   const [timeStr, setTimeStr] = useState(formatDateTime());
 
@@ -38,13 +42,13 @@ export default function PosHeader({
 
       <div className="pos-header-right">
         <div className="pos-user-info">
-          <span>Thu ngân: <strong>{cashierName}</strong></span>
+          <span>{role === 'ADMIN' ? '👑 Quản lý' : '💼 Thu ngân'}: <strong>{cashierName}</strong></span>
           <span className="pos-divider">•</span>
           <span>{shiftName}</span>
         </div>
 
-        <Badge variant={isOnline ? 'success' : 'danger'}>
-          {isOnline ? 'Máy chủ: Online' : 'Mất kết nối'}
+        <Badge variant={isOnline ? 'success' : 'secondary'} title={isWsConnected ? 'STOMP WebSocket Realtime: Đã kết nối' : 'WebSocket: Đang chờ...'}>
+          {isOnline ? (isWsConnected ? '🟢 Máy chủ & WS' : '🟢 API Online') : '⚪ Ngoại tuyến'}
         </Badge>
 
         <Button
@@ -60,9 +64,18 @@ export default function PosHeader({
           variant="secondary"
           size="sm"
           onClick={onNavigateToForecast}
-          title="Chuyển sang màn hình Dự báo AI & Báo cáo"
+          title="Chuyển sang màn hình Dự báo AI"
         >
           📈 Dự báo AI
+        </Button>
+
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onNavigateToReport}
+          title="Xem báo cáo doanh thu & sản phẩm bán chạy"
+        >
+          📊 Báo cáo
         </Button>
 
         <Button
@@ -74,6 +87,17 @@ export default function PosHeader({
         >
           Trợ giúp
         </Button>
+
+        {onLogout && (
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={onLogout}
+            title="Đăng xuất khỏi ca làm việc"
+          >
+            Đăng xuất
+          </Button>
+        )}
       </div>
     </header>
   );

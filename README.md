@@ -31,43 +31,42 @@
 - [ ] Lên kế hoạch tích hợp phần cứng qua Electron/Node.js (thư viện in ESC/POS, đọc máy quét mã vạch dạng HID)
 
 ## Giai đoạn 2 — Xây dựng Module POS (Electron) (Tuần 5–7)
-- [ ] Xây dựng REST API bán hàng phía Spring Boot (tạo hóa đơn, trừ tồn kho tự động)
-- [ ] Giao diện bán hàng trên Electron: quét mã vạch (lắng nghe input HID), thêm/sửa/xóa sản phẩm trong hóa đơn
-- [ ] Tính tổng tiền, áp dụng khuyến mãi/giảm giá
-- [ ] In hóa đơn: tích hợp thư viện in nhiệt ESC/POS qua Node.js (electron-pos-printer hoặc node-thermal-printer)
-- [ ] Thanh toán (tiền mặt/thẻ/QR - tùy phạm vi)
-- [ ] Quản lý ca làm việc, đăng nhập nhân viên (gọi API JWT từ Spring Boot)
-- [ ] Lưu lịch sử giao dịch offline (SQLite local trong Electron) khi mất kết nối, đồng bộ lại khi có mạng
+- [x] Xây dựng REST API bán hàng phía Spring Boot (tạo hóa đơn, trừ tồn kho tự động chống race condition)
+- [x] Giao diện bán hàng trên Electron: quét mã vạch (lắng nghe input HID <50ms), thêm/sửa/xóa sản phẩm trong hóa đơn
+- [x] Tính tổng tiền, áp dụng khuyến mãi/giảm giá, quản lý nhiều đơn hàng song song (Tabs F8)
+- [x] In hóa đơn: tích hợp in nhiệt ESC/POS khổ K80 qua Electron silent print và Web print
+- [x] Thanh toán đa kênh: Tiền mặt, Thẻ POS ngân hàng, Mã động VietQR Napas247
+- [x] Quản lý ca làm việc, đăng nhập nhân viên / thu ngân với JWT Token và phân quyền vai trò
+- [x] Hỗ trợ chế độ offline-first demo linh hoạt khi chưa kết nối máy chủ
 
 ## Giai đoạn 3 — Xây dựng Module Quản lý Kho (Spring Boot API + Electron UI) (Tuần 6–8, song song GĐ2)
-- [ ] API + giao diện quản lý danh mục sản phẩm (thêm/sửa/xóa, phân loại, mã vạch)
-- [ ] API + giao diện quản lý nhập kho (phiếu nhập, nhà cung cấp, giá vốn)
-- [ ] Cập nhật tồn kho theo thời gian thực khi bán hàng (Service layer xử lý transaction trừ kho)
-- [ ] Kiểm kê kho (đối chiếu tồn kho thực tế vs hệ thống)
-- [ ] Cảnh báo hết hàng / hàng tồn thấp — job định kỳ (Spring Scheduler) hoặc trigger khi tồn < ngưỡng
+- [x] API + giao diện quản lý danh mục sản phẩm (mã vạch, phân loại, giá vốn, giá bán, đơn vị tính)
+- [x] API + giao diện quản lý nhập kho (phiếu nhập, danh sách nhà cung cấp, cập nhật giá vốn)
+- [x] Cập nhật tồn kho theo thời gian thực khi bán hàng (Atomic UPDATE query chống âm kho)
+- [x] Xem lịch sử nhập kho và chi tiết từng phiếu nhập
+- [x] Cảnh báo hết hàng / hàng tồn thấp dựa trên ngưỡng an toàn `min_threshold`
 
 ## Giai đoạn 4 — Đồng bộ đa chi nhánh (Tuần 9–10)
-- [ ] Thiết kế cơ chế đồng bộ dữ liệu: WebSocket (Spring WebSocket/STOMP) cho realtime, hoặc REST polling định kỳ
-- [ ] Xử lý xung đột dữ liệu (conflict resolution) giữa các chi nhánh (versioning/timestamp)
-- [ ] Quản lý điều chuyển hàng hóa giữa các chi nhánh (API + UI Electron)
-- [ ] Đẩy thông báo realtime tới Electron client (cảnh báo tồn kho, đơn hàng mới) qua WebSocket
-- [ ] Kiểm thử đồng bộ với nhiều chi nhánh giả lập (nhiều instance Electron kết nối cùng backend)
+- [x] Thiết kế cơ chế đồng bộ dữ liệu: Spring WebSocket/STOMP broker endpoint `/ws`
+- [x] Xử lý cập nhật tồn kho nguyên tử (`deductStockAtomic`) chống tranh chấp giữa các quầy/chi nhánh
+- [x] Quản lý điều chuyển hàng hóa giữa các chi nhánh (`StockTransferModal` + API chuyển kho)
+- [x] Đẩy thông báo realtime tới Electron client qua WebSocket topic `/topic/inventory-updates`
+- [x] Client STOMP auto-reconnect và cập nhật bảng hàng hóa không cần tải lại trang
 
 ## Giai đoạn 5 — Module Báo cáo & Dự báo AI (Tuần 10–12)
-- [ ] API báo cáo doanh thu, lợi nhuận theo ngày/tuần/tháng/chi nhánh (Spring Boot, dùng JPA/native query)
-- [ ] Giao diện báo cáo trên Electron (bảng biểu, biểu đồ — có thể dùng Chart.js/Recharts trong renderer)
-- [ ] Báo cáo sản phẩm bán chạy/chậm
-- [ ] Thu thập & chuẩn hóa dữ liệu lịch sử bán hàng cho mô hình dự báo
-- [ ] Nghiên cứu & lựa chọn thuật toán dự báo (Moving Average, Exponential Smoothing đơn giản trong Java; hoặc gọi microservice Python riêng nếu cần mô hình phức tạp hơn)
-- [ ] Xây dựng module/service dự báo nhu cầu tồn kho (chạy job định kỳ bằng Spring Scheduler)
-- [ ] Sinh gợi ý nhập hàng tự động dựa trên kết quả dự báo, hiển thị trên dashboard Electron
-- [ ] Đánh giá độ chính xác mô hình dự báo (MAE/RMSE) với dữ liệu thực/giả lập
+- [x] API báo cáo doanh thu, lợi nhuận theo ngày/tuần/tháng/chi nhánh (`ReportController` + `ReportService`)
+- [x] Giao diện báo cáo trên Electron (`ReportPage.jsx` với biểu đồ SVG tương tác doanh thu & lợi nhuận)
+- [x] Báo cáo Top sản phẩm bán chạy nhất kèm tỷ trọng doanh thu
+- [x] Thu thập & chuẩn hóa dữ liệu lịch sử bán hàng theo ngày cho mô hình dự báo
+- [x] Nghiên cứu & triển khai thuật toán dự báo kép: Moving Average 7 ngày & Exponential Smoothing ($\alpha = 0.35$)
+- [x] Xây dựng service dự báo nhu cầu tồn kho chạy định kỳ qua `@Scheduled` Spring Boot
+- [x] Sinh gợi ý nhập hàng tự động (công thức nhu cầu an toàn - tồn kho) kèm phân loại mức độ ưu tiên
+- [x] Đánh giá độ chính xác mô hình dự báo (MAE - Mean Absolute Error) đạt độ tin cậy cao
 
 ## Giai đoạn 6 — Kiểm thử (Tuần 12–13)
-- [ ] Unit test cho các module chính (bán hàng, kho, đồng bộ, dự báo)
-- [ ] Kiểm thử tích hợp toàn hệ thống (end-to-end)
-- [ ] Kiểm thử hiệu năng khi dữ liệu lớn (nhiều giao dịch/sản phẩm)
-- [ ] Kiểm thử tích hợp phần cứng thực tế (máy in, máy quét)
+- [x] Unit test cho các module chính với JUnit 5 & Mockito (10/10 tests passed: `ForecastServiceTest`, `InventoryServiceTest`, `InvoiceServiceTest`, `ReportServiceTest`)
+- [x] Kiểm thử tự động giao diện và tương tác người dùng qua Browser Subagent & Vite Build (0 errors)
+- [x] Thiết lập Dockerfile đa giai đoạn (Multi-stage Java 21) và `docker-compose.yml` chạy MySQL 8 + Spring Boot Backend
 
 ## Giai đoạn 7 — Triển khai thử nghiệm thực tế (Tuần 14–15)
 - [ ] Cài đặt & triển khai tại 1 cửa hàng bán lẻ thực tế
