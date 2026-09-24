@@ -1,0 +1,4 @@
+com\pos\report\ReportServiceTest.class
+com\pos\forecast\ForecastServiceTest.class
+com\pos\sale\InvoiceServiceTest.class
+com\pos\inventory\InventoryServiceTest.class

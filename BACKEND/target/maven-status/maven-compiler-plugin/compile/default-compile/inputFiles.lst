@@ -1,4 +1,5 @@
 E:\1.KLTN\BACKEND\src\main\java\com\pos\product\ProductRequest.java
+E:\1.KLTN\BACKEND\src\main\java\com\pos\report\TopProductResponse.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\product\ProductController.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\forecast\ForecastService.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\sale\InvoiceRequest.java
@@ -22,8 +23,10 @@ E:\1.KLTN\BACKEND\src\main\java\com\pos\sale\InvoiceDetail.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\config\CorsConfig.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\product\ProductService.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\purchase\StockInRequest.java
+E:\1.KLTN\BACKEND\src\main\java\com\pos\report\ReportService.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\purchase\StockInDetail.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\sale\Invoice.java
+E:\1.KLTN\BACKEND\src\main\java\com\pos\report\ReportController.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\product\Product.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\user\UserRepository.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\product\ProductRepository.java
@@ -32,6 +35,7 @@ E:\1.KLTN\BACKEND\src\main\java\com\pos\purchase\StockInService.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\config\DatabaseInitializer.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\purchase\SupplierController.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\sale\InvoiceRepository.java
+E:\1.KLTN\BACKEND\src\main\java\com\pos\report\RevenueSummaryResponse.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\sale\InvoiceService.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\security\JwtTokenProvider.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\customer\CustomerService.java

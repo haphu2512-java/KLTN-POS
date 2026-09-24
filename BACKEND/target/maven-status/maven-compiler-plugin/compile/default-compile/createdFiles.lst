@@ -7,6 +7,7 @@ com\pos\customer\CustomerService.class
 com\pos\inventory\StockTransferRequest.class
 com\pos\product\ProductController.class
 com\pos\auth\AuthController.class
+com\pos\report\RevenueSummaryResponse.class
 com\pos\forecast\ForecastResponse.class
 com\pos\sale\InvoiceDetail$InvoiceDetailBuilder.class
 com\pos\purchase\Supplier$SupplierBuilder.class
@@ -20,6 +21,7 @@ com\pos\product\ProductService.class
 com\pos\purchase\StockIn$StockInBuilder.class
 com\pos\security\JwtAuthFilter.class
 com\pos\sale\InvoiceService.class
+com\pos\report\TopProductResponse$TopProductResponseBuilder.class
 com\pos\purchase\SupplierRepository.class
 com\pos\sale\InvoiceRequest$Item.class
 com\pos\sale\InvoiceRequest.class
@@ -29,10 +31,13 @@ com\pos\auth\LoginRequest.class
 com\pos\config\WebSocketConfig.class
 com\pos\product\ProductRequest.class
 com\pos\purchase\StockInRepository.class
+com\pos\report\ReportService.class
 com\pos\forecast\ForecastResponse$ForecastResponseBuilder.class
 com\pos\config\CorsConfig.class
+com\pos\report\RevenueSummaryResponse$RevenueSummaryResponseBuilder.class
 com\pos\security\JwtTokenProvider.class
 com\pos\common\ApiResponse.class
+com\pos\report\ReportController.class
 com\pos\common\BusinessException.class
 com\pos\purchase\StockInController.class
 com\pos\forecast\ForecastController.class
@@ -57,12 +62,15 @@ com\pos\inventory\InventoryRepository.class
 com\pos\auth\AuthResponse$AuthResponseBuilder.class
 com\pos\branch\BranchRepository.class
 com\pos\branch\BranchController.class
+com\pos\report\TopProductResponse.class
+com\pos\report\RevenueSummaryResponse$DailyRevenueItem$DailyRevenueItemBuilder.class
 com\pos\product\Product$ProductBuilder.class
 com\pos\user\Role.class
 com\pos\sale\InvoiceDetail.class
 com\pos\customer\CustomerController.class
 com\pos\forecast\ForecastService.class
 com\pos\sale\PaymentMethod.class
+com\pos\report\RevenueSummaryResponse$DailyRevenueItem.class
 com\pos\customer\CustomerRepository.class
 com\pos\purchase\StockInDetail$StockInDetailBuilder.class
 com\pos\purchase\StockInRequest$Item.class

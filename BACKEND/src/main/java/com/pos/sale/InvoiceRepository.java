@@ -30,4 +30,14 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
            "GROUP BY FUNCTION('DATE', i.createdAt) " +
            "ORDER BY FUNCTION('DATE', i.createdAt) ASC")
     List<Object[]> getDailyRevenue(@Param("since") LocalDateTime since);
+
+    @Query("SELECT d.product.id, d.product.name, d.product.barcode, SUM(d.quantity), SUM(d.totalPrice) " +
+           "FROM InvoiceDetail d JOIN d.invoice i " +
+           "WHERE (:branchId IS NULL OR i.branch.id = :branchId) AND i.createdAt BETWEEN :start AND :end " +
+           "GROUP BY d.product.id, d.product.name, d.product.barcode " +
+           "ORDER BY SUM(d.quantity) DESC")
+    List<Object[]> getTopSellingProducts(@Param("branchId") Long branchId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    @Query("SELECT i FROM Invoice i WHERE (:branchId IS NULL OR i.branch.id = :branchId) AND i.createdAt BETWEEN :start AND :end ORDER BY i.createdAt DESC")
+    List<Invoice> findInvoicesByFilter(@Param("branchId") Long branchId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }
