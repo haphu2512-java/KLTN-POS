@@ -47,6 +47,7 @@ E:\1.KLTN\BACKEND\src\main\java\com\pos\forecast\ForecastController.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\inventory\InventoryController.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\user\Role.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\config\OpenApiConfig.java
+E:\1.KLTN\BACKEND\src\main\java\com\pos\auth\UserProfileResponse.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\security\CustomUserDetailsService.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\security\JwtAuthFilter.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\branch\BranchRepository.java

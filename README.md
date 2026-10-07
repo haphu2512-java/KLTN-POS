@@ -63,10 +63,11 @@
 - [x] Sinh gợi ý nhập hàng tự động (công thức nhu cầu an toàn - tồn kho) kèm phân loại mức độ ưu tiên
 - [x] Đánh giá độ chính xác mô hình dự báo (MAE - Mean Absolute Error) đạt độ tin cậy cao
 
-## Giai đoạn 6 — Kiểm thử (Tuần 12–13)
-- [x] Unit test cho các module chính với JUnit 5 & Mockito (10/10 tests passed: `ForecastServiceTest`, `InventoryServiceTest`, `InvoiceServiceTest`, `ReportServiceTest`)
+## Giai đoạn 6 — Kiểm thử & Tối ưu hóa (Tuần 12–13)
+- [x] Unit test cho các module chính với JUnit 5 & Mockito (11/11 tests passed: `ForecastServiceTest`, `InventoryServiceTest`, `InvoiceServiceTest`, `ReportServiceTest`)
 - [x] Kiểm thử tự động giao diện và tương tác người dùng qua Browser Subagent & Vite Build (0 errors)
-- [x] Thiết lập Dockerfile đa giai đoạn (Multi-stage Java 21) và `docker-compose.yml` chạy MySQL 8 + Spring Boot Backend
+- [x] Khắc phục toàn bộ 9 vấn đề kỹ thuật & bảo mật trong `docs/fix.md` (Bảo mật `/api/auth/me`, thắt chặt CORS, Atomic customer points update, Pagination cho hóa đơn, Dự báo dữ liệu thực tế, Hoàn thiện Nightly Job)
+- [x] Thiết lập Dockerfile đa giai đoạn (`maven:3.9-eclipse-temurin-21-alpine` -> JRE 21) và `docker-compose.yml` chạy MySQL 8 + Spring Boot Backend độc lập không cần cài đặt môi trường
 
 ## Giai đoạn 7 — Triển khai thử nghiệm thực tế (Tuần 14–15)
 - [ ] Cài đặt & triển khai tại 1 cửa hàng bán lẻ thực tế

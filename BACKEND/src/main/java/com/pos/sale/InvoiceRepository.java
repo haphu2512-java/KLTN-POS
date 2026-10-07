@@ -8,12 +8,19 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 @Repository
 public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
     List<Invoice> findByBranchIdOrderByCreatedAtDesc(Long branchId);
 
+    Page<Invoice> findByBranchIdOrderByCreatedAtDesc(Long branchId, Pageable pageable);
+
     List<Invoice> findAllByOrderByCreatedAtDesc();
+
+    Page<Invoice> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     List<Invoice> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
 

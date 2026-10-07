@@ -1,5 +1,6 @@
 package com.pos.forecast;
 
+import com.pos.branch.BranchRepository;
 import com.pos.inventory.Inventory;
 import com.pos.inventory.InventoryRepository;
 import com.pos.product.Product;
@@ -36,6 +37,9 @@ class ForecastServiceTest {
     @Mock
     private InvoiceRepository invoiceRepository;
 
+    @Mock
+    private BranchRepository branchRepository;
+
     @InjectMocks
     private ForecastService forecastService;
 
@@ -69,8 +73,8 @@ class ForecastServiceTest {
     }
 
     @Test
-    @DisplayName("Đề xuất nhập hàng tự động: phát hiện thiếu hàng và gắn cờ HIGH urgency")
-    void testGetDemandForecastAndReplenishment() {
+    @DisplayName("Đề xuất nhập hàng tự động: phát hiện thiếu hàng khi có lịch sử bán")
+    void testGetDemandForecastAndReplenishmentWithHistory() {
         Product product = Product.builder()
                 .id(1L)
                 .barcode("8934567890123")
@@ -84,7 +88,7 @@ class ForecastServiceTest {
 
         when(productRepository.findByActiveTrue()).thenReturn(List.of(product));
         when(invoiceRepository.getDailyProductSales(eq(1L), any(LocalDateTime.class)))
-                .thenReturn(new ArrayList<>()); // fallback default sales
+                .thenReturn(List.of(new Object[]{"2026-09-01", 5.0}, new Object[]{"2026-09-02", 7.0}));
         when(inventoryRepository.findByProductIdAndBranchId(1L, 1L))
                 .thenReturn(Optional.of(Inventory.builder().quantity(0).build())); // Tồn = 0
 
@@ -94,7 +98,38 @@ class ForecastServiceTest {
         assertEquals(1, responses.size());
         ForecastResponse resp = responses.get(0);
         assertEquals(1L, resp.getProductId());
+        assertTrue(resp.getHasHistory());
         assertEquals("HIGH", resp.getUrgency(), "Tồn kho = 0 phải có mức độ ưu tiên HIGH");
         assertTrue(resp.getSuggestedRestockQty() > 0, "Số lượng đề xuất nhập hàng phải lớn hơn 0");
+    }
+
+    @Test
+    @DisplayName("Sản phẩm mới chưa có lịch sử bán: không gán dữ liệu giả, restock = 0")
+    void testGetDemandForecastSparseHistory() {
+        Product product = Product.builder()
+                .id(2L)
+                .barcode("8939999999999")
+                .name("Bánh mì que mới")
+                .category("Bánh")
+                .unit("Cái")
+                .costPrice(BigDecimal.valueOf(5000))
+                .salePrice(BigDecimal.valueOf(10000))
+                .active(true)
+                .build();
+
+        when(productRepository.findByActiveTrue()).thenReturn(List.of(product));
+        when(invoiceRepository.getDailyProductSales(eq(2L), any(LocalDateTime.class)))
+                .thenReturn(new ArrayList<>()); // Không có lịch sử bán
+        when(inventoryRepository.findByProductIdAndBranchId(2L, 1L))
+                .thenReturn(Optional.of(Inventory.builder().quantity(10).build()));
+
+        List<ForecastResponse> responses = forecastService.getDemandForecastAndReplenishment(1L, 7, "EXP_SMOOTHING");
+
+        assertNotNull(responses);
+        assertEquals(1, responses.size());
+        ForecastResponse resp = responses.get(0);
+        assertFalse(resp.getHasHistory());
+        assertEquals(0, resp.getSuggestedRestockQty());
+        assertEquals(0.0, resp.getDailyDemandForecast());
     }
 }

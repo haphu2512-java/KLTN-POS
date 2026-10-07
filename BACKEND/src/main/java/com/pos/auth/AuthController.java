@@ -60,12 +60,21 @@ public class AuthController {
 
     @GetMapping("/me")
     @Operation(summary = "Lấy thông tin tài khoản hiện tại từ Token")
-    public ResponseEntity<ApiResponse<User>> getCurrentUser(@AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<ApiResponse<UserProfileResponse>> getCurrentUser(@AuthenticationPrincipal UserDetails userDetails) {
         if (userDetails == null) {
             return ResponseEntity.ok(ApiResponse.error("UNAUTHORIZED", "Chưa đăng nhập"));
         }
         User user = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng"));
-        return ResponseEntity.ok(ApiResponse.ok(user));
+        
+        UserProfileResponse profile = UserProfileResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .fullName(user.getFullName())
+                .role(user.getRole() != null ? user.getRole().name() : null)
+                .branchId(user.getBranchId())
+                .build();
+                
+        return ResponseEntity.ok(ApiResponse.ok(profile));
     }
 }

@@ -87,8 +87,8 @@ class InvoiceServiceTest {
 
         // Verify atomic deduction called for 2 items
         verify(inventoryService).deductStockAtomic(1L, 1L, 2);
-        // Verify customer points updated (+7 points for 70,000 VND)
-        verify(customerRepository).save(argThat(c -> c.getPoints() == 17));
+        // Verify atomic customer points updated (+7 points for 70,000 VND)
+        verify(customerRepository).addPoints(1L, 7);
     }
 
     @Test

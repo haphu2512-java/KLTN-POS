@@ -8,6 +8,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+
 import java.util.List;
 
 @RestController
@@ -19,8 +23,15 @@ public class InvoiceController {
     private final InvoiceService invoiceService;
 
     @GetMapping
-    @Operation(summary = "Lấy danh sách hóa đơn bán lẻ (có thể lọc theo chi nhánh)")
-    public ResponseEntity<ApiResponse<List<Invoice>>> getAll(@RequestParam(required = false) Long branchId) {
+    @Operation(summary = "Lấy danh sách hóa đơn bán lẻ (hỗ trợ phân trang hoặc lấy tất cả theo chi nhánh)")
+    public ResponseEntity<ApiResponse<?>> getAll(
+            @RequestParam(required = false) Long branchId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        if (page != null && size != null) {
+            Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, size));
+            return ResponseEntity.ok(ApiResponse.ok(invoiceService.getInvoices(branchId, pageable)));
+        }
         return ResponseEntity.ok(ApiResponse.ok(invoiceService.getAllInvoices(branchId)));
     }
 

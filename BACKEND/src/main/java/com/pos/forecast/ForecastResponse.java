@@ -25,5 +25,7 @@ public class ForecastResponse {
     private Integer totalPredictedDemand;
     private Integer suggestedRestockQty;
     private String urgency; // HIGH, MEDIUM, LOW
+    private Boolean hasHistory;
     private List<Double> historicalDailySales;
 }
+
