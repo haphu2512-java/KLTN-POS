@@ -12,7 +12,7 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD:-pospass123}
       TZ: Asia/Ho_Chi_Minh
     ports:
-      - "3306:3306"
+      - "${DB_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
@@ -37,11 +37,17 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME:-pos_inventory}?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: ${DB_USER:-posuser}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-pospass123}
-      JWT_SECRET: ${JWT_SECRET:-9a3f4e8b2d1c7f0a5e8c3b6d9e2a1f4a7c0b8e6d3f2a1c5b8e9d0f3a6b2c5e8d}
-      SERVER_PORT: 8080
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000,file://*}
+      AI_FORECAST_ALGORITHM: ${AI_FORECAST_ALGORITHM:-EXP_SMOOTH}
+      AI_DEFAULT_FORECAST_DAYS: ${AI_DEFAULT_FORECAST_DAYS:-7}
+      AI_SAFETY_STOCK_FACTOR: ${AI_SAFETY_STOCK_FACTOR:-1.10}
+      AI_LEAD_TIME_DAYS: ${AI_LEAD_TIME_DAYS:-3}
       TZ: Asia/Ho_Chi_Minh
     ports:
-      - "8080:8080"
+      - "${SERVER_PORT:-8080}:8080"
     networks:
       - pos-network
 

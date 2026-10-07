@@ -9,6 +9,7 @@ import com.pos.product.ProductRepository;
 import com.pos.sale.InvoiceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -25,6 +26,15 @@ public class ForecastService {
     private final InventoryRepository inventoryRepository;
     private final InvoiceRepository invoiceRepository;
     private final BranchRepository branchRepository;
+
+    @Value("${ai.forecast.algorithm:EXP_SMOOTH}")
+    private String configuredAlgorithm = "EXP_SMOOTH";
+
+    @Value("${ai.forecast.default-days:7}")
+    private int configuredForecastDays = 7;
+
+    @Value("${ai.forecast.safety-factor:1.10}")
+    private double safetyFactor = 1.10;
 
     /**
      * Moving Average forecasting algorithm (Bước 7.2 trong StepByStep_Implementation.md)
@@ -86,8 +96,9 @@ public class ForecastService {
                     dailyRate = predictNextDemandExponentialSmoothing(dailySales, 0.35);
                 }
 
-                // 4. Calculate Replenishment (Nhu cầu dự báo * Hệ số an toàn 1.1 - Tồn hiện tại)
-                totalDemand = (int) Math.ceil(dailyRate * forecastDays * 1.10);
+                // 4. Calculate Replenishment (Nhu cầu dự báo * Hệ số an toàn - Tồn hiện tại)
+                double factor = safetyFactor > 0 ? safetyFactor : 1.10;
+                totalDemand = (int) Math.ceil(dailyRate * forecastDays * factor);
                 int shortage = totalDemand - currentStock;
                 suggestedRestock = Math.max(0, shortage);
 
@@ -131,11 +142,12 @@ public class ForecastService {
      */
     @Scheduled(cron = "0 0 1 * * ?")
     public void runNightlyForecastJob() {
-        log.info("[AI FORECAST JOB] Đang chạy tác vụ tính toán dự báo nhu cầu định kỳ ban đêm...");
+        log.info("[AI FORECAST JOB] Đang chạy tác vụ tính toán dự báo nhu cầu định kỳ ban đêm (Thuật toán: {}, Số ngày: {})...",
+                configuredAlgorithm, configuredForecastDays);
         try {
             List<Branch> branches = branchRepository.findAll();
             for (Branch branch : branches) {
-                List<ForecastResponse> results = getDemandForecastAndReplenishment(branch.getId(), 7, "EXP_SMOOTH");
+                List<ForecastResponse> results = getDemandForecastAndReplenishment(branch.getId(), configuredForecastDays, configuredAlgorithm);
                 long restockCount = results.stream().filter(r -> r.getSuggestedRestockQty() > 0).count();
                 log.info("[AI FORECAST JOB] Chi nhánh '{}' (ID: {}): phân tích {} sản phẩm, {} sản phẩm cần nhập hàng.",
                         branch.getName(), branch.getId(), results.size(), restockCount);

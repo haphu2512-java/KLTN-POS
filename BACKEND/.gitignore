@@ -1,0 +1,25 @@
+# Maven & Java Build artifacts
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# Environment & Sensitive configs
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log

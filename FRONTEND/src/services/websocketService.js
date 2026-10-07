@@ -7,7 +7,7 @@ class WebSocketService {
     this.listeners = new Map();
   }
 
-  connect(wsUrl = 'ws://localhost:8080/ws') {
+  connect(wsUrl = import.meta.env?.VITE_WS_URL || 'ws://localhost:8080/ws') {
     if (this.client && this.client.active) {
       return;
     }
