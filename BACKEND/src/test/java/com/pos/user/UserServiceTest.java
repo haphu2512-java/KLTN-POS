@@ -1,0 +1,94 @@
+package com.pos.user;
+
+import com.pos.common.BusinessException;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.util.List;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class UserServiceTest {
+
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
+    @InjectMocks
+    private UserService userService;
+
+    @Test
+    @DisplayName("Tạo nhân viên thành công: mã hóa mật khẩu và lưu DB")
+    void testCreateUserSuccess() {
+        CreateUserRequest req = CreateUserRequest.builder()
+                .username("cashier2")
+                .password("plain123")
+                .fullName("Lê Thu Ngân")
+                .role(Role.CASHIER)
+                .branchId(1L)
+                .build();
+
+        when(userRepository.existsByUsername("cashier2")).thenReturn(false);
+        when(passwordEncoder.encode("plain123")).thenReturn("hashed123");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            User u = inv.getArgument(0);
+            u.setId(2L);
+            return u;
+        });
+
+        UserResponse res = userService.createUser(req);
+
+        assertNotNull(res);
+        assertEquals("cashier2", res.getUsername());
+        assertEquals("Lê Thu Ngân", res.getFullName());
+        assertEquals(Role.CASHIER, res.getRole());
+        assertTrue(res.getActive());
+        verify(passwordEncoder).encode("plain123");
+        verify(userRepository).save(any(User.class));
+    }
+
+    @Test
+    @DisplayName("Ném BusinessException khi username đã tồn tại")
+    void testCreateUserDuplicateUsername() {
+        CreateUserRequest req = CreateUserRequest.builder()
+                .username("admin")
+                .password("123456")
+                .fullName("Admin User")
+                .role(Role.ADMIN)
+                .build();
+
+        when(userRepository.existsByUsername("admin")).thenReturn(true);
+
+        assertThrows(BusinessException.class, () -> userService.createUser(req));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Toggle trạng thái active của nhân viên thành công")
+    void testToggleUserStatus() {
+        User user = User.builder()
+                .id(5L)
+                .username("cashier5")
+                .active(true)
+                .build();
+
+        when(userRepository.findById(5L)).thenReturn(Optional.of(user));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UserResponse res = userService.toggleUserStatus(5L);
+
+        assertFalse(res.getActive());
+        verify(userRepository).save(user);
+    }
+}

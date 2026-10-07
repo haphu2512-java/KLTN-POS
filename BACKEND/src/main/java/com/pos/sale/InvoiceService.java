@@ -121,4 +121,46 @@ public class InvoiceService {
 
         return invoiceRepository.save(invoice);
     }
+
+    @Transactional
+    public Invoice refundInvoice(Long id, String reason) {
+        Invoice invoice = invoiceRepository.findById(id)
+                .orElseThrow(() -> new BusinessException("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn với ID: " + id));
+
+        if (invoice.getStatus() == InvoiceStatus.REFUNDED) {
+            throw new BusinessException("ALREADY_REFUNDED", "Hóa đơn này đã được hoàn trả trước đó");
+        }
+
+        // 1. Hoàn tồn kho nguyên tử cho từng sản phẩm trong hóa đơn
+        if (invoice.getDetails() != null) {
+            for (InvoiceDetail detail : invoice.getDetails()) {
+                inventoryService.addStockAtomic(
+                        detail.getProduct().getId(),
+                        invoice.getBranch().getId(),
+                        detail.getQuantity()
+                );
+            }
+        }
+
+        // 2. Thu hồi điểm tích lũy khách hàng (nếu có)
+        if (invoice.getCustomer() != null && invoice.getTotalAmount() != null && invoice.getTotalAmount().compareTo(BigDecimal.ZERO) > 0) {
+            int earnedPoints = invoice.getTotalAmount().divide(BigDecimal.valueOf(10000), java.math.RoundingMode.FLOOR).intValue();
+            if (earnedPoints > 0) {
+                int currentPoints = invoice.getCustomer().getPoints();
+                int deductPoints = Math.min(currentPoints, earnedPoints);
+                if (deductPoints > 0) {
+                    customerRepository.addPoints(invoice.getCustomer().getId(), -deductPoints);
+                    invoice.getCustomer().setPoints(currentPoints - deductPoints);
+                }
+            }
+        }
+
+        // 3. Cập nhật trạng thái hóa đơn
+        invoice.setStatus(InvoiceStatus.REFUNDED);
+        String noteReason = (reason != null && !reason.trim().isEmpty()) ? " | Lý do trả: " + reason.trim() : "";
+        String existingNote = invoice.getNote() != null ? invoice.getNote() : "";
+        invoice.setNote((existingNote + " [ĐÃ HOÀN TRẢ" + noteReason + "]").trim());
+
+        return invoiceRepository.save(invoice);
+    }
 }

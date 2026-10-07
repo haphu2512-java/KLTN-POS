@@ -13,7 +13,9 @@ export default function PosHeader({
   onLogout,
   onNavigateToInventory,
   onNavigateToForecast,
-  onNavigateToReport
+  onNavigateToReport,
+  onNavigateToPartners,
+  onNavigateToStaff
 }) {
   const [timeStr, setTimeStr] = useState(formatDateTime());
 
@@ -77,6 +79,26 @@ export default function PosHeader({
         >
           📊 Báo cáo
         </Button>
+
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onNavigateToPartners}
+          title="Quản lý khách hàng thân thiết & nhà cung cấp"
+        >
+          👥 Khách & NCC
+        </Button>
+
+        {role === 'ADMIN' && onNavigateToStaff && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onNavigateToStaff}
+            title="Quản lý tài khoản nhân viên"
+          >
+            👤 Nhân viên
+          </Button>
+        )}
 
         <Button
           variant="ghost"

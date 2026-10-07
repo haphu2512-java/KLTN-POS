@@ -15,4 +15,10 @@ export const saleService = {
     const res = await api.post('/invoices', invoiceData);
     return res.data;
   },
+
+  async refundInvoice(id, reason = '') {
+    const res = await api.post(`/invoices/${id}/refund`, { reason });
+    return res.data;
+  },
 };
+

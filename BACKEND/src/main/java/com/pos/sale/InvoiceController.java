@@ -47,4 +47,14 @@ public class InvoiceController {
         Invoice invoice = invoiceService.createInvoice(req);
         return ResponseEntity.ok(ApiResponse.ok("Tạo hóa đơn thành công", invoice));
     }
+
+    @PostMapping("/{id}/refund")
+    @Operation(summary = "Hoàn trả hàng / Hủy hóa đơn (tự động hoàn kho nguyên tử và thu hồi điểm)")
+    public ResponseEntity<ApiResponse<Invoice>> refund(
+            @PathVariable Long id,
+            @RequestBody(required = false) java.util.Map<String, String> body) {
+        String reason = body != null ? body.get("reason") : null;
+        Invoice refunded = invoiceService.refundInvoice(id, reason);
+        return ResponseEntity.ok(ApiResponse.ok("Hoàn trả hàng thành công", refunded));
+    }
 }

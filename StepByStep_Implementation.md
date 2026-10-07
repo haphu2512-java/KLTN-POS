@@ -181,17 +181,18 @@ Chọn:
 Tuân theo chuẩn Clean Architecture / Modular Monolith:
 ```text
 BACKEND/src/main/java/com/pos/
-├── config/            # SecurityConfig, WebSocketConfig, CorsConfig, OpenApiConfig, DatabaseInitializer
-├── security/          # JwtTokenProvider, JwtAuthFilter, CustomUserDetailsService
+├── config/            # CorsConfig, DatabaseInitializer, OpenApiConfig, WebSocketConfig
+├── security/          # JwtTokenProvider, JwtAuthFilter, CustomUserDetailsService, SecurityConfig
 ├── common/            # ApiResponse<T>, BusinessException, GlobalExceptionHandler
-├── user/              # User, UserRepository, Role
-├── branch/            # Branch, BranchRepository
+├── user/              # User, UserRepository, Role, UserService, UserController, DTOs (Create/Update/Response)
+├── branch/            # Branch, BranchRepository, BranchService, BranchController
 ├── customer/          # Customer, CustomerRepository, CustomerService, CustomerController
 ├── product/           # Product, ProductRepository, ProductService, ProductController, DTOs
 ├── inventory/         # Inventory, InventoryRepository, InventoryService, InventoryController, DTOs
-├── sale/              # Invoice, InvoiceDetail, InvoiceRepository, InvoiceService, InvoiceController, DTOs
-├── purchase/          # StockIn, StockInDetail, StockInRepository, StockInService, StockInController, DTOs
+├── sale/              # Invoice, InvoiceDetail, InvoiceStatus, InvoiceRepository, InvoiceService, InvoiceController, DTOs
+├── purchase/          # StockIn, StockInDetail, StockInRepository, StockInService, StockInController, Supplier, SupplierService, SupplierController, DTOs
 ├── forecast/          # ForecastService, ForecastController, DTOs
+├── report/            # ReportService, ReportController, DTOs
 └── PosBackendApplication.java
 ```
 
@@ -351,13 +352,17 @@ FRONTEND/
 │   │   ├── common/          # Button, Input, Table, Badge, Modal, Tabs
 │   │   └── forecast/        # SalesTrendChart (interactive SVG)
 │   ├── pages/
-│   │   ├── pos/             # PosPage, PosHeader, PosCart, PosPayment, ProductSearchModal, CustomerModal, VietQRModal
+│   │   ├── pos/             # PosPage, PosHeader, PosCart, PosPayment, Modals (Search, Customer, VietQR)
 │   │   ├── inventory/       # InventoryPage, StockInModal, StockInDetailModal, StockTransferModal
-│   │   └── forecast/        # ForecastPage (Dự báo nhu cầu & đề xuất nhập hàng)
+│   │   ├── forecast/        # ForecastPage (Dự báo nhu cầu & đề xuất nhập hàng)
+│   │   ├── report/          # ReportPage (Báo cáo doanh thu, Lịch sử hóa đơn & Hoàn trả)
+│   │   ├── partner/         # PartnerPage (Quản lý Khách hàng thân thiết & Nhà cung cấp)
+│   │   └── admin/           # StaffPage (Quản lý Tài khoản & Phân quyền nhân viên)
+│   ├── services/            # api, auth, sale, inventory, purchase, product, forecast, report, user, customer, websocket
 │   ├── hooks/               # useBarcodeScanner (HID <50ms buffer), useHotkeys (F1-F9, Esc)
-│   └── utils/               # formatters.js, audio.js (Web Audio API sound), forecasting.js
+│   └── utils/               # formatters.js, audio.js, exportCsv.js, receiptPrinter.js, forecasting.js
 ├── electron/
-│   ├── main.cjs             # Electron Main Process (quản lý BrowserWindow, IPC)
+│   ├── main.cjs             # Electron Main Process (BrowserWindow, IPC, Silent Print K80)
 │   └── preload.cjs          # ContextBridge an toàn cách ly (contextIsolation: true)
 └── package.json
 ```

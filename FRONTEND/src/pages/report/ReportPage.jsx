@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Button, Table, Badge } from '../../components/common';
-import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { Button, Table, Badge, Modal } from '../../components/common';
+import { formatCurrency, formatNumber, formatDateTime } from '../../utils/formatters';
 import { reportService } from '../../services/reportService';
+import { saleService } from '../../services/saleService';
+import { exportToCsv } from '../../utils/exportCsv';
 import './ReportPage.css';
 
 const DEFAULT_DAYS_DATA = [
@@ -29,11 +31,18 @@ export default function ReportPage({
   onNavigateToPos,
   onNavigateToInventory,
   onNavigateToForecast,
+  onNavigateToPartners,
+  onNavigateToStaff,
   onLogout
 }) {
   const [selectedBranchId, setSelectedBranchId] = useState(branchId || 1);
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(false);
+  const [viewMode, setViewMode] = useState('charts'); // 'charts' | 'invoices'
+  const [invoices, setInvoices] = useState([]);
+  const [refundTarget, setRefundTarget] = useState(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [showRefundModal, setShowRefundModal] = useState(false);
 
   const [summaryData, setSummaryData] = useState({
     totalRevenue: 13980000,
@@ -78,6 +87,71 @@ export default function ReportPage({
       isMounted = false;
     };
   }, [selectedBranchId, days, isOnline]);
+
+  const fetchInvoices = async () => {
+    if (!isOnline) {
+      setInvoices([
+        { id: 101, createdAt: new Date().toISOString(), employeeId: 1, totalAmount: 142000, paymentMethod: 'CASH', status: 'PAID', note: 'Đơn bán tại quầy' },
+        { id: 102, createdAt: new Date(Date.now() - 3600000).toISOString(), employeeId: 1, totalAmount: 320000, paymentMethod: 'TRANSFER', status: 'PAID', note: 'Chuyển khoản VietQR' }
+      ]);
+      return;
+    }
+    try {
+      const data = await saleService.getInvoices(selectedBranchId);
+      setInvoices(data || []);
+    } catch (err) {
+      console.error('Lỗi khi tải danh sách hóa đơn:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (viewMode === 'invoices') {
+      fetchInvoices();
+    }
+  }, [viewMode, selectedBranchId, isOnline]);
+
+  const handleProcessRefund = async (e) => {
+    e.preventDefault();
+    if (!refundTarget) return;
+    try {
+      await saleService.refundInvoice(refundTarget.id, refundReason);
+      alert(`Đã hoàn trả hóa đơn #${refundTarget.id} thành công! Số lượng tồn kho đã được hoàn lại.`);
+      setShowRefundModal(false);
+      setRefundReason('');
+      setRefundTarget(null);
+      fetchInvoices();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Có lỗi khi hoàn trả hóa đơn');
+    }
+  };
+
+  const handleExportCsv = () => {
+    if (viewMode === 'invoices') {
+      const headers = ['Mã hóa đơn', 'Thời gian', 'Thu ngân', 'Khách hàng', 'Tổng tiền (VND)', 'Phương thức', 'Trạng thái', 'Ghi chú'];
+      const rows = invoices.map((i) => [
+        `HD-${i.id}`,
+        formatDateTime(i.createdAt),
+        `Nhân viên ${i.employeeId || 1}`,
+        i.customer ? i.customer.name : 'Khách lẻ',
+        i.totalAmount,
+        i.paymentMethod,
+        i.status === 'REFUNDED' ? 'Đã hoàn trả' : 'Đã thanh toán',
+        i.note || ''
+      ]);
+      exportToCsv(`DanhSachHoaDon_CN${selectedBranchId}`, headers, rows);
+    } else {
+      const headers = ['Mã sản phẩm', 'Mã vạch', 'Tên sản phẩm', 'Số lượng bán', 'Doanh thu (VND)', 'Lợi nhuận ước tính (VND)'];
+      const rows = topProducts.map((p) => [
+        p.productId,
+        p.barcode,
+        p.productName,
+        p.quantitySold,
+        p.totalRevenue,
+        p.estimatedProfit
+      ]);
+      exportToCsv(`BaoCaoSanPhamBanChay_CN${selectedBranchId}`, headers, rows);
+    }
+  };
 
   // Chart data calculations
   const maxRevenue = useMemo(() => {
@@ -140,6 +214,77 @@ export default function ReportPage({
     }
   ];
 
+  const invoiceColumns = [
+    {
+      key: 'id',
+      title: 'Mã HĐ',
+      width: '90px',
+      render: (i) => <strong style={{ color: '#38BDF8', fontFamily: 'monospace' }}>#{i.id}</strong>
+    },
+    {
+      key: 'createdAt',
+      title: 'Thời gian',
+      width: '150px',
+      render: (i) => (i.createdAt ? formatDateTime(i.createdAt) : '—')
+    },
+    {
+      key: 'customer',
+      title: 'Khách hàng',
+      render: (i) => (i.customer ? `${i.customer.name} (${i.customer.phone})` : 'Khách lẻ')
+    },
+    {
+      key: 'totalAmount',
+      title: 'Tổng tiền',
+      align: 'right',
+      render: (i) => <strong style={{ color: '#10B981' }}>{formatCurrency(i.totalAmount)}</strong>
+    },
+    {
+      key: 'paymentMethod',
+      title: 'Hình thức',
+      align: 'center',
+      render: (i) => <Badge variant="secondary">{i.paymentMethod}</Badge>
+    },
+    {
+      key: 'status',
+      title: 'Trạng thái',
+      align: 'center',
+      render: (i) => (
+        <Badge variant={i.status === 'REFUNDED' ? 'danger' : 'success'}>
+          {i.status === 'REFUNDED' ? 'Đã hoàn trả' : 'Đã thanh toán'}
+        </Badge>
+      )
+    },
+    {
+      key: 'note',
+      title: 'Ghi chú',
+      render: (i) => <span style={{ fontSize: '12px', color: '#94A3B8' }}>{i.note || '—'}</span>
+    },
+    {
+      key: 'actions',
+      title: 'Thao tác',
+      align: 'center',
+      render: (i) => (
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+          {i.status !== 'REFUNDED' ? (
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => {
+                setRefundTarget(i);
+                setShowRefundModal(true);
+              }}
+              title="Thực hiện hoàn trả hàng và hoàn tiền cho khách"
+            >
+              🔄 Trả hàng
+            </Button>
+          ) : (
+            <span style={{ fontSize: '11px', color: '#EF4444' }}>Đã hoàn kho</span>
+          )}
+        </div>
+      )
+    }
+  ];
+
   return (
     <div className="report-container">
       {/* Header */}
@@ -177,6 +322,24 @@ export default function ReportPage({
           >
             📈 Dự báo AI
           </Button>
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={onNavigateToPartners}
+            title="Quản lý khách hàng thân thiết & nhà cung cấp"
+          >
+            👥 Khách & NCC
+          </Button>
+          {currentUser?.role === 'ADMIN' && onNavigateToStaff && (
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={onNavigateToStaff}
+              title="Quản lý tài khoản nhân viên"
+            >
+              👤 Nhân viên
+            </Button>
+          )}
 
           {onLogout && (
             <Button
@@ -230,6 +393,15 @@ export default function ReportPage({
             <Button
               variant="secondary"
               size="sm"
+              onClick={handleExportCsv}
+              title="Xuất dữ liệu hiển thị ra file CSV/Excel"
+            >
+              📥 Xuất CSV
+            </Button>
+
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => window.print()}
               title="In báo cáo này ra giấy hoặc PDF"
             >
@@ -238,153 +410,247 @@ export default function ReportPage({
           </div>
         </div>
 
-        {/* KPI Cards Grid */}
-        <div className="report-kpi-grid">
-          <div className="report-kpi-card">
-            <div className="report-kpi-title">
-              <span>Tổng Doanh Thu</span>
-              <span>💰</span>
-            </div>
-            <div className="report-kpi-value" style={{ color: '#10B981' }}>
-              {formatCurrency(summaryData.totalRevenue)}
-            </div>
-            <div className="report-kpi-sub">Giá trị bán ra thực tế sau chiết khấu</div>
-          </div>
-
-          <div className="report-kpi-card">
-            <div className="report-kpi-title">
-              <span>Tiền Vốn Hàng Bán</span>
-              <span>📦</span>
-            </div>
-            <div className="report-kpi-value" style={{ color: '#94A3B8' }}>
-              {formatCurrency(summaryData.totalCost)}
-            </div>
-            <div className="report-kpi-sub">Theo giá nhập kho bình quân</div>
-          </div>
-
-          <div className="report-kpi-card">
-            <div className="report-kpi-title">
-              <span>Lợi Nhuận Gộp</span>
-              <span>📈</span>
-            </div>
-            <div className="report-kpi-value" style={{ color: '#38BDF8' }}>
-              {formatCurrency(summaryData.grossProfit)}
-            </div>
-            <div className="report-kpi-sub">
-              Tỷ suất lợi nhuận: <strong>{summaryData.profitMarginPercent}%</strong>
-            </div>
-          </div>
-
-          <div className="report-kpi-card">
-            <div className="report-kpi-title">
-              <span>Tổng Đơn & AOV</span>
-              <span>🧾</span>
-            </div>
-            <div className="report-kpi-value" style={{ color: '#F59E0B' }}>
-              {formatNumber(summaryData.totalOrders)} đơn
-            </div>
-            <div className="report-kpi-sub">
-              Giá trị TB/đơn: <strong>{formatCurrency(summaryData.averageOrderValue)}</strong>
-            </div>
-          </div>
+        {/* View Mode Sub-tabs */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <button
+            type="button"
+            className={`report-period-btn ${viewMode === 'charts' ? 'active' : ''}`}
+            onClick={() => setViewMode('charts')}
+          >
+            📊 Biểu Đồ & Top Sản Phẩm Bán Chạy
+          </button>
+          <button
+            type="button"
+            className={`report-period-btn ${viewMode === 'invoices' ? 'active' : ''}`}
+            onClick={() => setViewMode('invoices')}
+          >
+            🧾 Lịch Sử Hóa Đơn & Trả Hàng ({invoices.length})
+          </button>
         </div>
 
-        {/* Chart & Top Products Grid */}
-        <div className="report-grid-2col">
-          {/* Revenue Trend SVG Chart */}
+        {viewMode === 'invoices' ? (
+          /* Invoices List Table */
           <div className="report-card">
             <div className="report-card-title">
-              <span>Xu Hướng Doanh Thu & Lợi Nhuận Hằng Ngày</span>
-              <div className="report-chart-legend">
-                <div className="report-legend-item">
-                  <div className="report-legend-dot" style={{ backgroundColor: '#10B981' }}></div>
-                  <span>Doanh thu</span>
+              <span>Lịch Sử Giao Dịch & Hóa Đơn Bán Hàng</span>
+              <span style={{ fontSize: '12px', color: '#64748B' }}>Chi nhánh {selectedBranchId}</span>
+            </div>
+            <Table
+              columns={invoiceColumns}
+              data={invoices}
+              loading={loading}
+              rowKey="id"
+              emptyMessage="Chưa có hóa đơn nào tại chi nhánh này"
+            />
+          </div>
+        ) : (
+          /* Charts & Metrics Overview */
+          <>
+            {/* KPI Cards Grid */}
+            <div className="report-kpi-grid">
+              <div className="report-kpi-card">
+                <div className="report-kpi-title">
+                  <span>Tổng Doanh Thu</span>
+                  <span>💰</span>
                 </div>
-                <div className="report-legend-item">
-                  <div className="report-legend-dot" style={{ backgroundColor: '#38BDF8' }}></div>
-                  <span>Lợi nhuận</span>
+                <div className="report-kpi-value" style={{ color: '#10B981' }}>
+                  {formatCurrency(summaryData.totalRevenue)}
+                </div>
+                <div className="report-kpi-sub">Giá trị bán ra thực tế sau chiết khấu</div>
+              </div>
+
+              <div className="report-kpi-card">
+                <div className="report-kpi-title">
+                  <span>Tiền Vốn Hàng Bán</span>
+                  <span>📦</span>
+                </div>
+                <div className="report-kpi-value" style={{ color: '#94A3B8' }}>
+                  {formatCurrency(summaryData.totalCost)}
+                </div>
+                <div className="report-kpi-sub">Theo giá nhập kho bình quân</div>
+              </div>
+
+              <div className="report-kpi-card">
+                <div className="report-kpi-title">
+                  <span>Lợi Nhuận Gộp</span>
+                  <span>📈</span>
+                </div>
+                <div className="report-kpi-value" style={{ color: '#38BDF8' }}>
+                  {formatCurrency(summaryData.grossProfit)}
+                </div>
+                <div className="report-kpi-sub">
+                  Tỷ suất lợi nhuận: <strong>{summaryData.profitMarginPercent}%</strong>
+                </div>
+              </div>
+
+              <div className="report-kpi-card">
+                <div className="report-kpi-title">
+                  <span>Tổng Đơn & AOV</span>
+                  <span>🧾</span>
+                </div>
+                <div className="report-kpi-value" style={{ color: '#F59E0B' }}>
+                  {formatNumber(summaryData.totalOrders)} đơn
+                </div>
+                <div className="report-kpi-sub">
+                  Giá trị TB/đơn: <strong>{formatCurrency(summaryData.averageOrderValue)}</strong>
                 </div>
               </div>
             </div>
 
-            <div className="report-chart-wrapper">
-              <svg className="report-chart-svg" viewBox="0 0 600 200" preserveAspectRatio="none">
-                {/* Horizontal grid lines */}
-                <line x1="0" y1="40" x2="600" y2="40" stroke="#334155" strokeDasharray="3 3" />
-                <line x1="0" y1="100" x2="600" y2="100" stroke="#334155" strokeDasharray="3 3" />
-                <line x1="0" y1="160" x2="600" y2="160" stroke="#334155" strokeDasharray="3 3" />
+            {/* Chart & Top Products Grid */}
+            <div className="report-grid-2col">
+              {/* Revenue Trend SVG Chart */}
+              <div className="report-card">
+                <div className="report-card-title">
+                  <span>Xu Hướng Doanh Thu & Lợi Nhuận Hằng Ngày</span>
+                  <div className="report-chart-legend">
+                    <div className="report-legend-item">
+                      <div className="report-legend-dot" style={{ backgroundColor: '#10B981' }}></div>
+                      <span>Doanh thu</span>
+                    </div>
+                    <div className="report-legend-item">
+                      <div className="report-legend-dot" style={{ backgroundColor: '#38BDF8' }}></div>
+                      <span>Lợi nhuận</span>
+                    </div>
+                  </div>
+                </div>
 
-                {/* Bars for Daily Revenue & Profit */}
-                {summaryData.dailyTrend.map((d, idx) => {
-                  const totalBars = summaryData.dailyTrend.length;
-                  const slotWidth = 600 / totalBars;
-                  const xCenter = slotWidth * idx + slotWidth / 2;
+                <div className="report-chart-wrapper">
+                  <svg className="report-chart-svg" viewBox="0 0 600 200" preserveAspectRatio="none">
+                    <line x1="0" y1="40" x2="600" y2="40" stroke="#334155" strokeDasharray="3 3" />
+                    <line x1="0" y1="100" x2="600" y2="100" stroke="#334155" strokeDasharray="3 3" />
+                    <line x1="0" y1="160" x2="600" y2="160" stroke="#334155" strokeDasharray="3 3" />
 
-                  const revHeight = Math.max(4, ((Number(d.revenue) || 0) / maxRevenue) * 140);
-                  const profHeight = Math.max(2, ((Number(d.profit) || 0) / maxRevenue) * 140);
+                    {summaryData.dailyTrend.map((d, idx) => {
+                      const totalBars = summaryData.dailyTrend.length;
+                      const slotWidth = 600 / totalBars;
+                      const xCenter = slotWidth * idx + slotWidth / 2;
 
-                  const revY = 160 - revHeight;
-                  const profY = 160 - profHeight;
+                      const revHeight = Math.max(4, ((Number(d.revenue) || 0) / maxRevenue) * 140);
+                      const profHeight = Math.max(2, ((Number(d.profit) || 0) / maxRevenue) * 140);
 
-                  return (
-                    <g key={idx}>
-                      {/* Revenue Bar */}
-                      <rect
-                        x={xCenter - 14}
-                        y={revY}
-                        width="12"
-                        height={revHeight}
-                        fill="#10B981"
-                        rx="2"
-                      >
-                        <title>{`${d.date}: Doanh thu ${formatCurrency(d.revenue)} (${d.orderCount} đơn)`}</title>
-                      </rect>
+                      const revY = 160 - revHeight;
+                      const profY = 160 - profHeight;
 
-                      {/* Profit Bar */}
-                      <rect
-                        x={xCenter + 2}
-                        y={profY}
-                        width="12"
-                        height={profHeight}
-                        fill="#38BDF8"
-                        rx="2"
-                      >
-                        <title>{`${d.date}: Lợi nhuận ${formatCurrency(d.profit)}`}</title>
-                      </rect>
+                      return (
+                        <g key={idx}>
+                          <rect
+                            x={xCenter - 14}
+                            y={revY}
+                            width="12"
+                            height={revHeight}
+                            fill="#10B981"
+                            rx="2"
+                          >
+                            <title>{`${d.date}: Doanh thu ${formatCurrency(d.revenue)} (${d.orderCount} đơn)`}</title>
+                          </rect>
 
-                      {/* Date label */}
-                      <text
-                        x={xCenter}
-                        y="180"
-                        fill="#94A3B8"
-                        fontSize="10"
-                        textAnchor="middle"
-                      >
-                        {d.date}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
+                          <rect
+                            x={xCenter + 2}
+                            y={profY}
+                            width="12"
+                            height={profHeight}
+                            fill="#38BDF8"
+                            rx="2"
+                          >
+                            <title>{`${d.date}: Lợi nhuận ${formatCurrency(d.profit)}`}</title>
+                          </rect>
+
+                          <text
+                            x={xCenter}
+                            y="180"
+                            fill="#94A3B8"
+                            fontSize="10"
+                            textAnchor="middle"
+                          >
+                            {d.date}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
+              </div>
+
+              {/* Top Selling Goods Table */}
+              <div className="report-card">
+                <div className="report-card-title">
+                  <span>Top Sản Phẩm Bán Chạy Nhất</span>
+                  <span style={{ fontSize: '11px', color: '#64748B' }}>Theo số lượng bán</span>
+                </div>
+
+                <Table
+                  columns={topColumns}
+                  data={topProducts}
+                  rowKey="productId"
+                  emptyMessage="Chưa có dữ liệu giao dịch"
+                />
+              </div>
             </div>
+          </>
+        )}
+      </main>
+
+      {/* Modal Refund Invoice */}
+      <Modal
+        isOpen={showRefundModal}
+        onClose={() => {
+          setShowRefundModal(false);
+          setRefundTarget(null);
+        }}
+        title={`Xác nhận trả hàng cho hóa đơn #${refundTarget?.id}`}
+        width="440px"
+      >
+        <form onSubmit={handleProcessRefund}>
+          <p style={{ color: '#F8FAFC', fontSize: '14px', marginBottom: '12px' }}>
+            Bạn đang thao tác hoàn trả hóa đơn giá trị:{' '}
+            <strong style={{ color: '#10B981' }}>{formatCurrency(refundTarget?.totalAmount || 0)}</strong>.
+          </p>
+          <div style={{ backgroundColor: '#0F172A', padding: '12px', borderRadius: '6px', marginBottom: '14px', border: '1px solid #334155' }}>
+            <p style={{ fontSize: '12px', color: '#F59E0B', margin: 0 }}>
+              ⚠️ Toàn bộ số lượng sản phẩm trong đơn sẽ được <strong>hoàn trả tự động vào kho hàng nguyên tử</strong>. Điểm tích lũy thành viên đã tặng cũng sẽ được thu hồi.
+            </p>
           </div>
 
-          {/* Top Selling Goods Table */}
-          <div className="report-card">
-            <div className="report-card-title">
-              <span>Top Sản Phẩm Bán Chạy Nhất</span>
-              <span style={{ fontSize: '11px', color: '#64748B' }}>Theo số lượng bán</span>
-            </div>
-
-            <Table
-              columns={topColumns}
-              data={topProducts}
-              rowKey="productId"
-              emptyMessage="Chưa có dữ liệu giao dịch"
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>
+              Lý do trả hàng / ghi chú hoàn tiền:
+            </label>
+            <input
+              type="text"
+              placeholder="vd: Hàng bị lỗi bao bì / Khách đổi ý..."
+              style={{
+                width: '100%',
+                backgroundColor: '#0F172A',
+                border: '1px solid #475569',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                color: '#F8FAFC',
+                boxSizing: 'border-box'
+              }}
+              value={refundReason}
+              onChange={(e) => setRefundReason(e.target.value)}
+              required
             />
           </div>
-        </div>
-      </main>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setShowRefundModal(false);
+                setRefundTarget(null);
+              }}
+            >
+              Hủy
+            </Button>
+            <Button type="submit" variant="danger">
+              Xác nhận Hoàn tiền & Hoàn kho
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

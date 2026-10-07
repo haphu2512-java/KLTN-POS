@@ -102,4 +102,49 @@ class InvoiceServiceTest {
 
         assertThrows(BusinessException.class, () -> invoiceService.createInvoice(req));
     }
+
+    @Test
+    @DisplayName("Hoàn trả hàng thành công: hoàn kho nguyên tử, thu hồi điểm và đổi trạng thái REFUNDED")
+    void testRefundInvoiceSuccess() {
+        Branch branch = Branch.builder().id(1L).name("Chi nhánh 1").build();
+        Customer customer = Customer.builder().id(1L).name("Anh Nam").points(20).build();
+        Product product = Product.builder().id(1L).name("Sữa tươi").build();
+
+        InvoiceDetail detail = InvoiceDetail.builder()
+                .product(product)
+                .quantity(3)
+                .build();
+
+        Invoice invoice = Invoice.builder()
+                .id(10L)
+                .branch(branch)
+                .customer(customer)
+                .status(InvoiceStatus.PAID)
+                .totalAmount(BigDecimal.valueOf(50000))
+                .details(List.of(detail))
+                .build();
+
+        when(invoiceRepository.findById(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Invoice refunded = invoiceService.refundInvoice(10L, "Khách đổi ý");
+
+        assertEquals(InvoiceStatus.REFUNDED, refunded.getStatus());
+        assertTrue(refunded.getNote().contains("Khách đổi ý"));
+        verify(inventoryService).addStockAtomic(1L, 1L, 3);
+        verify(customerRepository).addPoints(1L, -5); // 50,000 VND = 5 points
+    }
+
+    @Test
+    @DisplayName("Ném lỗi khi hoàn trả hóa đơn đã được hoàn trả trước đó")
+    void testRefundAlreadyRefunded() {
+        Invoice invoice = Invoice.builder()
+                .id(11L)
+                .status(InvoiceStatus.REFUNDED)
+                .build();
+
+        when(invoiceRepository.findById(11L)).thenReturn(Optional.of(invoice));
+
+        assertThrows(BusinessException.class, () -> invoiceService.refundInvoice(11L, "Lỗi"));
+    }
 }

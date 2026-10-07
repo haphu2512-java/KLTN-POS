@@ -1,6 +1,7 @@
 E:\1.KLTN\BACKEND\src\main\java\com\pos\product\ProductRequest.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\report\TopProductResponse.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\product\ProductController.java
+E:\1.KLTN\BACKEND\src\main\java\com\pos\user\CreateUserRequest.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\forecast\ForecastService.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\sale\InvoiceRequest.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\sale\InvoiceController.java
@@ -33,15 +34,19 @@ E:\1.KLTN\BACKEND\src\main\java\com\pos\product\ProductRepository.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\purchase\StockInController.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\purchase\StockInService.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\config\DatabaseInitializer.java
+E:\1.KLTN\BACKEND\src\main\java\com\pos\user\UserController.java
+E:\1.KLTN\BACKEND\src\main\java\com\pos\user\UserService.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\purchase\SupplierController.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\sale\InvoiceRepository.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\report\RevenueSummaryResponse.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\sale\InvoiceService.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\security\JwtTokenProvider.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\customer\CustomerService.java
+E:\1.KLTN\BACKEND\src\main\java\com\pos\user\UpdateUserRequest.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\auth\LoginRequest.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\common\GlobalExceptionHandler.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\common\ApiResponse.java
+E:\1.KLTN\BACKEND\src\main\java\com\pos\sale\InvoiceStatus.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\inventory\InventoryRepository.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\forecast\ForecastController.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\inventory\InventoryController.java
@@ -55,6 +60,7 @@ E:\1.KLTN\BACKEND\src\main\java\com\pos\branch\Branch.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\branch\BranchController.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\config\WebSocketConfig.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\purchase\SupplierRepository.java
+E:\1.KLTN\BACKEND\src\main\java\com\pos\user\UserResponse.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\auth\AuthResponse.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\security\SecurityConfig.java
 E:\1.KLTN\BACKEND\src\main\java\com\pos\branch\BranchService.java

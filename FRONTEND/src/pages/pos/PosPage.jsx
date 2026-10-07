@@ -26,6 +26,8 @@ export default function PosPage({
   onNavigateToInventory,
   onNavigateToForecast,
   onNavigateToReport,
+  onNavigateToPartners,
+  onNavigateToStaff,
   onLogout
 }) {
   // Products & Customers
@@ -473,6 +475,8 @@ export default function PosPage({
         onNavigateToInventory={onNavigateToInventory}
         onNavigateToForecast={onNavigateToForecast}
         onNavigateToReport={onNavigateToReport}
+        onNavigateToPartners={onNavigateToPartners}
+        onNavigateToStaff={onNavigateToStaff}
       />
 
       {/* Main 2-Column POS Workspace */}
