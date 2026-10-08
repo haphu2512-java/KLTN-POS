@@ -26,6 +26,8 @@ export default function ForecastPage({
   onNavigateToPos,
   onNavigateToInventory,
   onNavigateToReport,
+  onNavigateToPartners,
+  onNavigateToStaff,
   onQuickStockIn,
   onLogout
 }) {
@@ -286,6 +288,24 @@ export default function ForecastPage({
           >
             📊 Báo cáo
           </Button>
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={onNavigateToPartners}
+            title="Quản lý khách hàng thân thiết & nhà cung cấp"
+          >
+            👥 Khách & NCC
+          </Button>
+          {currentUser?.role === 'ADMIN' && onNavigateToStaff && (
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={onNavigateToStaff}
+              title="Quản lý tài khoản nhân viên"
+            >
+              👤 Nhân viên
+            </Button>
+          )}
           <Button
             variant="primary"
             size="md"

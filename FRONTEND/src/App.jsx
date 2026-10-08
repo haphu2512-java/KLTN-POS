@@ -5,10 +5,12 @@ import PosPage from './pages/pos/PosPage';
 import InventoryPage from './pages/inventory/InventoryPage';
 import ForecastPage from './pages/forecast/ForecastPage';
 import ReportPage from './pages/report/ReportPage';
+import PartnerPage from './pages/partner/PartnerPage';
+import StaffPage from './pages/admin/StaffPage';
 
 function MainApp() {
   const { user, branchId, isBackendOnline, isWsConnected, logout, isAuthenticated } = useAuth();
-  const [currentScreen, setCurrentScreen] = useState('pos'); // 'pos' | 'inventory' | 'forecast' | 'report'
+  const [currentScreen, setCurrentScreen] = useState('pos'); // 'pos' | 'inventory' | 'forecast' | 'report' | 'partners' | 'staff'
   const [isOfflineDemo, setIsOfflineDemo] = useState(false);
 
   // If user is not authenticated and hasn't selected offline demo, show Login Screen
@@ -38,6 +40,8 @@ function MainApp() {
         onNavigateToPos={() => setCurrentScreen('pos')}
         onNavigateToForecast={() => setCurrentScreen('forecast')}
         onNavigateToReport={() => setCurrentScreen('report')}
+        onNavigateToPartners={() => setCurrentScreen('partners')}
+        onNavigateToStaff={() => setCurrentScreen('staff')}
         onLogout={handleLogout}
       />
     );
@@ -67,6 +71,40 @@ function MainApp() {
         onNavigateToPos={() => setCurrentScreen('pos')}
         onNavigateToInventory={() => setCurrentScreen('inventory')}
         onNavigateToForecast={() => setCurrentScreen('forecast')}
+        onNavigateToPartners={() => setCurrentScreen('partners')}
+        onNavigateToStaff={() => setCurrentScreen('staff')}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  if (currentScreen === 'partners') {
+    return (
+      <PartnerPage
+        currentUser={currentUser}
+        branchId={branchId}
+        isOnline={isBackendOnline}
+        onNavigateToPos={() => setCurrentScreen('pos')}
+        onNavigateToInventory={() => setCurrentScreen('inventory')}
+        onNavigateToForecast={() => setCurrentScreen('forecast')}
+        onNavigateToReport={() => setCurrentScreen('report')}
+        onNavigateToStaff={() => setCurrentScreen('staff')}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  if (currentScreen === 'staff') {
+    return (
+      <StaffPage
+        currentUser={currentUser}
+        branchId={branchId}
+        isOnline={isBackendOnline}
+        onNavigateToPos={() => setCurrentScreen('pos')}
+        onNavigateToInventory={() => setCurrentScreen('inventory')}
+        onNavigateToForecast={() => setCurrentScreen('forecast')}
+        onNavigateToReport={() => setCurrentScreen('report')}
+        onNavigateToPartners={() => setCurrentScreen('partners')}
         onLogout={handleLogout}
       />
     );
@@ -81,6 +119,8 @@ function MainApp() {
       onNavigateToInventory={() => setCurrentScreen('inventory')}
       onNavigateToForecast={() => setCurrentScreen('forecast')}
       onNavigateToReport={() => setCurrentScreen('report')}
+      onNavigateToPartners={() => setCurrentScreen('partners')}
+      onNavigateToStaff={() => setCurrentScreen('staff')}
       onLogout={handleLogout}
     />
   );

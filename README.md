@@ -63,10 +63,15 @@
 - [x] Sinh gợi ý nhập hàng tự động (công thức nhu cầu an toàn - tồn kho) kèm phân loại mức độ ưu tiên
 - [x] Đánh giá độ chính xác mô hình dự báo (MAE - Mean Absolute Error) đạt độ tin cậy cao
 
-## Giai đoạn 6 — Kiểm thử (Tuần 12–13)
-- [x] Unit test cho các module chính với JUnit 5 & Mockito (10/10 tests passed: `ForecastServiceTest`, `InventoryServiceTest`, `InvoiceServiceTest`, `ReportServiceTest`)
-- [x] Kiểm thử tự động giao diện và tương tác người dùng qua Browser Subagent & Vite Build (0 errors)
-- [x] Thiết lập Dockerfile đa giai đoạn (Multi-stage Java 21) và `docker-compose.yml` chạy MySQL 8 + Spring Boot Backend
+## Giai đoạn 6 — Kiểm thử, Mở rộng Nghiệp vụ & Tối ưu hóa (Tuần 12–13)
+- [x] Unit test cho các module chính với JUnit 5 & Mockito (16/16 tests passed: `UserServiceTest`, `ForecastServiceTest`, `InventoryServiceTest`, `InvoiceServiceTest`, `ReportServiceTest`)
+- [x] Kiểm thử tự động giao diện và tương tác người dùng qua Browser Subagent & Vite Build (0 errors, 131 modules)
+- [x] Khắc phục toàn bộ 9 vấn đề kỹ thuật & bảo mật trong `docs/fix.md` (Bảo mật `/api/auth/me`, thắt chặt CORS, Atomic customer points update, Pagination cho hóa đơn, Dự báo dữ liệu thực tế, Hoàn thiện Nightly Job)
+- [x] Thiết lập Dockerfile đa giai đoạn (`maven:3.9-eclipse-temurin-21-alpine` -> JRE 21) và `docker-compose.yml` chạy MySQL 8 + Spring Boot Backend độc lập không cần cài đặt môi trường
+- [x] **Xây dựng Module Quản lý Nhân viên & Phân quyền (Staff Management):** API CRUD tài khoản (`UserController`, `UserService`, `UserResponse`), phân quyền (`ADMIN`, `MANAGER`, `CASHIER`, `WAREHOUSE`), khóa/mở khóa tài khoản, đổi mật khẩu và giao diện `StaffPage.jsx`.
+- [x] **Xây dựng Module Quản lý Đối tác (Customer & Supplier Management):** Quản lý khách hàng thân thiết, tra cứu điểm tích lũy, quản lý nhà cung cấp hàng hóa trên giao diện `PartnerPage.jsx`.
+- [x] **Nghiệp vụ Trả hàng & Hoàn tiền (Sales Return & Refund):** Trạng thái hóa đơn `InvoiceStatus` (`PAID`, `REFUNDED`), API hoàn trả tự động hoàn tồn kho nguyên tử (`addStockAtomic`), thu hồi điểm thưởng, ghi chú lý do và giao diện thực hiện trả hàng trong tab Lịch sử Hóa đơn.
+- [x] **Xuất dữ liệu Báo cáo & Tồn kho (CSV/Excel Export):** Tích hợp tiện ích `exportCsv.js` chuẩn UTF-8 BOM hiển thị tiếng Việt trên Excel cho cả Báo cáo Doanh thu, Danh sách Hóa đơn và Bảng Tồn kho theo chi nhánh.
 
 ## Giai đoạn 7 — Triển khai thử nghiệm thực tế (Tuần 14–15)
 - [ ] Cài đặt & triển khai tại 1 cửa hàng bán lẻ thực tế

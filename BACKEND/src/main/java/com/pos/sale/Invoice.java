@@ -57,6 +57,11 @@ public class Invoice {
     @Column(name = "change_amount", precision = 14, scale = 2)
     private BigDecimal changeAmount;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20)
+    @Builder.Default
+    private InvoiceStatus status = InvoiceStatus.PAID;
+
     @Column(length = 255)
     private String note;
 

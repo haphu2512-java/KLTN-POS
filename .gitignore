@@ -1,1 +1,96 @@
+# ===================================================================
+# Git Ignore Configuration - POS & Inventory Management System (KLTN)
+# ===================================================================
+
+# --- Environment & Sensitive Credentials ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+*.cert
+
+# Exception: Keep .env.example templates committed
+!.env.example
+!FRONTEND/.env.example
+
+# --- Java & Spring Boot (BACKEND) ---
+BACKEND/target/
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+.mvn/wrapper/maven-wrapper.jar
+
+# --- Node.js & React / Vite / Electron (FRONTEND) ---
+FRONTEND/node_modules/
+node_modules/
+FRONTEND/dist/
+FRONTEND/dist-ssr/
+dist/
+dist-ssr/
+.npm
+*.tsbuildinfo
+
+# --- Python & AI / Forecasting artifacts ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.pytest_cache/
+*.pkl
+*.h5
+*.onnx
+
+# --- Logs ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --- IDE & Editor files ---
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.project
+.classpath
+.settings/
+
+# --- Operating System Files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# --- Docker & Temporary Volumes ---
+.docker/
+
+# --- Antigravity IDE / Agent transcripts & scratch files ---
 chat_history.md
+docs/chat_history.md
+.system_generated/
+scratch/

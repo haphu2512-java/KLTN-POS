@@ -20,4 +20,10 @@ export const purchaseService = {
     const res = await api.get('/suppliers');
     return res.data || [];
   },
+
+  async createSupplier(supplierData) {
+    const res = await api.post('/suppliers', supplierData);
+    return res.data;
+  },
 };
+

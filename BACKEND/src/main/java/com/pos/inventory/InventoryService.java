@@ -6,6 +6,7 @@ import com.pos.common.BusinessException;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class InventoryService {
 
     private final InventoryRepository inventoryRepository;
@@ -83,8 +85,8 @@ public class InventoryService {
         try {
             messagingTemplate.convertAndSend("/topic/inventory-updates",
                     String.format("{\"branchId\": %d, \"productId\": %d}", branchId, productId));
-        } catch (Exception ignored) {
-            // Ignore messaging errors in offline / test setups
+        } catch (Exception e) {
+            log.warn("WS notify failed branchId={} productId={}: {}", branchId, productId, e.getMessage());
         }
     }
 }

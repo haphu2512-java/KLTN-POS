@@ -12,6 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +28,13 @@ public class InvoiceService {
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final InventoryService inventoryService;
+
+    public Page<Invoice> getInvoices(Long branchId, Pageable pageable) {
+        if (branchId != null) {
+            return invoiceRepository.findByBranchIdOrderByCreatedAtDesc(branchId, pageable);
+        }
+        return invoiceRepository.findAllByOrderByCreatedAtDesc(pageable);
+    }
 
     public List<Invoice> getAllInvoices(Long branchId) {
         if (branchId != null) {
@@ -100,12 +110,56 @@ public class InvoiceService {
             invoice.setChangeAmount(BigDecimal.ZERO);
         }
 
-        // 3. Award Customer Points (1 point per 10,000 VND)
+        // 3. Award Customer Points atomically (1 point per 10,000 VND)
         if (customer != null && totalAmount.compareTo(BigDecimal.ZERO) > 0) {
             int earnedPoints = totalAmount.divide(BigDecimal.valueOf(10000), java.math.RoundingMode.FLOOR).intValue();
-            customer.setPoints(customer.getPoints() + earnedPoints);
-            customerRepository.save(customer);
+            if (earnedPoints > 0) {
+                customerRepository.addPoints(customer.getId(), earnedPoints);
+                customer.setPoints(customer.getPoints() + earnedPoints);
+            }
         }
+
+        return invoiceRepository.save(invoice);
+    }
+
+    @Transactional
+    public Invoice refundInvoice(Long id, String reason) {
+        Invoice invoice = invoiceRepository.findById(id)
+                .orElseThrow(() -> new BusinessException("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn với ID: " + id));
+
+        if (invoice.getStatus() == InvoiceStatus.REFUNDED) {
+            throw new BusinessException("ALREADY_REFUNDED", "Hóa đơn này đã được hoàn trả trước đó");
+        }
+
+        // 1. Hoàn tồn kho nguyên tử cho từng sản phẩm trong hóa đơn
+        if (invoice.getDetails() != null) {
+            for (InvoiceDetail detail : invoice.getDetails()) {
+                inventoryService.addStockAtomic(
+                        detail.getProduct().getId(),
+                        invoice.getBranch().getId(),
+                        detail.getQuantity()
+                );
+            }
+        }
+
+        // 2. Thu hồi điểm tích lũy khách hàng (nếu có)
+        if (invoice.getCustomer() != null && invoice.getTotalAmount() != null && invoice.getTotalAmount().compareTo(BigDecimal.ZERO) > 0) {
+            int earnedPoints = invoice.getTotalAmount().divide(BigDecimal.valueOf(10000), java.math.RoundingMode.FLOOR).intValue();
+            if (earnedPoints > 0) {
+                int currentPoints = invoice.getCustomer().getPoints();
+                int deductPoints = Math.min(currentPoints, earnedPoints);
+                if (deductPoints > 0) {
+                    customerRepository.addPoints(invoice.getCustomer().getId(), -deductPoints);
+                    invoice.getCustomer().setPoints(currentPoints - deductPoints);
+                }
+            }
+        }
+
+        // 3. Cập nhật trạng thái hóa đơn
+        invoice.setStatus(InvoiceStatus.REFUNDED);
+        String noteReason = (reason != null && !reason.trim().isEmpty()) ? " | Lý do trả: " + reason.trim() : "";
+        String existingNote = invoice.getNote() != null ? invoice.getNote() : "";
+        invoice.setNote((existingNote + " [ĐÃ HOÀN TRẢ" + noteReason + "]").trim());
 
         return invoiceRepository.save(invoice);
     }

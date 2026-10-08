@@ -14,6 +14,7 @@ import { productService } from '../../services/productService';
 import { inventoryService } from '../../services/inventoryService';
 import { purchaseService } from '../../services/purchaseService';
 import { websocketService } from '../../services/websocketService';
+import { exportToCsv } from '../../utils/exportCsv';
 import './InventoryPage.css';
 
 export default function InventoryPage({
@@ -24,6 +25,8 @@ export default function InventoryPage({
   onNavigateToPos,
   onNavigateToForecast,
   onNavigateToReport,
+  onNavigateToPartners,
+  onNavigateToStaff,
   onLogout
 }) {
   // State
@@ -260,6 +263,22 @@ export default function InventoryPage({
     handleSaveStockIn(quickSlip);
   };
 
+  const handleExportInventory = () => {
+    const headers = ['Mã vạch', 'Tên sản phẩm', 'Danh mục', 'ĐVT', 'Tồn kho', 'Ngưỡng an toàn', 'Giá vốn (VND)', 'Giá bán (VND)', 'Tổng giá trị tồn (VND)'];
+    const rows = filteredProducts.map((p) => [
+      p.barcode,
+      p.name,
+      p.category,
+      p.unit,
+      p.stock,
+      p.minThreshold,
+      p.costPrice,
+      p.salePrice,
+      (Number(p.stock) || 0) * (Number(p.costPrice) || 0)
+    ]);
+    exportToCsv(`BaoCaoTonKho_ChiNhanh_${currentBranchId}`, headers, rows);
+  };
+
   // Table columns for Inventory
   const productColumns = [
     {
@@ -476,6 +495,24 @@ export default function InventoryPage({
             📊 Báo cáo
           </Button>
           <Button
+            variant="secondary"
+            size="md"
+            onClick={onNavigateToPartners}
+            title="Quản lý khách hàng thân thiết & nhà cung cấp"
+          >
+            👥 Khách & NCC
+          </Button>
+          {currentUser?.role === 'ADMIN' && onNavigateToStaff && (
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={onNavigateToStaff}
+              title="Quản lý tài khoản nhân viên"
+            >
+              👤 Nhân viên
+            </Button>
+          )}
+          <Button
             variant="primary"
             size="md"
             onClick={onNavigateToPos}
@@ -609,13 +646,23 @@ export default function InventoryPage({
                 )}
               </div>
 
-              <div style={{ width: '320px' }}>
-                <Input
-                  placeholder="Tìm theo tên hàng hoặc mã vạch..."
-                  prefix="🔍"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ width: '300px' }}>
+                  <Input
+                    placeholder="Tìm theo tên hàng hoặc mã vạch..."
+                    prefix="🔍"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <Button
+                  size="md"
+                  variant="secondary"
+                  onClick={handleExportInventory}
+                  title="Xuất bảng tồn kho ra file Excel/CSV"
+                >
+                  📥 Xuất CSV
+                </Button>
               </div>
             </div>
           )}
