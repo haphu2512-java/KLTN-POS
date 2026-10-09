@@ -295,11 +295,29 @@ export default function InventoryPage({
       key: 'name',
       title: 'Tên hàng hóa & Danh mục',
       render: (val, row) => (
-        <div>
-          <div className="font-medium">{val}</div>
-          <span className="text-muted" style={{ fontSize: '11px' }}>
-            {row.category} • ĐVT: <strong>{row.unit}</strong>
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {row.imageUrl && (
+            <img
+              src={row.imageUrl}
+              alt=""
+              style={{
+                width: 38,
+                height: 38,
+                objectFit: 'contain',
+                borderRadius: 4,
+                backgroundColor: '#fff',
+                border: '1px solid #e2e8f0',
+                flexShrink: 0
+              }}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          )}
+          <div>
+            <div className="font-medium">{val}</div>
+            <span className="text-muted" style={{ fontSize: '11px' }}>
+              {row.category} • ĐVT: <strong>{row.unit}</strong>
+            </span>
+          </div>
         </div>
       )
     },

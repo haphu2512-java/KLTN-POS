@@ -47,6 +47,7 @@ public class ProductService {
                 .costPrice(req.getCostPrice() != null ? req.getCostPrice() : req.getSalePrice())
                 .salePrice(req.getSalePrice())
                 .unit(StringUtils.hasText(req.getUnit()) ? req.getUnit().trim() : "Cái")
+                .imageUrl(req.getImageUrl() != null ? req.getImageUrl().trim() : null)
                 .active(true)
                 .build();
 
@@ -70,6 +71,9 @@ public class ProductService {
         existing.setSalePrice(req.getSalePrice());
         if (StringUtils.hasText(req.getUnit())) {
             existing.setUnit(req.getUnit().trim());
+        }
+        if (req.getImageUrl() != null) {
+            existing.setImageUrl(req.getImageUrl().trim());
         }
 
         return productRepository.save(existing);

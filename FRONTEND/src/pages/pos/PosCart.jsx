@@ -32,15 +32,33 @@ export default function PosCart({
       key: 'name',
       title: 'Tên hàng hóa / Mã vạch',
       render: (_, row) => (
-        <div>
-          <div className="font-medium" style={{ fontSize: '13px' }}>
-            {row.name}
-          </div>
-          <div
-            className="text-muted"
-            style={{ fontSize: '11px', fontFamily: 'var(--font-mono)' }}
-          >
-            {row.barcode}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {row.imageUrl && (
+            <img
+              src={row.imageUrl}
+              alt=""
+              style={{
+                width: 32,
+                height: 32,
+                objectFit: 'contain',
+                borderRadius: 4,
+                backgroundColor: '#fff',
+                border: '1px solid #e2e8f0',
+                flexShrink: 0
+              }}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          )}
+          <div>
+            <div className="font-medium" style={{ fontSize: '13px' }}>
+              {row.name}
+            </div>
+            <div
+              className="text-muted"
+              style={{ fontSize: '11px', fontFamily: 'var(--font-mono)' }}
+            >
+              {row.barcode}
+            </div>
           </div>
         </div>
       )
