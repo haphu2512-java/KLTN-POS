@@ -22,11 +22,13 @@ export default function ProductSearchModal({
     const term = searchTerm.toLowerCase().trim();
     if (!term) return true;
     return (
-      p.name.toLowerCase().includes(term) ||
-      p.barcode.includes(term) ||
-      p.category.toLowerCase().includes(term)
+      (p.name && p.name.toLowerCase().includes(term)) ||
+      (p.barcode && String(p.barcode).toLowerCase().includes(term)) ||
+      (p.category && p.category.toLowerCase().includes(term))
     );
   });
+
+  const displayedProducts = filtered.slice(0, 100);
 
   const columns = [
     {
@@ -136,7 +138,7 @@ export default function ProductSearchModal({
 
         <Table
           columns={columns}
-          data={filtered}
+          data={displayedProducts}
           maxHeight="380px"
           emptyText="Không tìm thấy sản phẩm nào phù hợp"
           onRowClick={(row) => {

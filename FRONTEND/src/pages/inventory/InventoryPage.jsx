@@ -3,12 +3,6 @@ import { Button, Input, Table, Badge } from '../../components/common';
 import StockInModal from './StockInModal';
 import StockTransferModal from './StockTransferModal';
 import StockInDetailModal from './StockInDetailModal';
-import {
-  INITIAL_PRODUCTS,
-  INITIAL_SUPPLIERS,
-  INITIAL_BRANCHES,
-  INITIAL_STOCK_IN_HISTORY
-} from '../../data/mockProducts';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 import { productService } from '../../services/productService';
 import { inventoryService } from '../../services/inventoryService';
@@ -16,6 +10,11 @@ import { purchaseService } from '../../services/purchaseService';
 import { websocketService } from '../../services/websocketService';
 import { exportToCsv } from '../../utils/exportCsv';
 import './InventoryPage.css';
+
+const BRANCHES = [
+  { id: 1, name: 'Chi nhánh 1 (Quận 1)' },
+  { id: 2, name: 'Chi nhánh 2 (Bình Thạnh)' }
+];
 
 export default function InventoryPage({
   currentUser,
@@ -29,11 +28,11 @@ export default function InventoryPage({
   onNavigateToStaff,
   onLogout
 }) {
-  // State
-  const [products, setProducts] = useState(INITIAL_PRODUCTS);
-  const [suppliers, setSuppliers] = useState(INITIAL_SUPPLIERS);
-  const [branches] = useState(INITIAL_BRANCHES);
-  const [stockInHistory, setStockInHistory] = useState(INITIAL_STOCK_IN_HISTORY);
+  // State from Database
+  const [products, setProducts] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [branches] = useState(BRANCHES);
+  const [stockInHistory, setStockInHistory] = useState([]);
 
   const [currentBranchId, setCurrentBranchId] = useState(branchId || 1);
   const [activeTab, setActiveTab] = useState('inventory'); // 'inventory' | 'history'
@@ -43,23 +42,37 @@ export default function InventoryPage({
     let isMounted = true;
     async function loadData() {
       try {
-        const [prodList, invList, supList, slipList] = await Promise.all([
+        const [prodRes, invRes, supRes, slipRes] = await Promise.allSettled([
           productService.getProducts(),
           inventoryService.getBranchInventory(currentBranchId),
           purchaseService.getSuppliers(),
           purchaseService.getStockIns(currentBranchId)
         ]);
 
+        const prodList = prodRes.status === 'fulfilled' ? prodRes.value : [];
+        const invList = invRes.status === 'fulfilled' ? invRes.value : [];
+        const supList = supRes.status === 'fulfilled' ? supRes.value : [];
+        const slipList = slipRes.status === 'fulfilled' ? slipRes.value : [];
+
         if (isMounted) {
           if (Array.isArray(prodList) && prodList.length > 0) {
             const stockMap = new Map();
-            (invList || []).forEach(inv => stockMap.set(inv.productId || inv.product?.id, inv.quantity));
+            const thresholdMap = new Map();
+            (invList || []).forEach(inv => {
+              const pid = inv.productId || inv.product?.id;
+              if (pid) {
+                stockMap.set(pid, inv.quantity);
+                if (inv.minThreshold !== undefined) {
+                  thresholdMap.set(pid, inv.minThreshold);
+                }
+              }
+            });
             const merged = prodList.map(p => ({
               ...p,
               stock: stockMap.has(p.id) ? stockMap.get(p.id) : (p.stock || 50),
               costPrice: p.costPrice || 0,
-              salePrice: p.sellingPrice || p.price || 0,
-              minThreshold: p.minThreshold || 10
+              salePrice: p.salePrice ?? p.sellingPrice ?? p.price ?? 0,
+              minThreshold: thresholdMap.has(p.id) ? thresholdMap.get(p.id) : (p.minThreshold || 5)
             }));
             setProducts(merged);
           }
@@ -90,9 +103,7 @@ export default function InventoryPage({
       }
     }
 
-    if (isOnline) {
-      loadData();
-    }
+    loadData();
 
     // Subscribe to STOMP WebSocket inventory updates
     const unsubWs = websocketService.on('inventory-update', (event) => {
@@ -163,6 +174,20 @@ export default function InventoryPage({
       return true;
     });
   }, [products, selectedCategory, stockStatusFilter, searchTerm]);
+
+  // Pagination for large inventory datasets (1900+ products)
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
+  const totalPages = Math.ceil(filteredProducts.length / pageSize) || 1;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategory, stockStatusFilter, searchTerm]);
+
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(start, start + pageSize);
+  }, [filteredProducts, currentPage, pageSize]);
 
   // Handle Save New Stock-In
   const handleSaveStockIn = async (newStockIn) => {
@@ -688,11 +713,41 @@ export default function InventoryPage({
 
         {/* Active Content Tab */}
         {activeTab === 'inventory' ? (
-          <Table
-            columns={productColumns}
-            data={filteredProducts}
-            emptyText="Không có sản phẩm nào phù hợp với bộ lọc"
-          />
+          <>
+            <Table
+              columns={productColumns}
+              data={paginatedProducts}
+              emptyText="Không có sản phẩm nào phù hợp với bộ lọc"
+            />
+            {filteredProducts.length > pageSize && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '0 8px' }}>
+                <span className="text-muted" style={{ fontSize: '13px' }}>
+                  Hiển thị {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, filteredProducts.length)} / {filteredProducts.length} mặt hàng
+                </span>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  >
+                    ← Trước
+                  </Button>
+                  <span style={{ fontSize: '13px', fontWeight: 600 }}>
+                    Trang {currentPage} / {totalPages}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  >
+                    Sau →
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <Table
             columns={historyColumns}

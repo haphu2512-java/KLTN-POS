@@ -19,8 +19,14 @@ public class InventoryController {
     private final InventoryService inventoryService;
 
     @GetMapping
-    @Operation(summary = "Lấy danh sách tồn kho theo Chi nhánh")
+    @Operation(summary = "Lấy danh sách tồn kho theo Chi nhánh (Query Param)")
     public ResponseEntity<ApiResponse<List<Inventory>>> getByBranch(@RequestParam Long branchId) {
+        return ResponseEntity.ok(ApiResponse.ok(inventoryService.getInventoryByBranch(branchId)));
+    }
+
+    @GetMapping("/branch/{branchId}")
+    @Operation(summary = "Lấy danh sách tồn kho theo Chi nhánh (Path Variable)")
+    public ResponseEntity<ApiResponse<List<Inventory>>> getByBranchPath(@PathVariable Long branchId) {
         return ResponseEntity.ok(ApiResponse.ok(inventoryService.getInventoryByBranch(branchId)));
     }
 

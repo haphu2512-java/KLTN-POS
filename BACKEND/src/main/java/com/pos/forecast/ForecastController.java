@@ -17,7 +17,7 @@ public class ForecastController {
 
     private final ForecastService forecastService;
 
-    @GetMapping("/demand")
+    @GetMapping({"/demand", "/replenishment"})
     @Operation(summary = "Tính toán dự báo nhu cầu bán hàng và đề xuất nhập kho cho chi nhánh")
     public ResponseEntity<ApiResponse<List<ForecastResponse>>> getDemandForecast(
             @RequestParam(defaultValue = "1") Long branchId,

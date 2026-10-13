@@ -31,38 +31,26 @@ export default function PartnerPage({
   const [supplierForm, setSupplierForm] = useState({ name: '', phone: '', email: '', address: '' });
 
   const fetchCustomers = async (search = '') => {
-    if (!isOnline) {
-      setCustomers([
-        { id: 1, name: 'Nguyễn Văn Nam', phone: '0901234567', points: 45, createdAt: new Date().toISOString() },
-        { id: 2, name: 'Trần Thị Mai', phone: '0988765432', points: 120, createdAt: new Date().toISOString() }
-      ]);
-      return;
-    }
     setLoading(true);
     try {
       const data = await customerService.getCustomers(search);
       setCustomers(data || []);
     } catch (err) {
-      console.error('Lỗi khi tải khách hàng:', err);
+      console.error('Lỗi khi tải khách hàng từ backend:', err);
+      setCustomers([]);
     } finally {
       setLoading(false);
     }
   };
 
   const fetchSuppliers = async () => {
-    if (!isOnline) {
-      setSuppliers([
-        { id: 1, name: 'Công ty CP Sữa Việt Nam (Vinamilk)', phone: '1900636979', email: 'vinamilk@vinamilk.com.vn', address: '10 Tân Trào, Q.7, TP.HCM' },
-        { id: 2, name: 'Công ty TNHH Nước Giải Khát Coca-Cola', phone: '18001717', email: 'contact@cocacola.vn', address: 'Thủ Đức, TP.HCM' }
-      ]);
-      return;
-    }
     setLoading(true);
     try {
       const data = await purchaseService.getSuppliers();
       setSuppliers(data || []);
     } catch (err) {
-      console.error('Lỗi khi tải nhà cung cấp:', err);
+      console.error('Lỗi khi tải nhà cung cấp từ backend:', err);
+      setSuppliers([]);
     } finally {
       setLoading(false);
     }

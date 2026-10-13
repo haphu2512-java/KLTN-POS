@@ -7,15 +7,10 @@ import {
   calculateMAE,
   calculateReplenishment
 } from '../../utils/forecasting';
-import {
-  PAST_14_DAYS_LABELS,
-  PRODUCT_SALES_HISTORY,
-  REVENUE_HISTORY_14_DAYS
-} from '../../data/mockSalesData';
-import { INITIAL_PRODUCTS } from '../../data/mockProducts';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 import { forecastService } from '../../services/forecastService';
 import { productService } from '../../services/productService';
+import { reportService } from '../../services/reportService';
 import './ForecastPage.css';
 
 export default function ForecastPage({
@@ -31,44 +26,61 @@ export default function ForecastPage({
   onQuickStockIn,
   onLogout
 }) {
-  const [products, setProducts] = useState(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState([]);
   const [algorithm, setAlgorithm] = useState('EXP_SMOOTHING'); // 'EXP_SMOOTHING' | 'MOVING_AVG'
   const [forecastDays, setForecastDays] = useState(7); // 7 | 14 | 30
-  const [selectedProductId, setSelectedProductId] = useState(1);
+  const [selectedProductId, setSelectedProductId] = useState(null);
   const [backendForecasts, setBackendForecasts] = useState([]);
+  const [revenueSummary, setRevenueSummary] = useState({
+    totalRevenue: 0,
+    totalOrders: 0,
+    averageOrderValue: 0
+  });
 
-  // Fetch forecast data from backend if online
+  // Fetch forecast data and live report metrics from backend database
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
       try {
-        const [prodList, fcList] = await Promise.all([
+        const [prodRes, fcRes, revRes] = await Promise.allSettled([
           productService.getProducts(),
-          forecastService.getDemandForecast(branchId, forecastDays, algorithm)
+          forecastService.getDemandForecast(branchId, forecastDays, algorithm),
+          reportService.getRevenueReport(branchId, 7)
         ]);
+
+        const prodList = prodRes.status === 'fulfilled' ? prodRes.value : [];
+        const fcList = fcRes.status === 'fulfilled' ? fcRes.value : [];
+        const revData = revRes.status === 'fulfilled' ? revRes.value : null;
 
         if (isMounted) {
           if (Array.isArray(prodList) && prodList.length > 0) {
             setProducts(prodList.map(p => ({
               ...p,
-              stock: p.stock ?? 50,
-              minThreshold: p.minThreshold ?? 10,
-              costPrice: p.costPrice ?? 20000,
-              price: p.sellingPrice || p.price || 0
+              stock: p.stock ?? 0,
+              minThreshold: p.minThreshold ?? 5,
+              costPrice: p.costPrice ?? 0,
+              price: p.salePrice ?? p.sellingPrice ?? p.price ?? 0
             })));
+            if (!selectedProductId && prodList[0]) {
+              setSelectedProductId(prodList[0].id);
+            }
           }
           if (Array.isArray(fcList) && fcList.length > 0) {
             setBackendForecasts(fcList);
+            if (!selectedProductId && fcList[0]) {
+              setSelectedProductId(fcList[0].productId);
+            }
+          }
+          if (revData && revData.totalRevenue !== undefined) {
+            setRevenueSummary(revData);
           }
         }
       } catch (err) {
-        console.warn('Backend forecast unavailable, running local forecasting algorithms:', err.message);
+        console.error('Error fetching database forecast data:', err);
       }
     }
 
-    if (isOnline) {
-      loadData();
-    }
+    loadData();
 
     return () => {
       isMounted = false;
@@ -77,21 +89,49 @@ export default function ForecastPage({
 
   // Selected product details
   const selectedProduct = useMemo(() => {
-    return products.find((p) => p.id === Number(selectedProductId)) || products[0];
+    return products.find((p) => p.id === Number(selectedProductId)) || products[0] || {
+      id: 1,
+      name: 'Chọn sản phẩm',
+      unit: 'SP',
+      stock: 0,
+      costPrice: 0
+    };
   }, [products, selectedProductId]);
 
-  // Actual sales for selected product
+  // Actual sales for selected product from DB
   const actualSales = useMemo(() => {
-    return PRODUCT_SALES_HISTORY[selectedProduct.id]?.dailySales || [10, 12, 11, 13, 14, 12, 15, 14, 16, 15, 17, 18, 16, 18];
-  }, [selectedProduct]);
+    const fc = backendForecasts.find(f => f.productId === Number(selectedProductId));
+    if (fc && Array.isArray(fc.historicalDailySales) && fc.historicalDailySales.length > 0) {
+      return fc.historicalDailySales;
+    }
+    return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  }, [backendForecasts, selectedProductId]);
+
+  // Past 14 days labels
+  const past14DaysLabels = useMemo(() => {
+    const labels = [];
+    const today = new Date();
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      labels.push(`${dd}/${mm}`);
+    }
+    return labels;
+  }, []);
 
   // Compute Daily Forecast rate based on chosen algorithm
   const dailyForecast = useMemo(() => {
+    const fc = backendForecasts.find(f => f.productId === Number(selectedProductId));
+    if (fc && fc.dailyDemandForecast !== undefined) {
+      return fc.dailyDemandForecast;
+    }
     if (algorithm === 'MOVING_AVG') {
       return predictMovingAverage(actualSales, 7);
     }
     return predictExponentialSmoothing(actualSales, 0.35);
-  }, [actualSales, algorithm]);
+  }, [backendForecasts, selectedProductId, actualSales, algorithm]);
 
   // Generate future daily values & labels for the chart
   const { forecastValues, forecastLabels } = useMemo(() => {
@@ -106,7 +146,6 @@ export default function ForecastPage({
       const mm = String(nextDate.getMonth() + 1).padStart(2, '0');
       labels.push(`${dd}/${mm}`);
 
-      // Add minor realistic variance (+/- 5%) around the forecast point
       const noise = (Math.sin(i * 1.5) * 0.08 + 1);
       values.push(Math.round(dailyForecast * noise));
     }
@@ -116,7 +155,6 @@ export default function ForecastPage({
 
   // Calculate MAE metric (Mean Absolute Error) for selected product
   const maeScore = useMemo(() => {
-    // Compare last 7 days actual vs running forecast
     const testActual = actualSales.slice(-7);
     const testForecast = testActual.map((_, i) =>
       predictExponentialSmoothing(actualSales.slice(0, 7 + i), 0.35)
@@ -124,33 +162,40 @@ export default function ForecastPage({
     return calculateMAE(testActual, testForecast);
   }, [actualSales]);
 
-  // Compute replenishment table for all products
+  // Compute replenishment table from live DB backendForecasts
   const replenishmentList = useMemo(() => {
+    if (backendForecasts && backendForecasts.length > 0) {
+      return backendForecasts.map((fc) => ({
+        id: fc.productId,
+        name: fc.productName,
+        category: fc.category,
+        unit: fc.unit,
+        currentStock: fc.currentStock,
+        costPrice: fc.costPrice,
+        dailyRate: fc.dailyDemandForecast,
+        totalDemand: fc.totalPredictedDemand,
+        suggestedQty: fc.suggestedRestockQty,
+        urgency: fc.urgency,
+        supplierName: 'Nhà cung cấp đối tác'
+      }));
+    }
     return products.map((prod) => {
-      const history = PRODUCT_SALES_HISTORY[prod.id]?.dailySales || [5, 6, 7, 8, 7, 6, 8, 7, 9, 8, 7, 8, 9, 8];
-      const dailyRate =
-        algorithm === 'MOVING_AVG'
-          ? predictMovingAverage(history, 7)
-          : predictExponentialSmoothing(history, 0.35);
-
-      const restockInfo = calculateReplenishment(prod.stock, dailyRate, forecastDays);
-      const supplierName = PRODUCT_SALES_HISTORY[prod.id]?.supplierName || 'Nhà cung cấp chính';
-
+      const restockInfo = calculateReplenishment(prod.stock || 0, 0, forecastDays);
       return {
         id: prod.id,
         name: prod.name,
         category: prod.category,
         unit: prod.unit,
-        currentStock: prod.stock,
-        costPrice: prod.costPrice,
-        dailyRate,
+        currentStock: prod.stock || 0,
+        costPrice: prod.costPrice || 0,
+        dailyRate: 0,
         totalDemand: restockInfo.totalDemand,
         suggestedQty: restockInfo.suggestedQty,
         urgency: restockInfo.urgency,
-        supplierName
+        supplierName: 'Nhà cung cấp đối tác'
       };
     });
-  }, [products, algorithm, forecastDays]);
+  }, [backendForecasts, products, forecastDays]);
 
   // Action: Trigger restock
   const handleRestockClick = (item) => {
@@ -333,17 +378,17 @@ export default function ForecastPage({
         {/* Metric Summary Cards */}
         <section className="forecast-metrics-grid">
           <div className="forecast-metric-card">
-            <span className="forecast-metric-label">Doanh thu hôm nay (16/09)</span>
+            <span className="forecast-metric-label">Doanh thu 7 ngày qua (Thực tế)</span>
             <span className="forecast-metric-val tabular-nums text-success" style={{ fontSize: '22px' }}>
-              {formatCurrency(REVENUE_HISTORY_14_DAYS[REVENUE_HISTORY_14_DAYS.length - 1])}
+              {formatCurrency(revenueSummary.totalRevenue || 0)}
             </span>
-            <span className="forecast-metric-sub">▲ Tăng 10.7% so với hôm qua</span>
+            <span className="forecast-metric-sub">Dữ liệu từ CSDL MySQL</span>
           </div>
 
           <div className="forecast-metric-card">
-            <span className="forecast-metric-label">Số đơn hàng hôm nay</span>
-            <span className="forecast-metric-val tabular-nums">48 hóa đơn</span>
-            <span className="forecast-metric-sub">Giá trị đơn bình quân: 79.500 ₫</span>
+            <span className="forecast-metric-label">Số đơn hàng đã bán</span>
+            <span className="forecast-metric-val tabular-nums">{revenueSummary.totalOrders || 0} hóa đơn</span>
+            <span className="forecast-metric-sub">Giá trị đơn TB: {formatCurrency(revenueSummary.averageOrderValue || 0)}</span>
           </div>
 
           <div className="forecast-metric-card">
@@ -439,7 +484,7 @@ export default function ForecastPage({
           <SalesTrendChart
             actualData={actualSales}
             forecastData={forecastValues}
-            actualLabels={PAST_14_DAYS_LABELS}
+            actualLabels={past14DaysLabels}
             forecastLabels={forecastLabels}
             unit={selectedProduct.unit}
             title={`Diễn biến doanh số 14 ngày qua & Dự báo ${forecastDays} ngày tới: ${selectedProduct.name}`}

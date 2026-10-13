@@ -5,13 +5,14 @@ export const reportService = {
     const res = await api.get('/reports/revenue', {
       params: { branchId, days }
     });
-    return res.data;
+    return res?.data !== undefined ? res.data : res;
   },
 
   async getTopProducts(branchId = 1, days = 30, limit = 10) {
     const res = await api.get('/reports/top-products', {
       params: { branchId, days, limit }
     });
-    return res.data || [];
+    const items = res?.data !== undefined ? res.data : res;
+    return Array.isArray(items) ? items : [];
   },
 };

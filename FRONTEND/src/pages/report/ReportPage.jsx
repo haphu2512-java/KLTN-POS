@@ -6,24 +6,6 @@ import { saleService } from '../../services/saleService';
 import { exportToCsv } from '../../utils/exportCsv';
 import './ReportPage.css';
 
-const DEFAULT_DAYS_DATA = [
-  { date: '18/09', revenue: 1450000, cost: 980000, profit: 470000, orderCount: 24 },
-  { date: '19/09', revenue: 1820000, cost: 1220000, profit: 600000, orderCount: 31 },
-  { date: '20/09', revenue: 1690000, cost: 1140000, profit: 550000, orderCount: 28 },
-  { date: '21/09', revenue: 2150000, cost: 1450000, profit: 700000, orderCount: 36 },
-  { date: '22/09', revenue: 2380000, cost: 1600000, profit: 780000, orderCount: 42 },
-  { date: '23/09', revenue: 1950000, cost: 1310000, profit: 640000, orderCount: 33 },
-  { date: '24/09', revenue: 2540000, cost: 1720000, profit: 820000, orderCount: 45 }
-];
-
-const DEFAULT_TOP_PRODUCTS = [
-  { productId: 1, barcode: '8934567890123', productName: 'Sữa tươi tiệt trùng Vinamilk 100% Không Đường 1L', quantitySold: 94, totalRevenue: 3384000, estimatedProfit: 846000 },
-  { productId: 3, barcode: '8936009876543', productName: 'Nước ngọt Coca-Cola Sleek 320ml', quantitySold: 185, totalRevenue: 2035000, estimatedProfit: 555000 },
-  { productId: 2, barcode: '8935001234567', productName: 'Mì ăn liền Hảo Hảo Tôm Chua Cay 75g', quantitySold: 210, totalRevenue: 1008000, estimatedProfit: 252000 },
-  { productId: 4, barcode: '8934673123456', productName: 'Dầu ăn Simply Đậu Nành Tinh Luyện 1L', quantitySold: 28, totalRevenue: 1540000, estimatedProfit: 308000 },
-  { productId: 5, barcode: '8934822001122', productName: 'Nước khoáng Lavie 500ml', quantitySold: 140, totalRevenue: 840000, estimatedProfit: 280000 }
-];
-
 export default function ReportPage({
   currentUser,
   branchId = 1,
@@ -45,38 +27,40 @@ export default function ReportPage({
   const [showRefundModal, setShowRefundModal] = useState(false);
 
   const [summaryData, setSummaryData] = useState({
-    totalRevenue: 13980000,
-    totalCost: 9420000,
-    grossProfit: 4560000,
-    profitMarginPercent: 32.6,
-    totalOrders: 239,
-    averageOrderValue: 58493,
-    dailyTrend: DEFAULT_DAYS_DATA
+    totalRevenue: 0,
+    totalCost: 0,
+    grossProfit: 0,
+    profitMarginPercent: 0,
+    totalOrders: 0,
+    averageOrderValue: 0,
+    dailyTrend: []
   });
 
-  const [topProducts, setTopProducts] = useState(DEFAULT_TOP_PRODUCTS);
+  const [topProducts, setTopProducts] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
     async function fetchReports() {
-      if (!isOnline) return;
       setLoading(true);
       try {
-        const [revData, topData] = await Promise.all([
+        const [revRes, topRes] = await Promise.allSettled([
           reportService.getRevenueReport(selectedBranchId, days),
           reportService.getTopProducts(selectedBranchId, days, 10)
         ]);
 
+        const revData = revRes.status === 'fulfilled' ? revRes.value : null;
+        const topData = topRes.status === 'fulfilled' ? topRes.value : [];
+
         if (isMounted) {
-          if (revData && revData.totalRevenue) {
+          if (revData && revData.totalRevenue !== undefined) {
             setSummaryData(revData);
           }
-          if (Array.isArray(topData) && topData.length > 0) {
+          if (Array.isArray(topData)) {
             setTopProducts(topData);
           }
         }
       } catch (err) {
-        console.warn('Report API fallback to localized metrics:', err.message);
+        console.error('Lỗi khi tải báo cáo từ cơ sở dữ liệu:', err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -89,18 +73,11 @@ export default function ReportPage({
   }, [selectedBranchId, days, isOnline]);
 
   const fetchInvoices = async () => {
-    if (!isOnline) {
-      setInvoices([
-        { id: 101, createdAt: new Date().toISOString(), employeeId: 1, totalAmount: 142000, paymentMethod: 'CASH', status: 'PAID', note: 'Đơn bán tại quầy' },
-        { id: 102, createdAt: new Date(Date.now() - 3600000).toISOString(), employeeId: 1, totalAmount: 320000, paymentMethod: 'TRANSFER', status: 'PAID', note: 'Chuyển khoản VietQR' }
-      ]);
-      return;
-    }
     try {
       const data = await saleService.getInvoices(selectedBranchId);
       setInvoices(data || []);
     } catch (err) {
-      console.error('Lỗi khi tải danh sách hóa đơn:', err);
+      console.error('Lỗi khi tải danh sách hóa đơn từ cơ sở dữ liệu:', err);
     }
   };
 

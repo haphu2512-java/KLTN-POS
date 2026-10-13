@@ -9,11 +9,11 @@ import { Modal, Button } from '../../components/common';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { useHotkeys } from '../../hooks/useHotkeys';
 import { playBeepSuccess, playBeepWarning } from '../../utils/audio';
-import { INITIAL_PRODUCTS, INITIAL_CUSTOMERS } from '../../data/mockProducts';
 import { formatCurrency } from '../../utils/formatters';
 import { printInvoiceReceipt } from '../../utils/receiptPrinter';
 import { productService } from '../../services/productService';
 import { inventoryService } from '../../services/inventoryService';
+import { customerService } from '../../services/customerService';
 import { saleService } from '../../services/saleService';
 import { websocketService } from '../../services/websocketService';
 import './PosPage.css';
@@ -30,40 +30,56 @@ export default function PosPage({
   onNavigateToStaff,
   onLogout
 }) {
-  // Products & Customers
-  const [products, setProducts] = useState(INITIAL_PRODUCTS);
-  const [customers, setCustomers] = useState(INITIAL_CUSTOMERS);
+  // Products & Customers from Database
+  const [products, setProducts] = useState([]);
+  const [customers, setCustomers] = useState([]);
 
-  // Sync products and inventory from backend if available
+  // Sync products, inventory, and customers from backend database
   useEffect(() => {
     let isMounted = true;
     async function loadBackendData() {
       try {
-        const [prodList, invList] = await Promise.all([
+        const [prodRes, invRes, custRes] = await Promise.allSettled([
           productService.getProducts(),
-          inventoryService.getBranchInventory(branchId)
+          inventoryService.getBranchInventory(branchId),
+          customerService.getCustomers()
         ]);
+        const rawProds = prodRes.status === 'fulfilled' ? prodRes.value : [];
+        const prodList = Array.isArray(rawProds) ? rawProds : (rawProds?.data || []);
+
+        const rawInvs = invRes.status === 'fulfilled' ? invRes.value : [];
+        const invList = Array.isArray(rawInvs) ? rawInvs : (rawInvs?.data || []);
+
+        const rawCusts = custRes.status === 'fulfilled' ? custRes.value : [];
+        const custList = Array.isArray(rawCusts) ? rawCusts : (rawCusts?.data || []);
+
+        if (prodRes.status === 'rejected') {
+          console.error('Lỗi tải sản phẩm từ backend:', prodRes.reason);
+        }
+
         if (isMounted && Array.isArray(prodList) && prodList.length > 0) {
           // Merge stock from inventory into products
           const stockMap = new Map();
           (invList || []).forEach(inv => stockMap.set(inv.productId || inv.product?.id, inv.quantity));
           const merged = prodList.map(p => ({
             ...p,
-            stock: stockMap.has(p.id) ? stockMap.get(p.id) : (p.stock || 50),
-            price: p.sellingPrice || p.price || 0,
+            stock: stockMap.has(p.id) ? stockMap.get(p.id) : (p.stock || 0),
+            price: p.salePrice ?? p.sellingPrice ?? p.price ?? 0,
             costPrice: p.costPrice || 0,
-            minThreshold: p.minThreshold || 10
+            minThreshold: p.minThreshold || 5
           }));
           setProducts(merged);
         }
+
+        if (isMounted && Array.isArray(custList) && custList.length > 0) {
+          setCustomers(custList);
+        }
       } catch (err) {
-        console.warn('Backend unavailable, using localized mock data:', err.message);
+        console.error('Error loading data from database:', err);
       }
     }
 
-    if (isOnline) {
-      loadBackendData();
-    }
+    loadBackendData();
 
     // Subscribe to STOMP WebSocket inventory updates
     const unsubWs = websocketService.on('inventory-update', (event) => {
@@ -84,33 +100,14 @@ export default function PosPage({
   ]);
   const [activeTabId, setActiveTabId] = useState('order-1');
 
-  // Orders State Dict: { [orderId]: { items, customer, discount, paymentMethod, receivedAmount, note } }
+  // Orders State Dict: initial order starts empty ready for scanning/adding
   const [orders, setOrders] = useState({
     'order-1': {
-      items: [
-        {
-          id: 1,
-          barcode: '8934567890123',
-          name: 'Sữa tươi tiệt trùng Vinamilk 100% Không Đường 1L',
-          unit: 'Hộp',
-          price: 36000,
-          quantity: 2,
-          stock: 45
-        },
-        {
-          id: 3,
-          barcode: '8936009876543',
-          name: 'Nước ngọt Coca-Cola Sleek 320ml',
-          unit: 'Lon',
-          price: 11000,
-          quantity: 3,
-          stock: 120
-        }
-      ],
+      items: [],
       customer: null,
       discount: 0,
       paymentMethod: 'CASH',
-      receivedAmount: 105000,
+      receivedAmount: 0,
       note: ''
     }
   });
