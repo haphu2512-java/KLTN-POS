@@ -250,6 +250,17 @@ export default function PosPage({
     enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen
   });
 
+  // Listen to simulated scan events (e.g. from BarcodePrintModal or mock tester)
+  useEffect(() => {
+    const handleCustomScan = (e) => {
+      if (e.detail?.barcode) {
+        handleBarcodeScanned(e.detail.barcode);
+      }
+    };
+    window.addEventListener('pos:barcode_scanned', handleCustomScan);
+    return () => window.removeEventListener('pos:barcode_scanned', handleCustomScan);
+  }, [handleBarcodeScanned]);
+
   // Handle Search Input submit (typing + enter)
   const handleSubmitBarcodeInput = () => {
     if (!barcodeInput.trim()) return;

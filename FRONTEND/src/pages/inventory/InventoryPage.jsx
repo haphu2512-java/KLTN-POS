@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Button, Input, Table, Badge } from '../../components/common';
+import { Button, Input, Table, Badge, BarcodeView } from '../../components/common';
 import StockInModal from './StockInModal';
 import StockTransferModal from './StockTransferModal';
 import StockInDetailModal from './StockInDetailModal';
+import BarcodePrintModal from './BarcodePrintModal';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 import { productService } from '../../services/productService';
 import { inventoryService } from '../../services/inventoryService';
@@ -36,6 +37,10 @@ export default function InventoryPage({
 
   const [currentBranchId, setCurrentBranchId] = useState(branchId || 1);
   const [activeTab, setActiveTab] = useState('inventory'); // 'inventory' | 'history'
+
+  // Barcode Printing State
+  const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
+  const [selectedBarcodeProduct, setSelectedBarcodeProduct] = useState(null);
 
   // Sync data from Backend
   useEffect(() => {
@@ -309,11 +314,43 @@ export default function InventoryPage({
     {
       key: 'barcode',
       title: 'Mã vạch (Barcode)',
-      width: '140px',
-      render: (val) => (
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-          {val}
-        </span>
+      width: '165px',
+      render: (val, row) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: 600 }}>
+              {val}
+            </div>
+            <BarcodeView
+              value={val}
+              width={1.0}
+              height={20}
+              displayValue={false}
+              margin={0}
+            />
+          </div>
+          <button
+            type="button"
+            style={{
+              background: 'rgba(56, 189, 248, 0.1)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              borderRadius: '4px',
+              padding: '2px 6px',
+              cursor: 'pointer',
+              color: '#38BDF8',
+              fontSize: '11px',
+              fontWeight: 600
+            }}
+            title="Xem và in tem mã vạch sản phẩm này"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedBarcodeProduct(row);
+              setIsBarcodeModalOpen(true);
+            }}
+          >
+            🏷️ In
+          </button>
+        </div>
       )
     },
     {
@@ -700,6 +737,17 @@ export default function InventoryPage({
                 </div>
                 <Button
                   size="md"
+                  variant="primary"
+                  onClick={() => {
+                    setSelectedBarcodeProduct(null);
+                    setIsBarcodeModalOpen(true);
+                  }}
+                  title="Mở trình in tem mã vạch cho tất cả sản phẩm hoặc theo danh mục"
+                >
+                  🏷️ In tem mã vạch
+                </Button>
+                <Button
+                  size="md"
                   variant="secondary"
                   onClick={handleExportInventory}
                   title="Xuất bảng tồn kho ra file Excel/CSV"
@@ -781,6 +829,14 @@ export default function InventoryPage({
         isOpen={!!selectedSlip}
         onClose={() => setSelectedSlip(null)}
         slip={selectedSlip}
+      />
+
+      <BarcodePrintModal
+        isOpen={isBarcodeModalOpen}
+        onClose={() => setIsBarcodeModalOpen(false)}
+        products={filteredProducts}
+        initialSelectedProduct={selectedBarcodeProduct}
+        storeName="BÁCH HÓA POS"
       />
     </div>
   );

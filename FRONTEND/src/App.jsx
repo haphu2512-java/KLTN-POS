@@ -95,6 +95,22 @@ function MainApp() {
   }
 
   if (currentScreen === 'staff') {
+    if (currentUser?.role !== 'ADMIN') {
+      return (
+        <PosPage
+          currentUser={currentUser}
+          branchId={branchId}
+          isOnline={isBackendOnline}
+          isWsConnected={isWsConnected}
+          onNavigateToInventory={() => setCurrentScreen('inventory')}
+          onNavigateToForecast={() => setCurrentScreen('forecast')}
+          onNavigateToReport={() => setCurrentScreen('report')}
+          onNavigateToPartners={() => setCurrentScreen('partners')}
+          onNavigateToStaff={() => setCurrentScreen('staff')}
+          onLogout={handleLogout}
+        />
+      );
+    }
     return (
       <StaffPage
         currentUser={currentUser}

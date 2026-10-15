@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, Input, Table, Badge, Button } from '../../components/common';
+import { Modal, Input, Table, Badge, Button, BarcodeView } from '../../components/common';
 import { formatCurrency } from '../../utils/formatters';
 
 export default function ProductSearchModal({
@@ -34,11 +34,17 @@ export default function ProductSearchModal({
     {
       key: 'barcode',
       title: 'Mã vạch (Barcode)',
-      width: '130px',
+      width: '150px',
       render: (val) => (
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-          {val}
-        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <BarcodeView
+            value={val}
+            width={1.1}
+            height={26}
+            fontSize={10}
+            margin={1}
+          />
+        </div>
       )
     },
     {

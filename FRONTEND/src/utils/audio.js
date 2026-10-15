@@ -72,3 +72,5 @@ export function playBeepWarning() {
     // Ignore audio error
   }
 }
+
+export const playBeep = playBeepSuccess;

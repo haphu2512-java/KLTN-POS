@@ -22,6 +22,7 @@ export default function StaffPage({
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
@@ -32,6 +33,14 @@ export default function StaffPage({
     fullName: '',
     role: 'CASHIER',
     branchId: branchId || 1
+  });
+  const [editFormData, setEditFormData] = useState({
+    id: null,
+    username: '',
+    fullName: '',
+    role: 'CASHIER',
+    branchId: 1,
+    active: true
   });
   const [newPassword, setNewPassword] = useState('');
 
@@ -108,6 +117,39 @@ export default function StaffPage({
     }
   };
 
+  const handleOpenEdit = (user) => {
+    setEditFormData({
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName || '',
+      role: user.role || 'CASHIER',
+      branchId: user.branchId || 1,
+      active: user.active !== false
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdateUser = async (e) => {
+    e.preventDefault();
+    if (!editFormData.fullName.trim()) {
+      alert('Vui lòng nhập họ và tên');
+      return;
+    }
+    try {
+      await userService.updateUser(editFormData.id, {
+        fullName: editFormData.fullName,
+        role: editFormData.role,
+        branchId: editFormData.branchId,
+        active: editFormData.active
+      });
+      alert('Cập nhật thông tin nhân viên thành công!');
+      setShowEditModal(false);
+      fetchUsers();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Có lỗi xảy ra khi cập nhật');
+    }
+  };
+
   const filteredUsers = users.filter((u) => {
     const matchSearch =
       u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -167,6 +209,14 @@ export default function StaffPage({
       title: 'Thao tác',
       render: (u) => (
         <div className="staff-actions-cell">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => handleOpenEdit(u)}
+            title="Chỉnh sửa thông tin nhân viên"
+          >
+            ✏️ Sửa
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -339,6 +389,87 @@ export default function StaffPage({
             </Button>
             <Button type="submit" variant="primary">
               Lưu tài khoản
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Edit User */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title={`Chỉnh sửa nhân viên "${editFormData.username}"`}
+        width="460px"
+      >
+        <form onSubmit={handleUpdateUser}>
+          <div className="staff-form-group">
+            <label>Tên đăng nhập</label>
+            <input
+              type="text"
+              className="staff-form-input"
+              value={editFormData.username}
+              disabled
+              style={{ opacity: 0.7, cursor: 'not-allowed' }}
+            />
+          </div>
+
+          <div className="staff-form-group">
+            <label>Họ và tên nhân viên *</label>
+            <input
+              type="text"
+              className="staff-form-input"
+              placeholder="vd: Nguyễn Hoàng Nam"
+              value={editFormData.fullName}
+              onChange={(e) => setEditFormData({ ...editFormData, fullName: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="staff-form-group">
+            <label>Vai trò *</label>
+            <select
+              className="staff-form-select"
+              value={editFormData.role}
+              onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })}
+            >
+              <option value="CASHIER">CASHIER (Thu ngân bán hàng tại quầy)</option>
+              <option value="MANAGER">MANAGER (Quản lý chi nhánh)</option>
+              <option value="WAREHOUSE">WAREHOUSE (Thủ kho)</option>
+              <option value="ADMIN">ADMIN (Quản trị viên toàn quyền)</option>
+            </select>
+          </div>
+
+          <div className="staff-form-group">
+            <label>Chi nhánh làm việc</label>
+            <select
+              className="staff-form-select"
+              value={editFormData.branchId}
+              onChange={(e) => setEditFormData({ ...editFormData, branchId: Number(e.target.value) })}
+            >
+              <option value={1}>Chi nhánh 1 (Quận 1 - Trung tâm)</option>
+              <option value={2}>Chi nhánh 2 (Quận 7)</option>
+            </select>
+          </div>
+
+          <div className="staff-form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
+            <input
+              type="checkbox"
+              id="edit-active-checkbox"
+              checked={editFormData.active}
+              onChange={(e) => setEditFormData({ ...editFormData, active: e.target.checked })}
+              disabled={editFormData.username === 'admin'}
+            />
+            <label htmlFor="edit-active-checkbox" style={{ margin: 0, cursor: 'pointer' }}>
+              Tài khoản đang hoạt động
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+            <Button type="button" variant="ghost" onClick={() => setShowEditModal(false)}>
+              Hủy
+            </Button>
+            <Button type="submit" variant="primary">
+              Lưu thay đổi
             </Button>
           </div>
         </form>

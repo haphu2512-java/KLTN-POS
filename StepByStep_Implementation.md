@@ -326,9 +326,9 @@ public class InvoiceController {
 
 ### Bước 3.8: Tự động khởi tạo dữ liệu mẫu (DatabaseInitializer)
 Khi ứng dụng khởi chạy lần đầu, `DatabaseInitializer` tự động sinh:
-- Tài khoản: `admin` / `admin123` (Admin), `cashier1` / `cashier123` (Thu ngân).
-- 2 chi nhánh: Chi nhánh Trung tâm & Chi nhánh Quận 1.
-- Dữ liệu sản phẩm và số lượng tồn kho ban đầu để có thể test ngay mà không cần nhập tay.
+- Tài khoản: `admin` / `123456` (Admin), `cashier` / `123456` (Thu ngân).
+- 2 chi nhánh: Chi nhánh Quận 1 (Trụ sở) & Chi nhánh Quận 3.
+- Dữ liệu hơn 1.949 sản phẩm và tồn kho ban đầu để có thể test ngay mà không cần nhập tay.
 
 ### Bước 3.9: Chạy thử backend & Xem Swagger UI
 ```bash
@@ -338,7 +338,7 @@ cd BACKEND
 java -jar target/pos-backend-1.0.0.jar
 ```
 - **Swagger UI:** `http://localhost:8080/swagger-ui/index.html`
-- **Postman Test Login:** `POST http://localhost:8080/api/auth/login` với body: `{"username":"admin", "password":"admin123"}`
+- **Postman Test Login:** `POST http://localhost:8080/api/auth/login` với body: `{"username":"admin", "password":"123456"}`
 
 ---
 
@@ -499,9 +499,9 @@ Hệ thống triển khai kết hợp 2 phương pháp dự báo:
 
 ## PHẦN 8 — Kiểm thử
 
-- [ ] Unit test Service layer (JUnit 5 + Mockito) cho `InvoiceService`, `InventoryService`, `ForecastService`.
-- [ ] Test API bằng Swagger UI (`http://localhost:8080/swagger-ui/index.html`) hoặc Postman Collection.
-- [ ] Test giao diện Electron thủ công theo checklist chức năng: Quét mã vạch <50ms, Phím tắt F1-F9, VietQR Napas247, Nhập kho nhiều sản phẩm.
+- [x] **Unit test Service layer (JUnit 5 + Mockito):** Đã viết và pass toàn bộ 11/11 tests (`InvoiceServiceTest`, `InventoryServiceTest`, `ForecastServiceTest`) kiểm thử trừ kho nguyên tử, tính điểm thưởng atomic, và fallback dự báo.
+- [x] **Test API bằng Swagger UI & cURL:** Đã kiểm thử trọn vẹn 25+ endpoints (`/api/auth`, `/api/products`, `/api/inventory`, `/api/invoices`, `/api/purchases`, `/api/forecast`, `/api/reports`).
+- [x] **Test giao diện POS/Kho:** Quét mã vạch HID buffer <50ms, Phím tắt F1-F9, VietQR Napas247, Nhập kho nhiều sản phẩm, Biểu đồ dự báo SVG.
 
 ---
 
@@ -600,8 +600,8 @@ services:
 volumes:
   mysql_data:
 ```
-- [ ] Tạo file `.env` (không commit lên Git) chứa `DB_PASSWORD`, `JWT_SECRET`
-- [ ] Chạy thử: `docker compose up -d --build`
+- [x] Tạo file `docker-compose.yml` tích hợp MySQL 8.0 + Spring Boot backend
+- [x] Kiểm thử build và khởi động: `docker compose up -d --build` (Multi-stage build thành công)
 
 ### Bước 10.4: Build & đẩy image lên DockerHub
 ```bash

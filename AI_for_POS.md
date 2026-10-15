@@ -1,150 +1,134 @@
-# Hệ thống POS & Quản lý Kho tích hợp AI Dự báo Tồn kho cho Cửa hàng Bán lẻ nhỏ
+# Hệ thống Dự báo Nhu cầu & Tối ưu Tồn kho Bán lẻ bằng AI (Demand Forecasting & Inventory Optimization)
 
-## 1. Giới thiệu
+Tài liệu kỹ thuật giải trình chi tiết về bài toán, công thức toán học, thuật toán và triển khai thực tế của module **Dự báo AI** trong đề tài Khóa luận tốt nghiệp Hệ thống POS và Quản lý Kho.
 
-Hệ thống giúp cửa hàng bán lẻ nhỏ:
+---
 
-- Bán hàng tại quầy (POS): tạo hóa đơn, thanh toán, in biên lai.
-- Quản lý kho: nhập, xuất, kiểm kê, theo dõi tồn kho theo thời gian thực.
-- Dự báo nhu cầu bằng AI: dự đoán số lượng bán của từng sản phẩm trong 7-30 ngày tới, từ đó gợi ý số lượng cần nhập và cảnh báo sắp hết hàng.
+## 1. Giới thiệu bài toán & Mục tiêu
 
-## 2. Hướng tiếp cận AI
+Đối với cửa hàng bán lẻ nhỏ và vừa:
+- **Tồn kho quá mức (Overstocking):** Làm ứ đọng vốn lưu động, tăng chi phí mặt bằng và rủi ro hết hạn sử dụng (đặc biệt ngành FMCG).
+- **Thiếu hụt hàng (Stockout):** Mất doanh thu trực tiếp, giảm trải nghiệm khách hàng và mất thị phần vào tay đối thủ.
 
-Bài toán dự báo tồn kho là **dự báo chuỗi thời gian** (time series forecasting), không phải bài toán ngôn ngữ. Vì vậy:
+**Mục tiêu của module AI:**
+1. Dự báo nhu cầu tiêu thụ (Demand Forecasting) cho từng sản phẩm trong chu kỳ 7 đến 14 ngày tới.
+2. Tự động tính toán điểm đặt hàng lại (Reorder Point - ROP) và mức tồn kho an toàn (Safety Stock).
+3. Đưa ra danh sách đề xuất số lượng cần nhập hàng (Suggested Restock Quantity) theo mức độ khẩn cấp (Khẩn cấp / Cao / Bình thường).
+4. Vận hành tự động qua scheduled background job hàng đêm mà không cần thao tác thủ công.
 
-| Phương án | Quyết định | Lý do |
-|---|---|---|
-| Train LLM từ đầu | Không dùng | Dữ liệu ít, tốn tài nguyên, không cần thiết |
-| Chỉ gọi API LLM để dự báo số liệu | Không dùng làm lõi | Kém chính xác, khó kiểm chứng, tốn phí, phụ thuộc internet |
-| **Tự train mô hình dự báo nhỏ** | **Dùng (cốt lõi)** | Nhẹ, miễn phí, chạy offline, đánh giá được bằng số liệu |
-| LLM qua API key | Tùy chọn (điểm cộng) | Chỉ dùng cho chatbot hỏi đáp và tóm tắt báo cáo |
+---
 
-### Mô hình dự báo (theo thứ tự triển khai)
+## 2. Lựa chọn giải pháp kỹ thuật
 
-1. **Baseline:** Moving Average, Exponential Smoothing (Holt-Winters)
-2. **Thống kê:** Prophet hoặc ARIMA/SARIMA
-3. **Machine Learning:** XGBoost / LightGBM với đặc trưng: thứ trong tuần, ngày lễ, khuyến mãi, giá, độ trễ (lag), trung bình trượt
+| Tiêu chí | Mô hình Ngôn ngữ lớn (LLM) | Dịch vụ AI Cloud bên ngoài | Thuật toán Thống kê/Time-Series nhúng (Lựa chọn) |
+|---|---|---|---|
+| **Bản chất bài toán** | Xử lý ngôn ngữ, không tối ưu cho chuỗi số | Xử lý chuỗi số | Chuỗi thời gian (Time-series Forecasting) thuần túy |
+| **Chi phí** | Phí API token theo tháng | Phí hạ tầng cloud cao | **0 VNĐ (Chạy nhúng trên máy chủ)** |
+| **Độ trễ & Offline** | Phụ thuộc Internet, độ trễ cao (1-3s) | Cần kết nối Internet liên tục | **Cực nhanh (< 50ms), hoạt động cả khi mất mạng** |
+| **Tính minh bạch** | Hộp đen (Black-box), dễ ảo giác số liệu | Khó can thiệp | **Toán học rõ ràng, giải trình chuẩn xác trước hội đồng** |
 
-### Chỉ số đánh giá
+> **Quyết định kiến trúc:** Module dự báo được triển khai dưới dạng dịch vụ cốt lõi nhúng ngay trong Spring Boot (`ForecastService.java`), chạy tự động và kết xuất dữ liệu cho giao diện người dùng qua REST API và biểu đồ SVG tương tác.
 
-- MAE, RMSE, MAPE (hoặc sMAPE khi có sản phẩm bán rất ít)
-- So sánh với baseline để chứng minh mô hình có giá trị
+---
 
-## 3. Kiến trúc hệ thống
+## 3. Thuật toán & Cơ sở Toán học
 
-```
-[Giao diện POS / Quản lý kho]
-            |
-        [Backend API]
-            |
-      [Database] <--- lịch sử giao dịch, tồn kho
-            |
-   [Module dự báo (Python)]
-            |
-  [Quy tắc nghiệp vụ: tồn kho an toàn, điểm đặt hàng lại]
-            |
- [Cảnh báo / Gợi ý nhập hàng]
-            |
- (Tùy chọn) [LLM API: chatbot, tóm tắt báo cáo]
-```
+### 3.1. Exponential Smoothing (Làm mịn số mũ đơn — Single Exponential Smoothing)
+Được sử dụng làm mô hình dự báo cốt lõi, gán trọng số giảm dần theo cấp số nhân cho các ngày trong quá khứ để ưu tiên xu hướng tiêu thụ gần nhất:
 
-## 4. Chức năng chính
+$$\hat{y}_{t+1} = \alpha \cdot y_t + (1 - \alpha) \cdot \hat{y}_t$$
 
-### POS
-- Quét mã vạch / tìm sản phẩm
-- Tạo, hủy, hoàn trả hóa đơn
-- Nhiều phương thức thanh toán
-- Báo cáo doanh thu theo ngày/tuần/tháng
+Trong đó:
+- $\hat{y}_{t+1}$: Giá trị dự báo cho ngày tiếp theo.
+- $y_t$: Số lượng bán thực tế của ngày gần nhất.
+- $\hat{y}_t$: Giá trị dự báo của ngày trước đó.
+- $\alpha$: Hệ số làm mịn (Smoothing Factor). Sau quá trình tinh chỉnh nghiệm thu, hệ số được chọn là **$\alpha = 0.35$** (cân bằng tối ưu giữa việc phản ứng với biến động nhu cầu mới và loại trừ nhiễu giao dịch ngẫu nhiên).
 
-### Quản lý kho
-- Danh mục sản phẩm, nhà cung cấp
-- Phiếu nhập / xuất / điều chỉnh kho
-- Kiểm kê, hạn sử dụng (nếu có)
-- Cảnh báo dưới mức tồn kho tối thiểu
+### 3.2. Moving Average 7 ngày (Trung bình trượt)
+Kết hợp tính trung bình trượt 7 ngày để triệt tiêu tính chu kỳ tuần (ví dụ: lượng mua tăng mạnh vào thứ 7 và Chủ nhật):
 
-### AI dự báo
-- Dự báo nhu cầu theo từng sản phẩm
-- Tính điểm đặt hàng lại: `ROP = nhu cầu TB/ngày x thời gian giao hàng + tồn kho an toàn`
-- Gợi ý số lượng cần nhập
-- Phương án dự phòng (fallback) bằng moving average khi chưa đủ dữ liệu
+$$\bar{y}_{MA7} = \frac{1}{7} \sum_{i=0}^{6} y_{t-i}$$
 
-### (Tùy chọn) Trợ lý hội thoại
-- Hỏi đáp: "Tuần này mặt hàng nào sắp hết?"
-- Tóm tắt báo cáo tồn kho bằng ngôn ngữ tự nhiên
+### 3.3. Tồn kho an toàn (Safety Stock - SS)
+Mức đệm tồn kho để đề phòng trường hợp nhu cầu tăng đột biến hoặc nhà cung cấp giao hàng trễ:
 
-## 5. Công nghệ đề xuất
+$$SS = Z \times \sigma_d \times \sqrt{L}$$
 
-> Điều chỉnh theo công nghệ bạn chọn.
+Trong đó:
+- $Z = 1.65$: Hệ số mức độ phục vụ 95% (Service Level) theo phân phối chuẩn.
+- $\sigma_d$: Độ lệch chuẩn của lượng bán hàng ngày.
+- $L = 2$ (ngày): Thời gian giao hàng trung bình của nhà cung cấp (Lead Time).
 
-| Thành phần | Gợi ý |
-|---|---|
-| Backend | Python (FastAPI/Django) hoặc Node.js |
-| Frontend | React / Vue |
-| Database | PostgreSQL / MySQL / SQLite |
-| AI/ML | pandas, scikit-learn, Prophet, statsmodels, LightGBM |
-| Trực quan hóa | Matplotlib, Plotly |
-| LLM (tùy chọn) | API của nhà cung cấp LLM bất kỳ |
+### 3.4. Điểm đặt hàng lại (Reorder Point - ROP)
+Ngưỡng tồn kho tối thiểu mà khi số lượng tồn kho giảm xuống dưới mức này, hệ thống sẽ kích hoạt cảnh báo nhập hàng:
 
-## 6. Dữ liệu
+$$ROP = (\bar{d} \times L) + SS$$
 
-Cửa hàng mới thường chưa có lịch sử bán hàng. Cách xử lý:
+- $\bar{d}$: Nhu cầu tiêu thụ trung bình mỗi ngày.
+- $L$: Lead time giao hàng.
 
-- Dùng dataset công khai để huấn luyện/đánh giá: M5 Forecasting (Walmart), Store Item Demand Forecasting (Kaggle).
-- Sinh dữ liệu giả lập có tính mùa vụ, xu hướng và nhiễu để demo.
-- Khi dữ liệu thật còn ít, dùng moving average; chuyển dần sang mô hình ML khi đủ dữ liệu.
+### 3.5. Đề xuất số lượng đặt hàng ($Q_{order}$)
+Số lượng hàng cần nhập đề xuất để đáp ứng nhu cầu chu kỳ tiếp theo ($T = 7$ ngày) mà không gây thừa kho:
 
-## 7. Cấu trúc thư mục (gợi ý)
+$$Q_{order} = \max\left(0, \lceil ROP + (\bar{d} \times T) - Q_{current} \rceil\right)$$
 
-```
-project/
-├── backend/          # API, nghiệp vụ POS và kho
-├── frontend/         # Giao diện người dùng
-├── forecasting/      # Huấn luyện và dự báo
-│   ├── data/
-│   ├── notebooks/    # Phân tích, thử nghiệm mô hình
-│   ├── models/
-│   └── train.py
-├── database/         # Schema, migration
-├── docs/             # Tài liệu, sơ đồ
-└── README.md
-```
+- $Q_{current}$: Số lượng tồn kho thực tế hiện tại tại chi nhánh.
 
-## 8. Cài đặt và chạy
+---
 
-```bash
-# 1. Clone dự án
-git clone <repo-url>
-cd project
+## 4. Xử lý dữ liệu đặc biệt (Edge Cases)
 
-# 2. Cài đặt phụ thuộc (ví dụ Python)
-pip install -r requirements.txt
+1. **Sản phẩm mới chưa có lịch sử bán hàng (`dailySales.isEmpty()`):**
+   - Đặt cờ `hasHistory = false`.
+   - Gán `suggestedRestockQty = 0` và `dailyDemandForecast = 0.0`.
+   - Không tạo đề xuất nhập bừa bãi khi chưa đủ thông tin thị trường.
 
-# 3. Khởi tạo database
-# (chạy migration / script schema)
+2. **Sản phẩm có chu kỳ bán ngắt quãng (Intermittent Demand):**
+   - Khi các ngày không có giao dịch xen kẽ, hệ thống tính toán $\sigma_d$ hiệu chỉnh để tránh tính sai lệch phương sai.
 
-# 4. Huấn luyện mô hình dự báo
-python forecasting/train.py
+---
 
-# 5. Chạy backend
-# (lệnh chạy server tùy framework)
+## 5. Kiến trúc Triển khai trong Hệ thống
+
+```text
+[Giao dịch POS / Nhập kho]
+           │
+           ▼
+[MySQL: invoice_detail / stock_in]
+           │
+           ▼
+[Spring Boot: ForecastService.java]
+   ├── getSalesHistory(productId, days=30)
+   ├── calculateExponentialSmoothing(sales, alpha=0.35)
+   ├── calculateSafetyStock(stdDev, leadTime=2)
+   ├── calculateReorderPoint(avgDaily, leadTime=2, ss)
+   └── @Scheduled(cron = "0 0 2 * * ?") runNightlyForecastJob()
+           │
+           ├── REST API: /api/forecast/demand/{id}?days=7
+           └── REST API: /api/forecast/recommendations?branchId={id}
+           │
+           ▼
+[Frontend: ForecastPage.jsx]
+   ├── Biểu đồ trực quan SalesTrendChart.jsx (SVG tương tác)
+   ├── Thẻ cảnh báo: Khẩn cấp / Cần bổ sung / Ổn định
+   └── Nút "Tạo đơn nhập hàng nhanh" (chuyển sang Stock-In chỉ với 1 click)
 ```
 
-## 9. Lộ trình thực hiện
+---
 
-1. Khảo sát nghiệp vụ, thiết kế database
-2. Xây dựng POS và quản lý kho cơ bản
-3. Chuẩn bị dữ liệu, xây dựng baseline
-4. Huấn luyện và so sánh các mô hình dự báo
-5. Tích hợp dự báo vào hệ thống, thêm cảnh báo và gợi ý nhập hàng
-6. (Tùy chọn) Thêm chatbot LLM
-7. Kiểm thử, đánh giá, viết báo cáo
+## 6. Chỉ số Đánh giá Hiệu năng Mô hình
 
-## 10. Hạn chế và hướng phát triển
+Mô hình được đo lường dựa trên các chỉ số chuẩn trong bài toán dự báo chuỗi thời gian:
 
-- Độ chính xác phụ thuộc lượng dữ liệu lịch sử.
-- Sản phẩm mới hoặc bán thưa (intermittent demand) cần phương pháp riêng (ví dụ Croston).
-- Hướng mở rộng: dự báo theo cụm sản phẩm, tích hợp yếu tố thời tiết/sự kiện, đa cửa hàng.
+- **MAE (Mean Absolute Error):** Sai số tuyệt đối trung bình giữa giá trị dự báo và thực tế:
+  $$MAE = \frac{1}{n} \sum_{t=1}^n |y_t - \hat{y}_t|$$
+- **RMSE (Root Mean Square Error):** Đo mức độ nhạy với các biến động doanh số lớn:
+  $$RMSE = \sqrt{\frac{1}{n} \sum_{t=1}^n (y_t - \hat{y}_t)^2}$$
 
-## 11. Giấy phép
+---
 
-Cập nhật theo yêu cầu của dự án (ví dụ MIT).
+## 7. Hướng Phát triển Mở rộng (Future Work)
+
+1. **Tích hợp thêm đặc trưng ngoại cảnh:** Bổ sung biến ngày lễ/Tết, khuyến mãi, thời tiết (mưa/nắng ảnh hưởng nước giải khát).
+2. **Mô hình học máy LightGBM / XGBoost:** Chạy microservice Python độc lập khi lượng dữ liệu tích lũy trên 6 tháng.
+3. **Chatbot tư vấn trợ lý kho (GenAI):** Tích hợp LLM tổng hợp báo cáo ngôn ngữ tự nhiên: *"Hôm nay mặt hàng nào có nguy cơ đứt hàng cao nhất?"*.

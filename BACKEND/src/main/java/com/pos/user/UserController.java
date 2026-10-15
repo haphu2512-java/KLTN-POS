@@ -15,6 +15,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 @Tag(name = "User Management", description = "Quản lý nhân viên, tài khoản và phân quyền người dùng")
 public class UserController {
 
