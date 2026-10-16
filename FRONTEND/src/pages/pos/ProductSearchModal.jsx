@@ -52,22 +52,47 @@ export default function ProductSearchModal({
       title: 'Tên hàng hóa',
       render: (val, row) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {row.imageUrl && (
-            <img
-              src={row.imageUrl}
-              alt=""
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              minWidth: 40,
+              borderRadius: 6,
+              backgroundColor: '#fff',
+              border: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              flexShrink: 0
+            }}
+          >
+            {row.imageUrl ? (
+              <img
+                src={row.imageUrl}
+                alt=""
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain'
+                }}
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  if (e.currentTarget.nextElementSibling) {
+                    e.currentTarget.nextElementSibling.style.display = 'flex';
+                  }
+                }}
+              />
+            ) : null}
+            <span
               style={{
-                width: 38,
-                height: 38,
-                objectFit: 'contain',
-                borderRadius: 4,
-                backgroundColor: '#fff',
-                border: '1px solid #e2e8f0',
-                flexShrink: 0
+                fontSize: '18px',
+                display: row.imageUrl ? 'none' : 'flex'
               }}
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-          )}
+            >
+              🛍️
+            </span>
+          </div>
           <div>
             <div className="font-medium">{val}</div>
             <span className="text-muted" style={{ fontSize: '11px' }}>
@@ -109,7 +134,10 @@ export default function ProductSearchModal({
           size="sm"
           variant="primary"
           disabled={row.stock <= 0}
-          onClick={() => {
+          onClick={(e) => {
+            if (e && e.stopPropagation) {
+              e.stopPropagation();
+            }
             onSelectProduct(row);
             onClose();
           }}

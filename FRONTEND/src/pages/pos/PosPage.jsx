@@ -201,6 +201,7 @@ export default function PosPage({
               id: product.id,
               barcode: product.barcode,
               name: product.name,
+              imageUrl: product.imageUrl,
               unit: product.unit,
               price: product.salePrice,
               quantity: 1,

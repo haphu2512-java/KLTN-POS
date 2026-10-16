@@ -32,25 +32,53 @@ export default function PosCart({
       key: 'name',
       title: 'Tên hàng hóa / Mã vạch',
       render: (_, row) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {row.imageUrl && (
-            <img
-              src={row.imageUrl}
-              alt=""
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              minWidth: 44,
+              borderRadius: 6,
+              backgroundColor: '#ffffff',
+              border: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+              flexShrink: 0
+            }}
+          >
+            {row.imageUrl ? (
+              <img
+                src={row.imageUrl}
+                alt={row.name}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain'
+                }}
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  if (e.currentTarget.nextElementSibling) {
+                    e.currentTarget.nextElementSibling.style.display = 'flex';
+                  }
+                }}
+              />
+            ) : null}
+            <span
               style={{
-                width: 32,
-                height: 32,
-                objectFit: 'contain',
-                borderRadius: 4,
-                backgroundColor: '#fff',
-                border: '1px solid #e2e8f0',
-                flexShrink: 0
+                fontSize: '20px',
+                display: row.imageUrl ? 'none' : 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-          )}
+            >
+              🛍️
+            </span>
+          </div>
           <div>
-            <div className="font-medium" style={{ fontSize: '13px' }}>
+            <div className="font-semibold" style={{ fontSize: '13.5px', color: 'var(--brand-900)' }}>
               {row.name}
             </div>
             <div
