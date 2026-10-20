@@ -256,6 +256,16 @@ export default function PosPage({
     return () => window.removeEventListener('pos:barcode_scanned', handleCustomScan);
   }, [handleBarcodeScanned]);
 
+  // Listen to remote barcode scans from Expo Mobile App via WebSocket
+  useEffect(() => {
+    const unsub = websocketService.on('barcode-scanned-remote', (payload) => {
+      if (payload?.barcode) {
+        handleBarcodeScanned(payload.barcode);
+      }
+    });
+    return () => unsub();
+  }, [handleBarcodeScanned]);
+
   // Handle Search Input submit (typing + enter)
   const handleSubmitBarcodeInput = () => {
     if (!barcodeInput.trim()) return;
