@@ -8,7 +8,10 @@ import com.pos.customer.CustomerRepository;
 import com.pos.inventory.InventoryService;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
+import com.pos.user.Role;
+import com.pos.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,10 +52,21 @@ public class InvoiceService {
                 .orElseThrow(() -> new BusinessException("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn với ID: " + id));
     }
 
+    /**
+     * Tạo hóa đơn bán hàng.
+     * Giá bán, nhân viên và chi nhánh do server quyết định dựa trên tài khoản đang đăng nhập (actor),
+     * không tin giá trị client gửi lên.
+     */
     @Transactional
-    public Invoice createInvoice(InvoiceRequest req) {
-        Branch branch = branchRepository.findById(req.getBranchId())
+    public Invoice createInvoice(InvoiceRequest req, User actor) {
+        Long branchId = resolveBranchId(req.getBranchId(), actor);
+        Branch branch = branchRepository.findById(branchId)
                 .orElseThrow(() -> new BusinessException("BRANCH_NOT_FOUND", "Chi nhánh không tồn tại"));
+
+        BigDecimal discount = req.getDiscount() != null ? req.getDiscount() : BigDecimal.ZERO;
+        if (discount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException("INVALID_DISCOUNT", "Giảm giá không được âm");
+        }
 
         Customer customer = null;
         if (req.getCustomerId() != null) {
@@ -62,9 +76,9 @@ public class InvoiceService {
         Invoice invoice = Invoice.builder()
                 .branch(branch)
                 .customer(customer)
-                .employeeId(req.getEmployeeId())
+                .employeeId(actor.getId())
                 .paymentMethod(req.getPaymentMethod())
-                .discount(req.getDiscount() != null ? req.getDiscount() : BigDecimal.ZERO)
+                .discount(discount)
                 .note(req.getNote())
                 .details(new ArrayList<>())
                 .build();
@@ -76,7 +90,7 @@ public class InvoiceService {
             Product product = productRepository.findById(itemReq.getProductId())
                     .orElseThrow(() -> new BusinessException("PRODUCT_NOT_FOUND", "Sản phẩm không tồn tại: " + itemReq.getProductId()));
 
-            BigDecimal unitPrice = itemReq.getUnitPrice() != null ? itemReq.getUnitPrice() : product.getSalePrice();
+            BigDecimal unitPrice = resolveUnitPrice(product, itemReq.getUnitPrice(), actor);
             BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(itemReq.getQuantity()));
 
             // ATOMIC STOCK DEDUCTION WITH CONCURRENCY CHECK
@@ -87,6 +101,7 @@ public class InvoiceService {
                     .product(product)
                     .quantity(itemReq.getQuantity())
                     .unitPrice(unitPrice)
+                    .costPrice(product.getCostPrice())
                     .totalPrice(lineTotal)
                     .build();
 
@@ -95,17 +110,19 @@ public class InvoiceService {
         }
 
         invoice.setSubtotal(subtotal);
-        BigDecimal discount = invoice.getDiscount();
-        BigDecimal totalAmount = subtotal.subtract(discount);
-        if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
-            totalAmount = BigDecimal.ZERO;
+        if (discount.compareTo(subtotal) > 0) {
+            throw new BusinessException("INVALID_DISCOUNT", "Giảm giá không được lớn hơn tổng tiền hàng");
         }
+        BigDecimal totalAmount = subtotal.subtract(discount);
         invoice.setTotalAmount(totalAmount);
 
         // 2. Handle Cash Tendered & Change
         BigDecimal received = req.getReceivedAmount() != null ? req.getReceivedAmount() : totalAmount;
         invoice.setReceivedAmount(received);
         if (req.getPaymentMethod() == PaymentMethod.CASH) {
+            if (received.compareTo(totalAmount) < 0) {
+                throw new BusinessException("INSUFFICIENT_PAYMENT", "Tiền khách đưa ít hơn số tiền phải thanh toán");
+            }
             invoice.setChangeAmount(received.subtract(totalAmount));
         } else {
             invoice.setChangeAmount(BigDecimal.ZERO);
@@ -125,7 +142,8 @@ public class InvoiceService {
 
     @Transactional
     public Invoice refundInvoice(Long id, String reason) {
-        Invoice invoice = invoiceRepository.findById(id)
+        // Khóa dòng hóa đơn để 2 yêu cầu hoàn trả đồng thời không cùng cộng kho
+        Invoice invoice = invoiceRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new BusinessException("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn với ID: " + id));
 
         if (invoice.getStatus() == InvoiceStatus.REFUNDED) {
@@ -163,5 +181,44 @@ public class InvoiceService {
         invoice.setNote((existingNote + " [ĐÃ HOÀN TRẢ" + noteReason + "]").trim());
 
         return invoiceRepository.save(invoice);
+    }
+
+    /**
+     * ADMIN được chọn chi nhánh bất kỳ; các vai trò khác chỉ bán tại chi nhánh của mình.
+     */
+    private Long resolveBranchId(Long requestedBranchId, User actor) {
+        if (actor.getRole() == Role.ADMIN || actor.getBranchId() == null) {
+            if (requestedBranchId == null) {
+                throw new BusinessException("BRANCH_REQUIRED", "Chi nhánh không được để trống");
+            }
+            return requestedBranchId;
+        }
+        if (requestedBranchId != null && !requestedBranchId.equals(actor.getBranchId())) {
+            throw new BusinessException("BRANCH_FORBIDDEN",
+                    "Bạn chỉ được bán hàng tại chi nhánh của mình", HttpStatus.FORBIDDEN);
+        }
+        return actor.getBranchId();
+    }
+
+    /**
+     * Giá bán lấy từ danh mục sản phẩm. Chỉ ADMIN/MANAGER được bán khác giá niêm yết.
+     */
+    private BigDecimal resolveUnitPrice(Product product, BigDecimal requestedPrice, User actor) {
+        BigDecimal listPrice = product.getSalePrice();
+        if (requestedPrice == null || (listPrice != null && requestedPrice.compareTo(listPrice) == 0)) {
+            if (listPrice == null) {
+                throw new BusinessException("PRODUCT_NO_PRICE", "Sản phẩm chưa có giá bán: " + product.getName());
+            }
+            return listPrice;
+        }
+        if (actor.getRole() != Role.ADMIN && actor.getRole() != Role.MANAGER) {
+            throw new BusinessException("PRICE_OVERRIDE_FORBIDDEN",
+                    "Giá bán của \"" + product.getName() + "\" khác giá niêm yết. Vui lòng tải lại danh sách sản phẩm.",
+                    HttpStatus.FORBIDDEN);
+        }
+        if (requestedPrice.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException("INVALID_PRICE", "Giá bán không được âm");
+        }
+        return requestedPrice;
     }
 }

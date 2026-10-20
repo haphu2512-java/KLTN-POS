@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button, Table, Badge, Modal } from '../../components/common';
 import { formatCurrency, formatNumber, formatDateTime } from '../../utils/formatters';
 import { reportService } from '../../services/reportService';
@@ -82,9 +82,17 @@ export default function ReportPage({
   };
 
   useEffect(() => {
-    if (viewMode === 'invoices') {
-      fetchInvoices();
-    }
+    if (viewMode !== 'invoices') return;
+    let isMounted = true;
+    saleService
+      .getInvoices(selectedBranchId)
+      .then((data) => {
+        if (isMounted) setInvoices(data || []);
+      })
+      .catch((err) => console.error('Lỗi khi tải danh sách hóa đơn từ cơ sở dữ liệu:', err));
+    return () => {
+      isMounted = false;
+    };
   }, [viewMode, selectedBranchId, isOnline]);
 
   const handleProcessRefund = async (e) => {
@@ -291,14 +299,16 @@ export default function ReportPage({
           >
             📦 Quản lý Kho
           </Button>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={onNavigateToForecast}
-            title="Mở màn hình Dự báo AI"
-          >
-            📈 Dự báo AI
-          </Button>
+          {onNavigateToForecast && (
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={onNavigateToForecast}
+              title="Mở màn hình Dự báo AI"
+            >
+              📈 Dự báo AI
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="md"

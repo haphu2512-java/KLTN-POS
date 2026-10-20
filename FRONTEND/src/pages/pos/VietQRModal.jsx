@@ -1,4 +1,3 @@
-import React from 'react';
 import { Modal, Button } from '../../components/common';
 import { formatCurrency } from '../../utils/formatters';
 

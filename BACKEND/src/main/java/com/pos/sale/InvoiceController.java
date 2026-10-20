@@ -1,11 +1,13 @@
 package com.pos.sale;
 
 import com.pos.common.ApiResponse;
+import com.pos.security.CurrentUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import org.springframework.data.domain.Page;
@@ -21,6 +23,7 @@ import java.util.List;
 public class InvoiceController {
 
     private final InvoiceService invoiceService;
+    private final CurrentUserService currentUserService;
 
     @GetMapping
     @Operation(summary = "Lấy danh sách hóa đơn bán lẻ (hỗ trợ phân trang hoặc lấy tất cả theo chi nhánh)")
@@ -44,11 +47,12 @@ public class InvoiceController {
     @PostMapping
     @Operation(summary = "Tạo hóa đơn thanh toán (tự động kiểm tra và trừ tồn kho nguyên tử)")
     public ResponseEntity<ApiResponse<Invoice>> create(@Valid @RequestBody InvoiceRequest req) {
-        Invoice invoice = invoiceService.createInvoice(req);
+        Invoice invoice = invoiceService.createInvoice(req, currentUserService.getCurrentUser());
         return ResponseEntity.ok(ApiResponse.ok("Tạo hóa đơn thành công", invoice));
     }
 
     @PostMapping("/{id}/refund")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Hoàn trả hàng / Hủy hóa đơn (tự động hoàn kho nguyên tử và thu hồi điểm)")
     public ResponseEntity<ApiResponse<Invoice>> refund(
             @PathVariable Long id,

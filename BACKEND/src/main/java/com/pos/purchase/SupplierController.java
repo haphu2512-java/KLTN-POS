@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
@@ -30,6 +31,7 @@ public class SupplierController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
     @Operation(summary = "Tạo mới nhà cung cấp")
     public ResponseEntity<ApiResponse<Supplier>> create(@RequestBody Supplier supplier) {
         return ResponseEntity.ok(ApiResponse.ok("Tạo nhà cung cấp thành công", supplierService.createSupplier(supplier)));

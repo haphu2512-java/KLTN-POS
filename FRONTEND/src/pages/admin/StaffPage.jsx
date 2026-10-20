@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button, Table, Badge, Modal } from '../../components/common';
 import { userService } from '../../services/userService';
 import { formatDateTime } from '../../utils/formatters';
 import './StaffPage.css';
 
 export default function StaffPage({
-  currentUser,
   branchId = 1,
   isOnline = true,
   onNavigateToPos,
@@ -65,6 +64,8 @@ export default function StaffPage({
   };
 
   useEffect(() => {
+    // Tải danh sách khi mở trang / đổi trạng thái kết nối là chủ ý (hàm fetch tự bật cờ loading)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUsers();
   }, [isOnline]);
 
@@ -256,12 +257,16 @@ export default function StaffPage({
           <Button size="sm" variant="secondary" onClick={onNavigateToInventory}>
             📦 Quản lý Kho
           </Button>
-          <Button size="sm" variant="secondary" onClick={onNavigateToForecast}>
-            📈 Dự báo AI
-          </Button>
-          <Button size="sm" variant="secondary" onClick={onNavigateToReport}>
-            📊 Báo cáo
-          </Button>
+          {onNavigateToForecast && (
+            <Button size="sm" variant="secondary" onClick={onNavigateToForecast}>
+              📈 Dự báo AI
+            </Button>
+          )}
+          {onNavigateToReport && (
+            <Button size="sm" variant="secondary" onClick={onNavigateToReport}>
+              📊 Báo cáo
+            </Button>
+          )}
           <Button size="sm" variant="secondary" onClick={onNavigateToPartners}>
             👥 Khách & NCC
           </Button>

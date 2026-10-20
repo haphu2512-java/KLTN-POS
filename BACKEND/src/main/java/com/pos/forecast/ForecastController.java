@@ -6,10 +6,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
 @RestController
+@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
 @RequestMapping("/api/forecast")
 @RequiredArgsConstructor
 @Tag(name = "AI Forecast", description = "Dự báo nhu cầu bán hàng và gợi ý số lượng nhập kho bằng AI")

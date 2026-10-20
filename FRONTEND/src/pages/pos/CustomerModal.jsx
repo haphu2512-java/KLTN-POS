@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Modal, Input, Button, Table } from '../../components/common';
 
 export default function CustomerModal({
@@ -14,12 +14,20 @@ export default function CustomerModal({
   const [newPhone, setNewPhone] = useState('');
   const searchInputRef = useRef(null);
 
-  useEffect(() => {
+  // Reset form mỗi lần mở modal (điều chỉnh state khi prop đổi, không cần effect)
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
     if (isOpen) {
       setSearchTerm('');
       setIsAddingNew(false);
-      setTimeout(() => searchInputRef.current?.focus(), 80);
     }
+  }
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setTimeout(() => searchInputRef.current?.focus(), 80);
+    return () => clearTimeout(timer);
   }, [isOpen]);
 
   const filtered = customers.filter(

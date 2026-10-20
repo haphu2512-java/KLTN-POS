@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
@@ -45,6 +46,7 @@ public class InventoryController {
     }
 
     @PostMapping("/transfer")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
     @Operation(summary = "Điều chuyển hàng hóa giữa 2 chi nhánh")
     public ResponseEntity<ApiResponse<Void>> transferStock(@Valid @RequestBody StockTransferRequest req) {
         inventoryService.transferStock(req);

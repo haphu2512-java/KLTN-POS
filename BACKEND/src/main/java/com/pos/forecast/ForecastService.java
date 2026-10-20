@@ -14,9 +14,13 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -61,63 +65,51 @@ public class ForecastService {
         return Math.round(forecast * 10.0) / 10.0;
     }
 
+    /** Số ngày lịch sử bán hàng dùng để dự báo (tính cả hôm nay) */
+    static final int HISTORY_DAYS = 14;
+
     /**
-     * Generates stock replenishment suggestions based on AI demand forecast
+     * Generates stock replenishment suggestions based on AI demand forecast.
+     * Chỉ dùng doanh số của đúng chi nhánh, bỏ hóa đơn đã hoàn trả và điền 0 cho những ngày không bán được.
      */
     public List<ForecastResponse> getDemandForecastAndReplenishment(Long branchId, int forecastDays, String algorithm) {
         List<Product> products = productRepository.findByActiveTrue();
         List<ForecastResponse> responses = new ArrayList<>();
-        LocalDateTime twoWeeksAgo = LocalDateTime.now().minusDays(14);
+
+        LocalDate lastDay = LocalDate.now();
+        LocalDate firstDay = lastDay.minusDays(HISTORY_DAYS - 1);
+        Map<Long, double[]> salesByProduct = loadDailySales(branchId, firstDay);
+        Map<Long, Integer> stockByProduct = loadBranchStock(branchId);
+        boolean movingAverage = "MOVING_AVG".equals(normalizeAlgorithm(algorithm));
 
         for (Product product : products) {
-            // 1. Fetch historical sales data from DB
-            List<Object[]> rawSales = invoiceRepository.getDailyProductSales(product.getId(), twoWeeksAgo);
+            // 1. Chuỗi bán hàng theo ngày của sản phẩm tại chi nhánh (đã điền 0 cho ngày không bán)
+            double[] series = salesByProduct.get(product.getId());
+            boolean hasHistory = series != null;
             List<Double> dailySales = new ArrayList<>();
-            for (Object[] row : rawSales) {
-                if (row[1] != null) {
-                    dailySales.add(((Number) row[1]).doubleValue());
+            if (hasHistory) {
+                for (double qty : series) {
+                    dailySales.add(qty);
                 }
             }
-
-            boolean hasHistory = !dailySales.isEmpty();
 
             // 2. Predict daily demand rate
             double dailyRate = 0.0;
             int totalDemand = 0;
-            int suggestedRestock = 0;
-            String urgency = "LOW";
 
             // 3. Get current branch stock
-            Inventory inv = inventoryRepository.findByProductIdAndBranchId(product.getId(), branchId).orElse(null);
-            int currentStock = inv != null ? inv.getQuantity() : 0;
+            int currentStock = stockByProduct.getOrDefault(product.getId(), 0);
 
             if (hasHistory) {
-                if ("MOVING_AVG".equalsIgnoreCase(algorithm)) {
-                    dailyRate = predictNextDemandMovingAverage(dailySales, 7);
-                } else {
-                    dailyRate = predictNextDemandExponentialSmoothing(dailySales, 0.35);
-                }
+                dailyRate = movingAverage
+                        ? predictNextDemandMovingAverage(dailySales, 7)
+                        : predictNextDemandExponentialSmoothing(dailySales, 0.35);
 
-                // 4. Calculate Replenishment (Nhu cầu dự báo * Hệ số an toàn - Tồn hiện tại)
+                // 4. Nhu cầu dự báo * Hệ số an toàn
                 double factor = safetyFactor > 0 ? safetyFactor : 1.10;
                 totalDemand = (int) Math.ceil(dailyRate * forecastDays * factor);
-                int shortage = totalDemand - currentStock;
-                suggestedRestock = Math.max(0, shortage);
-
-                if (currentStock <= 0) {
-                    urgency = "HIGH";
-                } else if (currentStock <= totalDemand * 0.3) {
-                    urgency = "HIGH";
-                } else if (suggestedRestock > 0) {
-                    urgency = "MEDIUM";
-                }
-            } else {
-                // Sản phẩm mới chưa có lịch sử bán hàng: không gán dữ liệu giả, gợi ý restock = 0
-                dailyRate = 0.0;
-                totalDemand = 0;
-                suggestedRestock = 0;
-                urgency = currentStock <= 0 ? "HIGH" : "LOW";
             }
+            // Sản phẩm chưa có lịch sử bán hàng: không gán dữ liệu giả, gợi ý restock = 0
 
             responses.add(ForecastResponse.builder()
                     .productId(product.getId())
@@ -129,8 +121,8 @@ public class ForecastService {
                     .costPrice(product.getCostPrice())
                     .dailyDemandForecast(dailyRate)
                     .totalPredictedDemand(totalDemand)
-                    .suggestedRestockQty(suggestedRestock)
-                    .urgency(urgency)
+                    .suggestedRestockQty(suggestRestock(hasHistory, totalDemand, currentStock))
+                    .urgency(classifyUrgency(hasHistory, totalDemand, currentStock))
                     .hasHistory(hasHistory)
                     .historicalDailySales(dailySales)
                     .build());
@@ -141,39 +133,108 @@ public class ForecastService {
 
     /**
      * Đọc kết quả dự báo đã được cache từ nightly job.
-     * Nếu chưa có cache (lần đầu chạy), fallback tính toán realtime.
+     * Cache chỉ dùng khi cùng thuật toán và số ngày dự báo; tồn kho được lấy lại theo thời gian thực
+     * để gợi ý nhập hàng phản ánh các giao dịch trong ngày.
+     * Nếu chưa có cache phù hợp, fallback tính toán realtime.
      */
     public List<ForecastResponse> getCachedOrComputeForecast(Long branchId, int forecastDays, String algorithm) {
+        String normalizedAlgorithm = normalizeAlgorithm(algorithm);
         List<ForecastResult> cached = forecastResultRepository
-                .findByBranchIdOrderByUrgencyAscProductProductNameAsc(branchId);
+                .findByBranchIdOrderByUrgencyAscProductNameAsc(branchId);
 
-        if (!cached.isEmpty()) {
-            // Trả kết quả từ cache, bổ sung thông tin sản phẩm
+        boolean cacheMatches = !cached.isEmpty() && cached.stream().allMatch(fr ->
+                normalizedAlgorithm.equals(normalizeAlgorithm(fr.getAlgorithm()))
+                        && Integer.valueOf(forecastDays).equals(fr.getForecastDays()));
+
+        if (cacheMatches) {
+            Map<Long, Integer> stockByProduct = loadBranchStock(branchId);
             List<ForecastResponse> responses = new ArrayList<>();
             for (ForecastResult fr : cached) {
                 Product product = fr.getProduct();
+                boolean hasHistory = Boolean.TRUE.equals(fr.getHasHistory());
+                int totalDemand = fr.getTotalPredictedDemand() != null ? fr.getTotalPredictedDemand() : 0;
+                int currentStock = stockByProduct.getOrDefault(product.getId(), 0);
                 responses.add(ForecastResponse.builder()
                         .productId(product.getId())
                         .barcode(product.getBarcode())
                         .productName(product.getName())
                         .category(product.getCategory())
                         .unit(product.getUnit())
-                        .currentStock(fr.getCurrentStock())
+                        .currentStock(currentStock)
                         .costPrice(product.getCostPrice())
                         .dailyDemandForecast(fr.getDailyDemandForecast())
-                        .totalPredictedDemand(fr.getTotalPredictedDemand())
-                        .suggestedRestockQty(fr.getSuggestedRestockQty())
-                        .urgency(fr.getUrgency())
-                        .hasHistory(fr.getHasHistory())
+                        .totalPredictedDemand(totalDemand)
+                        .suggestedRestockQty(suggestRestock(hasHistory, totalDemand, currentStock))
+                        .urgency(classifyUrgency(hasHistory, totalDemand, currentStock))
+                        .hasHistory(hasHistory)
                         .historicalDailySales(null) // Không lưu raw sales trong cache
                         .build());
             }
             return responses;
         }
 
-        // Fallback: chưa có cache → tính toán realtime
-        log.info("[FORECAST] Chưa có cache cho branchId={}, tính toán realtime...", branchId);
-        return getDemandForecastAndReplenishment(branchId, forecastDays, algorithm);
+        // Fallback: chưa có cache phù hợp → tính toán realtime
+        log.info("[FORECAST] Chưa có cache phù hợp cho branchId={} (algorithm={}, days={}), tính toán realtime...",
+                branchId, normalizedAlgorithm, forecastDays);
+        return getDemandForecastAndReplenishment(branchId, forecastDays, normalizedAlgorithm);
+    }
+
+    /** "MOVING_AVG" hoặc mặc định "EXP_SMOOTH" (chấp nhận cả "EXP_SMOOTHING" từ client cũ) */
+    static String normalizeAlgorithm(String algorithm) {
+        return "MOVING_AVG".equalsIgnoreCase(algorithm) ? "MOVING_AVG" : "EXP_SMOOTH";
+    }
+
+    static int suggestRestock(boolean hasHistory, int totalDemand, int currentStock) {
+        return hasHistory ? Math.max(0, totalDemand - currentStock) : 0;
+    }
+
+    static String classifyUrgency(boolean hasHistory, int totalDemand, int currentStock) {
+        if (currentStock <= 0) {
+            return "HIGH";
+        }
+        if (!hasHistory) {
+            return "LOW";
+        }
+        if (currentStock <= totalDemand * 0.3) {
+            return "HIGH";
+        }
+        return totalDemand - currentStock > 0 ? "MEDIUM" : "LOW";
+    }
+
+    /**
+     * Doanh số theo ngày của mọi sản phẩm tại chi nhánh, mỗi sản phẩm là mảng HISTORY_DAYS phần tử
+     * (ngày không bán = 0). Sản phẩm không bán được ngày nào trong cửa sổ sẽ không có trong map.
+     */
+    private Map<Long, double[]> loadDailySales(Long branchId, LocalDate firstDay) {
+        Map<Long, double[]> salesByProduct = new HashMap<>();
+        List<Object[]> rows = invoiceRepository.getBranchDailyProductSales(branchId, firstDay.atStartOfDay());
+        for (Object[] row : rows) {
+            if (row[0] == null || row[1] == null || row[2] == null) continue;
+            int dayIndex = (int) ChronoUnit.DAYS.between(firstDay, toLocalDate(row[1]));
+            if (dayIndex < 0 || dayIndex >= HISTORY_DAYS) continue;
+            long productId = ((Number) row[0]).longValue();
+            salesByProduct.computeIfAbsent(productId, k -> new double[HISTORY_DAYS])[dayIndex]
+                    += ((Number) row[2]).doubleValue();
+        }
+        return salesByProduct;
+    }
+
+    private Map<Long, Integer> loadBranchStock(Long branchId) {
+        Map<Long, Integer> stockByProduct = new HashMap<>();
+        for (Inventory inv : inventoryRepository.findByBranchId(branchId)) {
+            if (inv.getProduct() != null && inv.getQuantity() != null) {
+                stockByProduct.put(inv.getProduct().getId(), inv.getQuantity());
+            }
+        }
+        return stockByProduct;
+    }
+
+    private static LocalDate toLocalDate(Object value) {
+        if (value instanceof LocalDate date) return date;
+        if (value instanceof java.sql.Date date) return date.toLocalDate();
+        if (value instanceof LocalDateTime dateTime) return dateTime.toLocalDate();
+        if (value instanceof java.util.Date date) return new java.sql.Date(date.getTime()).toLocalDate();
+        return LocalDate.parse(value.toString().substring(0, 10));
     }
 
     /**
