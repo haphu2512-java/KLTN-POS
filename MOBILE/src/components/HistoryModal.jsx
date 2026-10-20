@@ -28,6 +28,8 @@ export default function HistoryModal({
         return { text: '✓ Đã gửi POS', bg: '#064e3b', color: '#34d399' };
       case 'OFFLINE_QUEUED':
         return { text: '💾 Lưu Offline', bg: '#451a03', color: '#fbbf24' };
+      case 'LOOKUP':
+        return { text: 'Tra giá', bg: '#1e3a8a', color: '#93c5fd' };
       case 'NOT_FOUND':
         return { text: '⚠️ Chưa có mã', bg: '#334155', color: '#94a3b8' };
       default:

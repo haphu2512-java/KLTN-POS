@@ -94,7 +94,7 @@ export const OfflineStorage = {
         unit: p.unit || 'Cái',
         salePrice: Number(p.salePrice || p.price || 0),
         costPrice: Number(p.costPrice || 0),
-        stock: Number(p.stock ?? p.inventoryQuantity ?? 10),
+        stock: p.stock == null ? null : Number(p.stock),
         imageUrl: p.imageUrl || null
       }));
       await AsyncStorage.setItem(STORAGE_KEYS.CACHED_PRODUCTS, JSON.stringify(sanitized));
@@ -155,7 +155,6 @@ export const OfflineStorage = {
       const newEntry = {
         clientScanId: scanRecord.clientScanId || `scan-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         barcode: String(scanRecord.barcode || '').trim(),
-        branchId: scanRecord.branchId || 1,
         deviceName: scanRecord.deviceName || 'Expo Mobile Scanner',
         timestamp: scanRecord.timestamp || new Date().toISOString(),
         action: scanRecord.action || 'ADD_TO_CART',
@@ -173,6 +172,14 @@ export const OfflineStorage = {
 
   async clearOfflineQueue() {
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_QUEUE);
+  },
+
+  // Đọc lại hàng đợi ngay lúc xóa để không làm mất mã vừa quét trong khi đang đồng bộ
+  async removeOfflineQueueItems(clientScanIds) {
+    const ids = new Set(clientScanIds);
+    const queue = await this.getOfflineQueue();
+    const remaining = queue.filter((item) => !ids.has(item.clientScanId));
+    await AsyncStorage.setItem(STORAGE_KEYS.OFFLINE_QUEUE, JSON.stringify(remaining));
   },
 
   async removeOfflineQueueItem(clientScanId) {
@@ -199,7 +206,7 @@ export const OfflineStorage = {
           id: `hist-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
           barcode: record.barcode,
           product: record.product || null,
-          status: record.status || 'SENT', // 'SENT' | 'OFFLINE_QUEUED' | 'NOT_FOUND'
+          status: record.status || 'SENT', // 'SENT' | 'OFFLINE_QUEUED' | 'NOT_FOUND' | 'LOOKUP'
           timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
           date: new Date().toLocaleDateString('vi-VN')
         },

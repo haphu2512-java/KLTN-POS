@@ -111,6 +111,8 @@ export default function PosPage({
   const [isCustomerOpen, setIsCustomerOpen] = useState(false);
   const [isVietQROpen, setIsVietQROpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  // Các mã quét offline trên điện thoại vừa đồng bộ lên, chờ thu ngân xác nhận
+  const [remoteBatch, setRemoteBatch] = useState(null);
   const [barcodeInput, setBarcodeInput] = useState('');
 
   // Current active order data
@@ -242,7 +244,7 @@ export default function PosPage({
 
   // Hook Barcode scanner
   useBarcodeScanner(handleBarcodeScanned, {
-    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen
+    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !remoteBatch
   });
 
   // Listen to simulated scan events (e.g. from BarcodePrintModal or mock tester)
@@ -256,15 +258,32 @@ export default function PosPage({
     return () => window.removeEventListener('pos:barcode_scanned', handleCustomScan);
   }, [handleBarcodeScanned]);
 
-  // Listen to remote barcode scans from Expo Mobile App via WebSocket
+  // Mã quét từ điện thoại đăng nhập cùng tài khoản (server chỉ gửi tới đúng tài khoản này)
   useEffect(() => {
     const unsub = websocketService.on('barcode-scanned-remote', (payload) => {
-      if (payload?.barcode) {
+      if (payload?.action !== 'ADD_TO_CART') return;
+      if (payload.type === 'BATCH') {
+        if (Array.isArray(payload.scans) && payload.scans.length > 0) {
+          setRemoteBatch(payload.scans);
+        }
+        return;
+      }
+      if (payload.barcode) {
         handleBarcodeScanned(payload.barcode);
       }
     });
     return () => unsub();
   }, [handleBarcodeScanned]);
+
+  const handleConfirmRemoteBatch = () => {
+    (remoteBatch || []).forEach((scan) => {
+      const found = products.find(
+        (p) => p.barcode.toLowerCase() === String(scan.barcode).toLowerCase().trim()
+      );
+      if (found) handleAddProduct(found);
+    });
+    setRemoteBatch(null);
+  };
 
   // Handle Search Input submit (typing + enter)
   const handleSubmitBarcodeInput = () => {
@@ -477,6 +496,7 @@ export default function PosPage({
       setIsCustomerOpen(false);
       setIsVietQROpen(false);
       setIsHelpOpen(false);
+      setRemoteBatch(null);
     }
   });
 
@@ -576,6 +596,41 @@ export default function PosPage({
       />
 
       {/* Help Modal */}
+      <Modal
+        isOpen={!!remoteBatch}
+        onClose={() => setRemoteBatch(null)}
+        title="Nhận hàng quét từ điện thoại"
+        maxWidth="500px"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRemoteBatch(null)}>
+              Bỏ qua
+            </Button>
+            <Button variant="primary" onClick={handleConfirmRemoteBatch}>
+              Thêm vào giỏ
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+          <div>
+            Điện thoại vừa đồng bộ {remoteBatch?.length || 0} mã đã quét lúc mất mạng. Thêm vào đơn hàng
+            hiện tại?
+          </div>
+          <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
+            {(remoteBatch || []).map((scan) => (
+              <div
+                key={scan.clientScanId || scan.barcode}
+                style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}
+              >
+                <span>{scan.product?.name || `Mã ${scan.barcode} (không có trong danh mục, sẽ bỏ qua)`}</span>
+                <span>{scan.product ? formatCurrency(scan.product.salePrice) : ''}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Modal>
+
       <Modal
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}

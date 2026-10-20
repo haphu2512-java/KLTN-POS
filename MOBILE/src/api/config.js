@@ -6,7 +6,8 @@ const STORAGE_KEYS = {
   BRANCH_ID: '@pos_scanner_branch_id',
   SCAN_MODE: '@pos_scanner_mode', // 'POS_REMOTE' | 'PRICE_CHECK'
   HAPTIC_ENABLED: '@pos_scanner_haptic',
-  SOUND_ENABLED: '@pos_scanner_sound'
+  SOUND_ENABLED: '@pos_scanner_sound',
+  AUTH_SESSION: '@pos_scanner_session' // { token, username, fullName, role, branchId }
 };
 
 // Default server URL based on platform
@@ -19,6 +20,24 @@ const getDefaultServerUrl = () => {
 };
 
 export const AppConfig = {
+  // Phiên đăng nhập: điện thoại dùng cùng tài khoản với máy POS cần nhận mã quét
+  async getSession() {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_SESSION);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  async setSession(session) {
+    await AsyncStorage.setItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(session));
+  },
+
+  async clearSession() {
+    await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_SESSION);
+  },
+
   async getServerUrl() {
     try {
       const saved = await AsyncStorage.getItem(STORAGE_KEYS.SERVER_URL);

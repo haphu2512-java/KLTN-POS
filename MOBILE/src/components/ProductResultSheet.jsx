@@ -104,7 +104,7 @@ export default function ProductResultSheet({
                   <Text style={styles.posAddedText}>
                     {online
                       ? '✓ Đã bắn trực tiếp vào giỏ hàng thu ngân POS'
-                      : '✓ Đã lưu hàng đợi - sẽ tự bắn khi có mạng'}
+                      : 'Đã lưu hàng đợi. Khi có mạng, mở Hàng đợi và bấm Đồng bộ.'}
                   </Text>
                 </View>
               )}
@@ -120,7 +120,7 @@ export default function ProductResultSheet({
 
           {/* Action Buttons */}
           <View style={styles.btnRow}>
-            {found && (
+            {found && scanMode === 'POS_REMOTE' && (
               <TouchableOpacity
                 style={styles.resendBtn}
                 onPress={() => onResendToPos(barcode)}
@@ -131,7 +131,7 @@ export default function ProductResultSheet({
             )}
 
             <TouchableOpacity
-              style={[styles.closeBtn, !found && { flex: 1 }]}
+              style={[styles.closeBtn, !(found && scanMode === 'POS_REMOTE') && { flex: 1 }]}
               onPress={onClose}
               activeOpacity={0.8}
             >

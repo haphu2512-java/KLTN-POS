@@ -13,12 +13,16 @@ import ProductResultSheet from './src/components/ProductResultSheet';
 import OfflineQueueModal from './src/components/OfflineQueueModal';
 import SettingsModal from './src/components/SettingsModal';
 import HistoryModal from './src/components/HistoryModal';
+import LoginScreen from './src/components/LoginScreen';
 import { AppConfig } from './src/api/config';
-import { ScannerApi } from './src/api/scannerApi';
+import { ScannerApi, AuthError } from './src/api/scannerApi';
 import { OfflineStorage } from './src/storage/offlineStorage';
 import { triggerScanFeedback } from './src/utils/feedback';
 
 export default function App() {
+  const [session, setSession] = useState(null);
+  const [isSessionLoaded, setIsSessionLoaded] = useState(false);
+  const [authNotice, setAuthNotice] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
   const [scanMode, setScanMode] = useState('POS_REMOTE'); // 'POS_REMOTE' | 'PRICE_CHECK'
   const [isProcessing, setIsProcessing] = useState(false);
@@ -48,6 +52,9 @@ export default function App() {
 
   const initializeApp = async () => {
     try {
+      setSession(await AppConfig.getSession());
+      setIsSessionLoaded(true);
+
       const settings = await AppConfig.getSettings();
       setScanMode(settings.scanMode || 'POS_REMOTE');
 
@@ -82,6 +89,22 @@ export default function App() {
     setHistory(h);
   };
 
+  // Token hết hạn / bị khóa: quay về màn hình đăng nhập
+  const handleAuthError = useCallback(async (err) => {
+    await ScannerApi.logout();
+    setIsResultOpen(false);
+    setIsQueueOpen(false);
+    setIsSettingsOpen(false);
+    setAuthNotice(err?.message || null);
+    setSession(null);
+  }, []);
+
+  const handleLogout = async () => {
+    await ScannerApi.logout();
+    setAuthNotice(null);
+    setSession(null);
+  };
+
   // Toggle Mode
   const handleToggleMode = async (mode) => {
     setScanMode(mode);
@@ -112,8 +135,11 @@ export default function App() {
       setIsProcessing(true);
 
       try {
-        const action = scanMode === 'POS_REMOTE' ? 'ADD_TO_CART' : 'LOOKUP_ONLY';
-        const result = await ScannerApi.broadcastBarcode(clean, action);
+        // Chỉ chế độ POS_REMOTE mới bắn vào giỏ; tra giá không gửi gì tới POS và không vào hàng đợi
+        const result =
+          scanMode === 'POS_REMOTE'
+            ? await ScannerApi.broadcastBarcode(clean)
+            : await ScannerApi.lookupBarcode(clean);
 
         // Feedback sound and haptics
         await triggerScanFeedback(result.found);
@@ -127,32 +153,60 @@ export default function App() {
         // Refresh offline queue & history
         await refreshData();
       } catch (err) {
-        Alert.alert('Lỗi quét mã', err.message);
+        if (err instanceof AuthError) {
+          handleAuthError(err);
+        } else {
+          Alert.alert('Lỗi quét mã', err.message);
+        }
       } finally {
         setIsProcessing(false);
       }
     },
-    [scanMode]
+    [scanMode, handleAuthError]
   );
 
   // Resend to POS button in bottom sheet
   const handleResendToPos = async (barcode) => {
     setIsProcessing(true);
     try {
-      const res = await ScannerApi.broadcastBarcode(barcode, 'ADD_TO_CART');
+      const res = await ScannerApi.broadcastBarcode(barcode);
       await triggerScanFeedback(true);
       setScanResult((prev) => ({
         ...prev,
         ...res,
-        message: '✓ Đã bắn lại mã vào giỏ hàng POS!'
+        message: res.online ? 'Đã bắn lại mã vào giỏ hàng POS!' : res.message
       }));
       await refreshData();
     } catch (e) {
-      Alert.alert('Lỗi', e.message);
+      if (e instanceof AuthError) {
+        handleAuthError(e);
+      } else {
+        Alert.alert('Lỗi', e.message);
+      }
     } finally {
       setIsProcessing(false);
     }
   };
+
+  if (!isSessionLoaded) {
+    return <SafeAreaView style={styles.safeArea} />;
+  }
+
+  if (!session) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+        <LoginScreen
+          notice={authNotice}
+          onLoggedIn={(s) => {
+            setAuthNotice(null);
+            setSession(s);
+            checkConnectivity();
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -191,12 +245,16 @@ export default function App() {
           queue={queue}
           onClose={() => setIsQueueOpen(false)}
           onQueueUpdated={refreshData}
+          onAuthError={handleAuthError}
         />
 
         {/* Settings & Configuration Modal */}
         <SettingsModal
           visible={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
+          session={session}
+          onLogout={handleLogout}
+          onAuthError={handleAuthError}
           onSettingsSaved={() => {
             checkConnectivity();
             refreshData();

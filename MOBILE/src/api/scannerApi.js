@@ -1,6 +1,16 @@
 import { AppConfig } from './config';
 import { OfflineStorage } from '../storage/offlineStorage';
 
+const SYNC_CHUNK_SIZE = 200; // Khớp giới hạn @Size của /api/scanner/sync-batch
+
+// Token hết hạn, sai hoặc tài khoản bị khóa: app phải đăng nhập lại, không xếp hàng đợi
+export class AuthError extends Error {
+  constructor(message = 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.') {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
 // Fetch helper with timeout
 const fetchWithTimeout = async (url, options = {}, timeoutMs = 3000) => {
   const controller = new AbortController();
@@ -19,32 +29,82 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = 3000) => {
   }
 };
 
+// Gọi API có kèm JWT; 401/403 ném AuthError
+const authFetch = async (path, options = {}, timeoutMs = 3000) => {
+  const [serverUrl, session] = await Promise.all([AppConfig.getServerUrl(), AppConfig.getSession()]);
+  if (!session?.token) {
+    throw new AuthError('Chưa đăng nhập.');
+  }
+  const response = await fetchWithTimeout(
+    `${serverUrl}${path}`,
+    {
+      ...options,
+      headers: {
+        Accept: 'application/json',
+        ...(options.headers || {}),
+        Authorization: `Bearer ${session.token}`
+      }
+    },
+    timeoutMs
+  );
+  if (response.status === 401) {
+    throw new AuthError();
+  }
+  if (response.status === 403) {
+    throw new AuthError('Tài khoản này không có quyền dùng chức năng quét mã.');
+  }
+  return response;
+};
+
+const newScanId = () => `scan-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+
 export const ScannerApi = {
-  // Broadcast barcode directly to POS through Spring Boot WebSocket
-  async broadcastBarcode(barcode, action = 'ADD_TO_CART') {
-    const serverUrl = await AppConfig.getServerUrl();
-    const branchId = await AppConfig.getBranchId();
+  // Đăng nhập bằng tài khoản POS; mã quét sẽ được gửi tới máy POS đang đăng nhập cùng tài khoản
+  async login(serverUrl, username, password) {
+    const cleanUrl = await AppConfig.setServerUrl(serverUrl);
+    const response = await fetchWithTimeout(
+      `${cleanUrl}/api/auth/login`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password })
+      },
+      8000
+    );
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !json?.data?.token) {
+      throw new Error(json?.message || `Đăng nhập thất bại (HTTP ${response.status})`);
+    }
+    const { token, username: user, fullName, role, branchId } = json.data;
+    const session = { token, username: user, fullName, role, branchId };
+    await AppConfig.setSession(session);
+    return session;
+  },
+
+  async logout() {
+    await AppConfig.clearSession();
+  },
+
+  // Bắn mã vào giỏ hàng POS. Chỉ dùng cho chế độ POS_REMOTE.
+  async broadcastBarcode(barcode) {
     const cleanBarcode = String(barcode || '').trim();
-    const clientScanId = `scan-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const clientScanId = newScanId();
 
     try {
-      const response = await fetchWithTimeout(
-        `${serverUrl}/api/scanner/broadcast`,
+      const response = await authFetch(
+        '/api/scanner/broadcast',
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             barcode: cleanBarcode,
-            branchId,
             deviceName: 'Expo Mobile App',
             clientScanId,
-            action
+            timestamp: new Date().toISOString(),
+            action: 'ADD_TO_CART'
           })
         },
-        3000 // 3s timeout
+        8000
       );
 
       if (!response.ok) {
@@ -54,7 +114,6 @@ export const ScannerApi = {
       const resData = await response.json();
       const product = resData?.data?.product || null;
 
-      // Add to history
       await OfflineStorage.addScanHistory({
         barcode: cleanBarcode,
         product,
@@ -67,29 +126,27 @@ export const ScannerApi = {
         broadcasted: true,
         product,
         found: !!product,
-        message: product 
-          ? `Đã gửi "${product.name}" tới quầy POS!` 
+        message: product
+          ? `Đã gửi "${product.name}" tới quầy POS!`
           : `Đã gửi mã ${cleanBarcode} (chưa có trong kho)`
       };
     } catch (err) {
+      if (err instanceof AuthError) throw err;
       console.log('Không thể kết nối máy chủ, kích hoạt Offline-First:', err.message);
 
-      // OFFLINE FALLBACK: Look up in local offline storage cache
       const localProduct = await OfflineStorage.lookupProductOffline(cleanBarcode);
 
-      // Enqueue to offline scan queue for later synchronization
+      // Giữ nguyên clientScanId: nếu request vừa rồi thực ra đã tới server, server sẽ bỏ qua bản trùng khi đồng bộ
       await OfflineStorage.queueOfflineScan({
         clientScanId,
         barcode: cleanBarcode,
-        branchId,
         deviceName: 'Expo Mobile (Offline)',
         timestamp: new Date().toISOString(),
-        action,
+        action: 'ADD_TO_CART',
         productName: localProduct?.name || 'Sản phẩm Offline',
         productPrice: localProduct?.salePrice || 0
       });
 
-      // Add to history as offline queued
       await OfflineStorage.addScanHistory({
         barcode: cleanBarcode,
         product: localProduct,
@@ -110,17 +167,46 @@ export const ScannerApi = {
     }
   },
 
+  // Tra giá / tồn kho. Không gửi gì tới POS và không xếp hàng đợi.
+  async lookupBarcode(barcode) {
+    const cleanBarcode = String(barcode || '').trim();
+    try {
+      const response = await authFetch(
+        `/api/scanner/lookup?barcode=${encodeURIComponent(cleanBarcode)}`,
+        {},
+        5000
+      );
+      if (response.status === 404) {
+        await OfflineStorage.addScanHistory({ barcode: cleanBarcode, product: null, status: 'NOT_FOUND' });
+        return { success: true, online: true, product: null, found: false, message: `Không tìm thấy mã ${cleanBarcode}` };
+      }
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const json = await response.json();
+      const product = json?.data || null;
+      await OfflineStorage.addScanHistory({ barcode: cleanBarcode, product, status: 'LOOKUP' });
+      return { success: true, online: true, product, found: !!product, message: 'Tra cứu trực tuyến' };
+    } catch (err) {
+      if (err instanceof AuthError) throw err;
+      const localProduct = await OfflineStorage.lookupProductOffline(cleanBarcode);
+      await OfflineStorage.addScanHistory({ barcode: cleanBarcode, product: localProduct, status: 'LOOKUP' });
+      return {
+        success: true,
+        online: false,
+        product: localProduct,
+        found: !!localProduct,
+        message: localProduct
+          ? '[Offline] Giá theo danh mục đã tải về máy'
+          : `[Offline] Không có mã ${cleanBarcode} trong danh mục đã tải`
+      };
+    }
+  },
+
   // Sync entire product catalog to phone for offline lookups
   async fetchProductsForCache() {
-    const serverUrl = await AppConfig.getServerUrl();
     try {
-      const response = await fetchWithTimeout(
-        `${serverUrl}/api/scanner/products/cache`,
-        {
-          headers: { Accept: 'application/json' }
-        },
-        7000
-      );
+      const response = await authFetch('/api/scanner/products/cache', {}, 10000);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -134,6 +220,7 @@ export const ScannerApi = {
       }
       return { success: false, message: 'Danh sách sản phẩm trống' };
     } catch (err) {
+      if (err instanceof AuthError) throw err;
       return {
         success: false,
         message: `Lỗi kết nối máy chủ: ${err.message}`
@@ -141,52 +228,67 @@ export const ScannerApi = {
     }
   },
 
-  // Push all queued offline scans to Spring Boot backend
+  // Đẩy hàng đợi offline lên server; POS sẽ hỏi thu ngân trước khi thêm vào giỏ.
+  // Chỉ xóa đúng các mục đã gửi thành công, mã quét mới trong lúc đồng bộ vẫn được giữ lại.
   async syncOfflineQueue() {
     const queue = await OfflineStorage.getOfflineQueue();
     if (queue.length === 0) {
       return { success: true, count: 0, message: 'Hàng đợi Offline đang trống.' };
     }
 
-    const serverUrl = await AppConfig.getServerUrl();
+    // Hàng đợi lưu mới nhất ở đầu; gửi theo thứ tự quét
+    const ordered = [...queue].reverse();
+    let sent = 0;
     try {
-      const response = await fetchWithTimeout(
-        `${serverUrl}/api/scanner/sync-batch`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json'
+      for (let i = 0; i < ordered.length; i += SYNC_CHUNK_SIZE) {
+        const chunk = ordered.slice(i, i + SYNC_CHUNK_SIZE);
+        const response = await authFetch(
+          '/api/scanner/sync-batch',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              scans: chunk.map(({ barcode, clientScanId, deviceName, timestamp }) => ({
+                barcode,
+                clientScanId,
+                deviceName,
+                timestamp,
+                action: 'ADD_TO_CART'
+              }))
+            })
           },
-          body: JSON.stringify(queue)
-        },
-        8000
-      );
+          10000
+        );
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        await OfflineStorage.removeOfflineQueueItems(chunk.map((item) => item.clientScanId));
+        sent += chunk.length;
       }
 
-      await OfflineStorage.clearOfflineQueue();
       return {
         success: true,
-        count: queue.length,
-        message: `Đã đồng bộ thành công ${queue.length} mã quét lên hệ thống POS!`
+        count: sent,
+        message: `Đã gửi ${sent} mã quét. Hãy xác nhận trên màn hình POS để thêm vào giỏ.`
       };
     } catch (err) {
+      if (err instanceof AuthError) throw err;
       return {
         success: false,
-        message: `Lỗi đồng bộ: ${err.message}. Các mã quét vẫn an toàn trong hàng đợi.`
+        count: sent,
+        message: `Lỗi đồng bộ: ${err.message}. Các mã chưa gửi vẫn an toàn trong hàng đợi.`
       };
     }
   },
 
-  // Test server connectivity
+  // Kiểm tra kết nối bằng endpoint nhẹ, không tải danh mục
   async testConnection(customUrl) {
-    const url = customUrl || (await AppConfig.getServerUrl());
+    const url = (customUrl || (await AppConfig.getServerUrl())).trim().replace(/\/+$/, '');
     try {
       const start = Date.now();
-      const res = await fetchWithTimeout(`${url}/api/scanner/products/cache`, {}, 2500);
+      const res = await fetchWithTimeout(`${url}/api/scanner/ping`, {}, 2500);
       const pingMs = Date.now() - start;
       return {
         online: res.ok,
