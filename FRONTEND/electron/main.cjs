@@ -80,9 +80,28 @@ ipcMain.handle('printer:get-printers', async () => {
   }
 });
 
+// In hóa đơn trong một cửa sổ ẩn chỉ chứa HTML hóa đơn.
+// (webContents.print của cửa sổ chính sẽ in cả màn hình POS chứ không phải hóa đơn.)
 ipcMain.handle('printer:print-receipt', async (event, options = {}) => {
-  if (!mainWindow) return { success: false, error: 'No active window' };
+  if (typeof options.html !== 'string' || !options.html) {
+    return { success: false, error: 'Thiếu nội dung hóa đơn' };
+  }
+
+  const printWindow = new BrowserWindow({
+    show: false,
+    width: 302, // ~80mm ở 96 dpi
+    height: 800,
+    webPreferences: {
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      javascript: false,
+    },
+  });
+
   try {
+    await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(options.html)}`);
+
     const printOptions = {
       silent: options.silent ?? true,
       printBackground: true,
@@ -93,17 +112,15 @@ ipcMain.handle('printer:print-receipt', async (event, options = {}) => {
       pageSize: options.pageSize || { width: 80000, height: 297000 }, // Standard 80mm roll width
     };
 
-    return new Promise((resolve) => {
-      mainWindow.webContents.print(printOptions, (success, failureReason) => {
-        if (!success) {
-          resolve({ success: false, error: failureReason });
-        } else {
-          resolve({ success: true });
-        }
+    return await new Promise((resolve) => {
+      printWindow.webContents.print(printOptions, (success, failureReason) => {
+        resolve(success ? { success: true } : { success: false, error: failureReason });
       });
     });
   } catch (error) {
     return { success: false, error: error.message };
+  } finally {
+    if (!printWindow.isDestroyed()) printWindow.close();
   }
 });
 

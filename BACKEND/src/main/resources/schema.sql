@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS invoice (
     received_amount DECIMAL(14,2),
     change_amount DECIMAL(14,2),
     note VARCHAR(255),
+    client_request_id VARCHAR(64) UNIQUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (branch_id) REFERENCES branch(id) ON DELETE CASCADE,
     FOREIGN KEY (customer_id) REFERENCES customer(id) ON DELETE SET NULL,

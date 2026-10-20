@@ -253,4 +253,48 @@ class InvoiceServiceTest {
 
         assertThrows(BusinessException.class, () -> invoiceService.refundInvoice(11L, "Lỗi"));
     }
+
+    @Test
+    @DisplayName("Gửi lại cùng clientRequestId: trả hóa đơn cũ, không trừ kho lần nữa")
+    void testRetryWithSameClientRequestIdReturnsExistingInvoice() {
+        Invoice existing = Invoice.builder().id(55L).employeeId(cashier.getId()).clientRequestId("req-1").build();
+        when(invoiceRepository.findByClientRequestId("req-1")).thenReturn(Optional.of(existing));
+
+        InvoiceRequest req = cashRequest(null, null, null);
+        req.setClientRequestId("req-1");
+
+        assertSame(existing, invoiceService.createInvoice(req, cashier));
+        verify(inventoryService, never()).deductStockAtomic(anyLong(), anyLong(), anyInt());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("clientRequestId của nhân viên khác: từ chối, không trả hóa đơn của người khác")
+    void testClientRequestIdOfAnotherEmployeeIsRejected() {
+        Invoice existing = Invoice.builder().id(55L).employeeId(manager.getId()).clientRequestId("req-2").build();
+        when(invoiceRepository.findByClientRequestId("req-2")).thenReturn(Optional.of(existing));
+
+        InvoiceRequest req = cashRequest(null, null, null);
+        req.setClientRequestId("req-2");
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> invoiceService.createInvoice(req, cashier));
+        assertEquals("DUPLICATE_REQUEST", ex.getCode());
+        verify(inventoryService, never()).deductStockAtomic(anyLong(), anyLong(), anyInt());
+    }
+
+    @Test
+    @DisplayName("Đơn mới có clientRequestId: lưu mã vào hóa đơn")
+    void testNewInvoiceStoresClientRequestId() {
+        when(invoiceRepository.findByClientRequestId("req-3")).thenReturn(Optional.empty());
+        when(branchRepository.findById(1L)).thenReturn(Optional.of(Branch.builder().id(1L).build()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(milk()));
+        when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        InvoiceRequest req = cashRequest(null, null, null);
+        req.setClientRequestId(" req-3 ");
+
+        Invoice saved = invoiceService.createInvoice(req, cashier);
+        assertEquals("req-3", saved.getClientRequestId());
+        verify(inventoryService).deductStockAtomic(1L, 1L, 2);
+    }
 }

@@ -59,6 +59,20 @@ public class InvoiceService {
      */
     @Transactional
     public Invoice createInvoice(InvoiceRequest req, User actor) {
+        String clientRequestId = req.getClientRequestId() != null && !req.getClientRequestId().isBlank()
+                ? req.getClientRequestId().trim() : null;
+        if (clientRequestId != null) {
+            // POS gửi lại đơn sau khi mất phản hồi: trả hóa đơn đã tạo, không trừ kho lần nữa
+            Invoice existing = invoiceRepository.findByClientRequestId(clientRequestId).orElse(null);
+            if (existing != null) {
+                if (!actor.getId().equals(existing.getEmployeeId())) {
+                    throw new BusinessException("DUPLICATE_REQUEST",
+                            "Mã yêu cầu đã được dùng cho hóa đơn khác", HttpStatus.CONFLICT);
+                }
+                return existing;
+            }
+        }
+
         Long branchId = resolveBranchId(req.getBranchId(), actor);
         Branch branch = branchRepository.findById(branchId)
                 .orElseThrow(() -> new BusinessException("BRANCH_NOT_FOUND", "Chi nhánh không tồn tại"));
@@ -80,6 +94,7 @@ public class InvoiceService {
                 .paymentMethod(req.getPaymentMethod())
                 .discount(discount)
                 .note(req.getNote())
+                .clientRequestId(clientRequestId)
                 .details(new ArrayList<>())
                 .build();
 
