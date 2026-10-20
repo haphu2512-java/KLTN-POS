@@ -7,15 +7,8 @@ import { exportToCsv } from '../../utils/exportCsv';
 import './ReportPage.css';
 
 export default function ReportPage({
-  currentUser,
   branchId = 1,
-  isOnline = true,
-  onNavigateToPos,
-  onNavigateToInventory,
-  onNavigateToForecast,
-  onNavigateToPartners,
-  onNavigateToStaff,
-  onLogout
+  isOnline = true
 }) {
   const [selectedBranchId, setSelectedBranchId] = useState(branchId || 1);
   const [days, setDays] = useState(7);
@@ -151,7 +144,7 @@ export default function ReportPage({
       width: '40px',
       align: 'center',
       render: (_, __, idx) => (
-        <span style={{ fontWeight: 700, color: idx < 3 ? '#10B981' : '#94A3B8' }}>
+        <span style={{ fontWeight: 700, color: idx < 3 ? 'var(--primary-600)' : 'var(--text-muted)' }}>
           {idx + 1}
         </span>
       )
@@ -181,7 +174,7 @@ export default function ReportPage({
       width: '110px',
       align: 'right',
       render: (val) => (
-        <span className="font-bold tabular-nums" style={{ color: '#10B981' }}>
+        <span className="font-bold tabular-nums" style={{ color: 'var(--primary-600)' }}>
           {formatCurrency(val)}
         </span>
       )
@@ -192,7 +185,7 @@ export default function ReportPage({
       width: '110px',
       align: 'right',
       render: (val) => (
-        <span className="tabular-nums font-semibold" style={{ color: '#38BDF8' }}>
+        <span className="tabular-nums font-semibold" style={{ color: 'var(--text-main)' }}>
           {formatCurrency(val)}
         </span>
       )
@@ -204,7 +197,7 @@ export default function ReportPage({
       key: 'id',
       title: 'Mã HĐ',
       width: '90px',
-      render: (i) => <strong style={{ color: '#38BDF8', fontFamily: 'monospace' }}>#{i.id}</strong>
+      render: (i) => <strong style={{ color: 'var(--text-main)', fontFamily: 'monospace' }}>#{i.id}</strong>
     },
     {
       key: 'createdAt',
@@ -221,7 +214,7 @@ export default function ReportPage({
       key: 'totalAmount',
       title: 'Tổng tiền',
       align: 'right',
-      render: (i) => <strong style={{ color: '#10B981' }}>{formatCurrency(i.totalAmount)}</strong>
+      render: (i) => <strong style={{ color: 'var(--primary-600)' }}>{formatCurrency(i.totalAmount)}</strong>
     },
     {
       key: 'paymentMethod',
@@ -242,7 +235,7 @@ export default function ReportPage({
     {
       key: 'note',
       title: 'Ghi chú',
-      render: (i) => <span style={{ fontSize: '12px', color: '#94A3B8' }}>{i.note || '—'}</span>
+      render: (i) => <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{i.note || '—'}</span>
     },
     {
       key: 'actions',
@@ -260,10 +253,10 @@ export default function ReportPage({
               }}
               title="Thực hiện hoàn trả hàng và hoàn tiền cho khách"
             >
-              🔄 Trả hàng
+              Trả hàng
             </Button>
           ) : (
-            <span style={{ fontSize: '11px', color: '#EF4444' }}>Đã hoàn kho</span>
+            <span style={{ fontSize: '11px', color: 'var(--danger-600)' }}>Đã hoàn kho</span>
           )}
         </div>
       )
@@ -273,72 +266,9 @@ export default function ReportPage({
   return (
     <div className="report-container">
       {/* Header */}
-      <header className="report-header">
-        <div className="report-header-left">
-          <span style={{ fontSize: '20px' }}>📊</span>
-          <span style={{ fontWeight: 700, fontSize: '15px', letterSpacing: '0.02em' }}>
-            BÁO CÁO DOANH THU & HIỆU QUẢ KINH DOANH
-          </span>
-          <Badge variant="brand" withDot={false}>Chi nhánh {selectedBranchId}</Badge>
-        </div>
-
-        <div className="report-header-right">
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={onNavigateToPos}
-            title="Quay lại màn hình bán hàng"
-          >
-            🏪 Bán hàng (POS)
-          </Button>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={onNavigateToInventory}
-            title="Mở màn hình Quản lý Kho"
-          >
-            📦 Quản lý Kho
-          </Button>
-          {onNavigateToForecast && (
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={onNavigateToForecast}
-              title="Mở màn hình Dự báo AI"
-            >
-              📈 Dự báo AI
-            </Button>
-          )}
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={onNavigateToPartners}
-            title="Quản lý khách hàng thân thiết & nhà cung cấp"
-          >
-            👥 Khách & NCC
-          </Button>
-          {currentUser?.role === 'ADMIN' && onNavigateToStaff && (
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={onNavigateToStaff}
-              title="Quản lý tài khoản nhân viên"
-            >
-              👤 Nhân viên
-            </Button>
-          )}
-
-          {onLogout && (
-            <Button
-              variant="danger"
-              size="md"
-              onClick={onLogout}
-              title="Đăng xuất khỏi ca làm việc"
-            >
-              Đăng xuất
-            </Button>
-          )}
-        </div>
+      <header className="page-header">
+        <h1 className="page-title">Báo cáo doanh thu</h1>
+        <span className="page-subtitle">Chi nhánh {selectedBranchId}</span>
       </header>
 
       {/* Main Body */}
@@ -383,7 +313,7 @@ export default function ReportPage({
               onClick={handleExportCsv}
               title="Xuất dữ liệu hiển thị ra file CSV/Excel"
             >
-              📥 Xuất CSV
+              Xuất CSV
             </Button>
 
             <Button
@@ -392,7 +322,7 @@ export default function ReportPage({
               onClick={() => window.print()}
               title="In báo cáo này ra giấy hoặc PDF"
             >
-              🖨 In Báo Cáo
+              In Báo Cáo
             </Button>
           </div>
         </div>
@@ -404,14 +334,14 @@ export default function ReportPage({
             className={`report-period-btn ${viewMode === 'charts' ? 'active' : ''}`}
             onClick={() => setViewMode('charts')}
           >
-            📊 Biểu Đồ & Top Sản Phẩm Bán Chạy
+            Biểu Đồ & Top Sản Phẩm Bán Chạy
           </button>
           <button
             type="button"
             className={`report-period-btn ${viewMode === 'invoices' ? 'active' : ''}`}
             onClick={() => setViewMode('invoices')}
           >
-            🧾 Lịch Sử Hóa Đơn & Trả Hàng ({invoices.length})
+            Lịch Sử Hóa Đơn & Trả Hàng ({invoices.length})
           </button>
         </div>
 
@@ -420,7 +350,7 @@ export default function ReportPage({
           <div className="report-card">
             <div className="report-card-title">
               <span>Lịch Sử Giao Dịch & Hóa Đơn Bán Hàng</span>
-              <span style={{ fontSize: '12px', color: '#64748B' }}>Chi nhánh {selectedBranchId}</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Chi nhánh {selectedBranchId}</span>
             </div>
             <Table
               columns={invoiceColumns}
@@ -438,9 +368,8 @@ export default function ReportPage({
               <div className="report-kpi-card">
                 <div className="report-kpi-title">
                   <span>Tổng Doanh Thu</span>
-                  <span>💰</span>
                 </div>
-                <div className="report-kpi-value" style={{ color: '#10B981' }}>
+                <div className="report-kpi-value" style={{ color: 'var(--primary-600)' }}>
                   {formatCurrency(summaryData.totalRevenue)}
                 </div>
                 <div className="report-kpi-sub">Giá trị bán ra thực tế sau chiết khấu</div>
@@ -449,9 +378,8 @@ export default function ReportPage({
               <div className="report-kpi-card">
                 <div className="report-kpi-title">
                   <span>Tiền Vốn Hàng Bán</span>
-                  <span>📦</span>
                 </div>
-                <div className="report-kpi-value" style={{ color: '#94A3B8' }}>
+                <div className="report-kpi-value" style={{ color: 'var(--text-muted)' }}>
                   {formatCurrency(summaryData.totalCost)}
                 </div>
                 <div className="report-kpi-sub">Theo giá nhập kho bình quân</div>
@@ -460,9 +388,8 @@ export default function ReportPage({
               <div className="report-kpi-card">
                 <div className="report-kpi-title">
                   <span>Lợi Nhuận Gộp</span>
-                  <span>📈</span>
                 </div>
-                <div className="report-kpi-value" style={{ color: '#38BDF8' }}>
+                <div className="report-kpi-value" style={{ color: 'var(--text-main)' }}>
                   {formatCurrency(summaryData.grossProfit)}
                 </div>
                 <div className="report-kpi-sub">
@@ -473,9 +400,8 @@ export default function ReportPage({
               <div className="report-kpi-card">
                 <div className="report-kpi-title">
                   <span>Tổng Đơn & AOV</span>
-                  <span>🧾</span>
                 </div>
-                <div className="report-kpi-value" style={{ color: '#F59E0B' }}>
+                <div className="report-kpi-value" style={{ color: 'var(--warning-600)' }}>
                   {formatNumber(summaryData.totalOrders)} đơn
                 </div>
                 <div className="report-kpi-sub">
@@ -492,11 +418,11 @@ export default function ReportPage({
                   <span>Xu Hướng Doanh Thu & Lợi Nhuận Hằng Ngày</span>
                   <div className="report-chart-legend">
                     <div className="report-legend-item">
-                      <div className="report-legend-dot" style={{ backgroundColor: '#10B981' }}></div>
+                      <div className="report-legend-dot" style={{ backgroundColor: 'var(--primary-600)' }}></div>
                       <span>Doanh thu</span>
                     </div>
                     <div className="report-legend-item">
-                      <div className="report-legend-dot" style={{ backgroundColor: '#38BDF8' }}></div>
+                      <div className="report-legend-dot" style={{ backgroundColor: 'var(--warning-600)' }}></div>
                       <span>Lợi nhuận</span>
                     </div>
                   </div>
@@ -504,9 +430,9 @@ export default function ReportPage({
 
                 <div className="report-chart-wrapper">
                   <svg className="report-chart-svg" viewBox="0 0 600 200" preserveAspectRatio="none">
-                    <line x1="0" y1="40" x2="600" y2="40" stroke="#334155" strokeDasharray="3 3" />
-                    <line x1="0" y1="100" x2="600" y2="100" stroke="#334155" strokeDasharray="3 3" />
-                    <line x1="0" y1="160" x2="600" y2="160" stroke="#334155" strokeDasharray="3 3" />
+                    <line x1="0" y1="40" x2="600" y2="40" stroke="var(--border-subtle)" strokeDasharray="3 3" />
+                    <line x1="0" y1="100" x2="600" y2="100" stroke="var(--border-subtle)" strokeDasharray="3 3" />
+                    <line x1="0" y1="160" x2="600" y2="160" stroke="var(--border-subtle)" strokeDasharray="3 3" />
 
                     {summaryData.dailyTrend.map((d, idx) => {
                       const totalBars = summaryData.dailyTrend.length;
@@ -526,7 +452,7 @@ export default function ReportPage({
                             y={revY}
                             width="12"
                             height={revHeight}
-                            fill="#10B981"
+                            fill="var(--primary-600)"
                             rx="2"
                           >
                             <title>{`${d.date}: Doanh thu ${formatCurrency(d.revenue)} (${d.orderCount} đơn)`}</title>
@@ -537,7 +463,7 @@ export default function ReportPage({
                             y={profY}
                             width="12"
                             height={profHeight}
-                            fill="#38BDF8"
+                            fill="var(--warning-600)"
                             rx="2"
                           >
                             <title>{`${d.date}: Lợi nhuận ${formatCurrency(d.profit)}`}</title>
@@ -546,7 +472,7 @@ export default function ReportPage({
                           <text
                             x={xCenter}
                             y="180"
-                            fill="#94A3B8"
+                            fill="var(--text-muted)"
                             fontSize="10"
                             textAnchor="middle"
                           >
@@ -563,7 +489,7 @@ export default function ReportPage({
               <div className="report-card">
                 <div className="report-card-title">
                   <span>Top Sản Phẩm Bán Chạy Nhất</span>
-                  <span style={{ fontSize: '11px', color: '#64748B' }}>Theo số lượng bán</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Theo số lượng bán</span>
                 </div>
 
                 <Table
@@ -589,18 +515,18 @@ export default function ReportPage({
         width="440px"
       >
         <form onSubmit={handleProcessRefund}>
-          <p style={{ color: '#F8FAFC', fontSize: '14px', marginBottom: '12px' }}>
+          <p style={{ color: 'var(--text-main)', fontSize: '14px', marginBottom: '12px' }}>
             Bạn đang thao tác hoàn trả hóa đơn giá trị:{' '}
-            <strong style={{ color: '#10B981' }}>{formatCurrency(refundTarget?.totalAmount || 0)}</strong>.
+            <strong style={{ color: 'var(--primary-600)' }}>{formatCurrency(refundTarget?.totalAmount || 0)}</strong>.
           </p>
-          <div style={{ backgroundColor: '#0F172A', padding: '12px', borderRadius: '6px', marginBottom: '14px', border: '1px solid #334155' }}>
-            <p style={{ fontSize: '12px', color: '#F59E0B', margin: 0 }}>
-              ⚠️ Toàn bộ số lượng sản phẩm trong đơn sẽ được <strong>hoàn trả tự động vào kho hàng nguyên tử</strong>. Điểm tích lũy thành viên đã tặng cũng sẽ được thu hồi.
+          <div style={{ backgroundColor: 'var(--bg-canvas)', padding: '12px', borderRadius: '6px', marginBottom: '14px', border: '1px solid var(--border-subtle)' }}>
+            <p style={{ fontSize: '12px', color: 'var(--warning-600)', margin: 0 }}>
+              Toàn bộ số lượng sản phẩm trong đơn sẽ được <strong>hoàn trả tự động vào kho hàng nguyên tử</strong>. Điểm tích lũy thành viên đã tặng cũng sẽ được thu hồi.
             </p>
           </div>
 
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>
+            <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>
               Lý do trả hàng / ghi chú hoàn tiền:
             </label>
             <input
@@ -608,11 +534,11 @@ export default function ReportPage({
               placeholder="vd: Hàng bị lỗi bao bì / Khách đổi ý..."
               style={{
                 width: '100%',
-                backgroundColor: '#0F172A',
-                border: '1px solid #475569',
+                backgroundColor: 'var(--bg-canvas)',
+                border: '1px solid var(--border-strong)',
                 borderRadius: '6px',
                 padding: '8px 12px',
-                color: '#F8FAFC',
+                color: 'var(--text-main)',
                 boxSizing: 'border-box'
               }}
               value={refundReason}

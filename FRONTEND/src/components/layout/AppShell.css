@@ -1,0 +1,130 @@
+.shell {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-canvas);
+  overflow: hidden;
+}
+
+.shell-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-rail {
+  width: var(--rail-width);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 8px;
+  background-color: var(--brand-800);
+}
+
+.shell-rail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 64px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: #cfc8b8;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.shell-rail-item:hover {
+  background-color: #322f28;
+  color: #ffffff;
+}
+
+.shell-rail-item.is-active {
+  background-color: #3a362e;
+  color: #ffffff;
+  cursor: default;
+}
+
+.shell-rail-item:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: -2px;
+}
+
+.shell-rail-spacer {
+  flex: 1;
+}
+
+.shell-rail-user {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 4px;
+  color: #cfc8b8;
+  font-size: 12px;
+  text-align: center;
+}
+
+.shell-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: #4a453a;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.shell-user-name {
+  max-width: 100%;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.shell-logout {
+  height: 32px;
+  width: 100%;
+  flex-direction: row;
+  border-radius: var(--radius-sm);
+}
+
+/* Thanh tiêu đề của từng màn hình, dùng chung */
+.page-header {
+  height: var(--header-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.page-subtitle {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.page-header-spacer {
+  flex: 1;
+}

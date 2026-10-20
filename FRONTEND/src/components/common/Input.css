@@ -8,7 +8,7 @@
 .input-label {
   font-size: 13px;
   font-weight: 500;
-  color: var(--brand-700);
+  color: var(--text-muted);
 }
 
 .input-wrapper {
@@ -24,7 +24,8 @@
 
 .input-wrapper:focus-within {
   border-color: var(--primary-600);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  outline: 2px solid var(--primary-600);
+  outline-offset: 0;
 }
 
 .input-wrapper.has-error {
@@ -32,14 +33,14 @@
 }
 
 .input-wrapper.has-error:focus-within {
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+  outline-color: var(--danger-600);
 }
 
 .input-control {
   width: 100%;
   border: none;
   background: transparent;
-  padding: 8px 12px;
+  padding: 10px 12px;
   font-family: var(--font-sans);
   font-size: 14px;
   color: var(--text-main);

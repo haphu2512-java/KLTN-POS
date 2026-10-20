@@ -13,9 +13,9 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 16px;
-  background: var(--color-bg-secondary, #1E293B);
+  background: var(--bg-surface);
   border-radius: 8px;
-  border: 1px solid var(--color-border, #334155);
+  border: 1px solid var(--border-subtle);
 }
 
 .barcode-toolbar-group {
@@ -27,9 +27,9 @@
 
 .barcode-select,
 .barcode-input {
-  background: var(--color-bg-primary, #0F172A);
-  color: #F8FAFC;
-  border: 1px solid var(--color-border, #334155);
+  background: var(--bg-canvas);
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 13px;
@@ -38,7 +38,7 @@
 
 .barcode-select:focus,
 .barcode-input:focus {
-  border-color: #38BDF8;
+  border-color: var(--text-main);
 }
 
 .barcode-checkbox-label {
@@ -46,7 +46,7 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #CBD5E1;
+  color: var(--text-main);
   cursor: pointer;
   user-select: none;
 }
@@ -55,9 +55,9 @@
   overflow-y: auto;
   max-height: 55vh;
   padding: 16px;
-  background: #F1F5F9;
+  background: var(--text-main);
   border-radius: 8px;
-  border: 1px solid #CBD5E1;
+  border: 1px solid var(--text-main);
 }
 
 /* Sticker Grid */
@@ -82,8 +82,8 @@
 /* Individual Sticker Card */
 .barcode-sticker {
   background: #FFFFFF;
-  color: #0F172A;
-  border: 1px dashed #94A3B8;
+  color: var(--bg-canvas);
+  border: 1px dashed var(--text-muted);
   border-radius: 6px;
   padding: 8px 10px;
   text-align: center;
@@ -99,7 +99,7 @@
 .barcode-sticker:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-  border-color: #0284C7;
+  border-color: var(--text-main);
 }
 
 .sticker-store {
@@ -107,7 +107,7 @@
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  color: #64748B;
+  color: var(--text-muted);
   margin-bottom: 2px;
 }
 
@@ -115,7 +115,7 @@
   font-size: 11px;
   font-weight: 600;
   line-height: 1.25;
-  color: #0F172A;
+  color: var(--bg-canvas);
   max-height: 28px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -135,7 +135,7 @@
 .sticker-price {
   font-size: 13px;
   font-weight: 800;
-  color: #DC2626;
+  color: var(--danger-600);
   margin-top: 2px;
   letter-spacing: 0.3px;
 }
@@ -144,7 +144,7 @@
   position: absolute;
   top: 4px;
   right: 4px;
-  background: #0284C7;
+  background: var(--warning-600);
   color: #FFF;
   border: none;
   border-radius: 4px;

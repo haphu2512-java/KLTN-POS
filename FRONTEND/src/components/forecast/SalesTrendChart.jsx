@@ -186,7 +186,7 @@ export default function SalesTrendChart({
                 fill="var(--brand-900)"
                 opacity="0.92"
               />
-              <text x={8} y={12} fill="#94a3b8" fontSize="10px" fontFamily="var(--font-sans)">
+              <text x={8} y={12} fill="var(--text-muted)" fontSize="10px" fontFamily="var(--font-sans)">
                 {hoveredPoint.label} ({hoveredPoint.type})
               </text>
               <text x={8} y={28} fill="#ffffff" fontSize="13px" fontWeight="bold" fontFamily="var(--font-mono)">

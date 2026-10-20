@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import AppShell from './components/layout/AppShell';
 import useAppNavigate from './hooks/useAppNavigate';
 import LoginPage from './pages/auth/LoginPage';
 import PosPage from './pages/pos/PosPage';
@@ -55,29 +56,30 @@ function AppRoutes() {
     onNavigateToReport: canViewReports ? nav.onNavigateToReport : undefined,
   };
 
+  // Hàm trả về element (không phải component) để không bị mount lại mỗi lần render
+  const shell = (active, page) => (
+    <AppShell active={active} {...sharedProps}>{page}</AppShell>
+  );
+
   return (
     <Routes>
       <Route
         path="/"
         element={
-          <PosPage
-            {...sharedProps}
-          />
+          shell("pos", <PosPage {...sharedProps} />)
         }
       />
       <Route
         path="/inventory"
         element={
-          <InventoryPage
-            {...sharedProps}
-          />
+          shell("inventory", <InventoryPage {...sharedProps} />)
         }
       />
       <Route
         path="/forecast"
         element={
           canViewForecast
-            ? <ForecastPage {...sharedProps} />
+            ? shell("forecast", <ForecastPage {...sharedProps} />)
             : <Navigate to="/" replace />
         }
       />
@@ -85,23 +87,21 @@ function AppRoutes() {
         path="/report"
         element={
           canViewReports
-            ? <ReportPage {...sharedProps} />
+            ? shell("report", <ReportPage {...sharedProps} />)
             : <Navigate to="/" replace />
         }
       />
       <Route
         path="/partners"
         element={
-          <PartnerPage
-            {...sharedProps}
-          />
+          shell("partners", <PartnerPage {...sharedProps} />)
         }
       />
       <Route
         path="/staff"
         element={
           currentUser?.role === 'ADMIN'
-            ? <StaffPage {...sharedProps} />
+            ? shell("staff", <StaffPage {...sharedProps} />)
             : <Navigate to="/" replace />
         }
       />

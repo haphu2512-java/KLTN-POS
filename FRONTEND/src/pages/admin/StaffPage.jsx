@@ -6,13 +6,7 @@ import './StaffPage.css';
 
 export default function StaffPage({
   branchId = 1,
-  isOnline = true,
-  onNavigateToPos,
-  onNavigateToInventory,
-  onNavigateToForecast,
-  onNavigateToReport,
-  onNavigateToPartners,
-  onLogout
+  isOnline = true
 }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -164,7 +158,7 @@ export default function StaffPage({
     {
       key: 'username',
       title: 'Tài khoản',
-      render: (u) => <strong style={{ color: '#38BDF8' }}>{u.username}</strong>
+      render: (u) => <strong style={{ color: 'var(--text-main)' }}>{u.username}</strong>
     },
     { key: 'fullName', title: 'Họ và tên' },
     {
@@ -196,7 +190,7 @@ export default function StaffPage({
       title: 'Trạng thái',
       render: (u) => (
         <Badge variant={u.active ? 'success' : 'secondary'}>
-          {u.active ? '🟢 Đang hoạt động' : '🔴 Đã khóa'}
+          {u.active ? 'Đang hoạt động' : 'Đã khóa'}
         </Badge>
       )
     },
@@ -216,7 +210,7 @@ export default function StaffPage({
             onClick={() => handleOpenEdit(u)}
             title="Chỉnh sửa thông tin nhân viên"
           >
-            ✏️ Sửa
+            Sửa
           </Button>
           <Button
             size="sm"
@@ -227,7 +221,7 @@ export default function StaffPage({
             }}
             title="Đổi mật khẩu tài khoản"
           >
-            🔑 Mật khẩu
+            Mật khẩu
           </Button>
           <Button
             size="sm"
@@ -245,37 +239,9 @@ export default function StaffPage({
   return (
     <div className="staff-page">
       {/* Header */}
-      <header className="staff-header">
-        <div className="staff-header-left">
-          <span style={{ fontSize: '20px' }}>👤</span>
-          <span className="staff-header-title">QUẢN LÝ NHÂN VIÊN & TÀI KHOẢN</span>
-        </div>
-        <div className="staff-header-right">
-          <Button size="sm" variant="secondary" onClick={onNavigateToPos}>
-            🏪 POS Bán hàng
-          </Button>
-          <Button size="sm" variant="secondary" onClick={onNavigateToInventory}>
-            📦 Quản lý Kho
-          </Button>
-          {onNavigateToForecast && (
-            <Button size="sm" variant="secondary" onClick={onNavigateToForecast}>
-              📈 Dự báo AI
-            </Button>
-          )}
-          {onNavigateToReport && (
-            <Button size="sm" variant="secondary" onClick={onNavigateToReport}>
-              📊 Báo cáo
-            </Button>
-          )}
-          <Button size="sm" variant="secondary" onClick={onNavigateToPartners}>
-            👥 Khách & NCC
-          </Button>
-          {onLogout && (
-            <Button size="sm" variant="danger" onClick={onLogout}>
-              Đăng xuất
-            </Button>
-          )}
-        </div>
+      <header className="page-header">
+        <h1 className="page-title">Nhân viên</h1>
+        <span className="page-subtitle">Tài khoản và phân quyền</span>
       </header>
 
       {/* Content */}
@@ -284,7 +250,7 @@ export default function StaffPage({
           <div className="staff-toolbar-left">
             <input
               type="text"
-              placeholder="🔍 Tìm username, họ tên nhân viên..."
+              placeholder="Tìm username, họ tên nhân viên..."
               className="staff-search-input"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -303,7 +269,7 @@ export default function StaffPage({
           </div>
           <div>
             <Button variant="primary" onClick={() => setShowAddModal(true)}>
-              ➕ Thêm nhân viên mới
+              Thêm nhân viên mới
             </Button>
           </div>
         </div>

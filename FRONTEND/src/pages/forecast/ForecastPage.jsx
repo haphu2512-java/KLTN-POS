@@ -14,16 +14,9 @@ import { reportService } from '../../services/reportService';
 import './ForecastPage.css';
 
 export default function ForecastPage({
-  currentUser,
   branchId = 1,
   isOnline = true,
-  onNavigateToPos,
-  onNavigateToInventory,
-  onNavigateToReport,
-  onNavigateToPartners,
-  onNavigateToStaff,
-  onQuickStockIn,
-  onLogout
+  onQuickStockIn
 }) {
   const [products, setProducts] = useState([]);
   const [algorithm, setAlgorithm] = useState('EXP_SMOOTHING'); // 'EXP_SMOOTHING' | 'MOVING_AVG'
@@ -306,72 +299,9 @@ export default function ForecastPage({
   return (
     <div className="forecast-container">
       {/* Header */}
-      <header className="forecast-header">
-        <div className="forecast-header-left">
-          <span style={{ fontSize: '20px' }}>📈</span>
-          <span style={{ fontWeight: 700, fontSize: '15px', letterSpacing: '0.02em' }}>
-            DỰ BÁO NHU CẦU & BÁO CÁO DOANH SỐ (AI FORECAST)
-          </span>
-          <Badge variant="brand" withDot={false}>Mô hình Machine Learning v1.2</Badge>
-        </div>
-
-        <div className="forecast-header-right">
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={onNavigateToInventory}
-            title="Mở màn hình Quản lý Kho"
-          >
-            📦 Quản lý Kho
-          </Button>
-          {onNavigateToReport && (
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={onNavigateToReport}
-              title="Xem báo cáo doanh thu & sản phẩm bán chạy"
-            >
-              📊 Báo cáo
-            </Button>
-          )}
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={onNavigateToPartners}
-            title="Quản lý khách hàng thân thiết & nhà cung cấp"
-          >
-            👥 Khách & NCC
-          </Button>
-          {currentUser?.role === 'ADMIN' && onNavigateToStaff && (
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={onNavigateToStaff}
-              title="Quản lý tài khoản nhân viên"
-            >
-              👤 Nhân viên
-            </Button>
-          )}
-          <Button
-            variant="primary"
-            size="md"
-            onClick={onNavigateToPos}
-            title="Quay lại bán hàng tại quầy"
-          >
-            🏪 Màn hình Bán hàng (POS)
-          </Button>
-
-          {onLogout && (
-            <Button
-              variant="danger"
-              size="md"
-              onClick={onLogout}
-              title="Đăng xuất khỏi ca làm việc"
-            >
-              Đăng xuất
-            </Button>
-          )}
-        </div>
+      <header className="page-header">
+        <h1 className="page-title">Dự báo nhu cầu</h1>
+        <span className="page-subtitle">Gợi ý nhập hàng dựa trên doanh số 14 ngày gần nhất</span>
       </header>
 
       {/* Main Workspace */}
@@ -497,7 +427,7 @@ export default function ForecastPage({
           <div className="forecast-table-header">
             <div>
               <h3 className="forecast-table-title">
-                📋 Bảng Gợi Ý Nhập Hàng Tự Động (AI Restock Recommendations)
+                Bảng Gợi Ý Nhập Hàng Tự Động (AI Restock Recommendations)
               </h3>
               <p className="text-muted" style={{ fontSize: '12px', margin: 0 }}>
                 Công thức: Nhu cầu dự báo ({forecastDays} ngày) + 10% hệ số an toàn - Tồn kho hiện tại.

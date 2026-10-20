@@ -6,13 +6,7 @@ import { formatNumber, formatDateTime } from '../../utils/formatters';
 import './PartnerPage.css';
 
 export default function PartnerPage({
-  isOnline = true,
-  onNavigateToPos,
-  onNavigateToInventory,
-  onNavigateToForecast,
-  onNavigateToReport,
-  onNavigateToStaff,
-  onLogout
+  isOnline = true
 }) {
   const [activeTab, setActiveTab] = useState('customers'); // 'customers' | 'suppliers'
   const [customers, setCustomers] = useState([]);
@@ -111,19 +105,19 @@ export default function PartnerPage({
     {
       key: 'name',
       title: 'Họ và tên',
-      render: (c) => <strong style={{ color: '#F8FAFC' }}>{c.name}</strong>
+      render: (c) => <strong style={{ color: 'var(--text-main)' }}>{c.name}</strong>
     },
     {
       key: 'phone',
       title: 'Số điện thoại',
-      render: (c) => <span style={{ color: '#38BDF8', fontFamily: 'monospace' }}>{c.phone}</span>
+      render: (c) => <span style={{ color: 'var(--text-main)', fontFamily: 'monospace' }}>{c.phone}</span>
     },
     {
       key: 'points',
       title: 'Điểm tích lũy',
       render: (c) => (
         <Badge variant={c.points > 50 ? 'brand' : 'secondary'}>
-          ⭐ {formatNumber(c.points || 0)} điểm
+          {formatNumber(c.points || 0)} điểm
         </Badge>
       )
     },
@@ -146,7 +140,7 @@ export default function PartnerPage({
     {
       key: 'name',
       title: 'Tên nhà cung cấp',
-      render: (s) => <strong style={{ color: '#38BDF8' }}>{s.name}</strong>
+      render: (s) => <strong style={{ color: 'var(--text-main)' }}>{s.name}</strong>
     },
     {
       key: 'phone',
@@ -168,39 +162,9 @@ export default function PartnerPage({
   return (
     <div className="partner-page">
       {/* Header */}
-      <header className="partner-header">
-        <div className="partner-header-left">
-          <span style={{ fontSize: '20px' }}>👥</span>
-          <span className="partner-header-title">QUẢN LÝ ĐỐI TÁC: KHÁCH HÀNG & NHÀ CUNG CẤP</span>
-        </div>
-        <div className="partner-header-right">
-          <Button size="sm" variant="secondary" onClick={onNavigateToPos}>
-            🏪 POS Bán hàng
-          </Button>
-          <Button size="sm" variant="secondary" onClick={onNavigateToInventory}>
-            📦 Quản lý Kho
-          </Button>
-          {onNavigateToForecast && (
-            <Button size="sm" variant="secondary" onClick={onNavigateToForecast}>
-              📈 Dự báo AI
-            </Button>
-          )}
-          {onNavigateToReport && (
-            <Button size="sm" variant="secondary" onClick={onNavigateToReport}>
-              📊 Báo cáo
-            </Button>
-          )}
-          {onNavigateToStaff && (
-            <Button size="sm" variant="secondary" onClick={onNavigateToStaff}>
-              👤 Nhân viên
-            </Button>
-          )}
-          {onLogout && (
-            <Button size="sm" variant="danger" onClick={onLogout}>
-              Đăng xuất
-            </Button>
-          )}
-        </div>
+      <header className="page-header">
+        <h1 className="page-title">Đối tác</h1>
+        <span className="page-subtitle">Khách hàng thân thiết và nhà cung cấp</span>
       </header>
 
       {/* Content */}
@@ -213,7 +177,7 @@ export default function PartnerPage({
               setSearchTerm('');
             }}
           >
-            ⭐ Khách Hàng Thân Thiết ({customers.length})
+            Khách Hàng Thân Thiết ({customers.length})
           </button>
           <button
             className={`partner-tab-btn ${activeTab === 'suppliers' ? 'active' : ''}`}
@@ -222,7 +186,7 @@ export default function PartnerPage({
               setSearchTerm('');
             }}
           >
-            🏭 Nhà Cung Cấp Hàng Hóa ({suppliers.length})
+            Nhà Cung Cấp Hàng Hóa ({suppliers.length})
           </button>
         </div>
 
@@ -232,8 +196,8 @@ export default function PartnerPage({
               type="text"
               placeholder={
                 activeTab === 'customers'
-                  ? '🔍 Tìm tên, số điện thoại khách hàng...'
-                  : '🔍 Tìm tên, SĐT, email nhà cung cấp...'
+                  ? 'Tìm tên, số điện thoại khách hàng...'
+                  : 'Tìm tên, SĐT, email nhà cung cấp...'
               }
               className="partner-search-input"
               value={searchTerm}
@@ -243,11 +207,11 @@ export default function PartnerPage({
           <div>
             {activeTab === 'customers' ? (
               <Button variant="primary" onClick={() => setShowAddCustomerModal(true)}>
-                ➕ Thêm khách hàng mới
+                Thêm khách hàng mới
               </Button>
             ) : (
               <Button variant="primary" onClick={() => setShowAddSupplierModal(true)}>
-                ➕ Thêm nhà cung cấp mới
+                Thêm nhà cung cấp mới
               </Button>
             )}
           </div>

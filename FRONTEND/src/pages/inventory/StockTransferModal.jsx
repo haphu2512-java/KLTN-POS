@@ -52,7 +52,7 @@ export default function StockTransferModal({
             Hủy (Esc)
           </Button>
           <Button variant="primary" onClick={handleSubmit}>
-            ✔ Xác nhận điều chuyển
+            Xác nhận điều chuyển
           </Button>
         </>
       }

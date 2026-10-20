@@ -20,13 +20,7 @@ const BRANCHES = [
 export default function InventoryPage({
   currentUser,
   branchId = 1,
-  isOnline = true,
-  onNavigateToPos,
-  onNavigateToForecast,
-  onNavigateToReport,
-  onNavigateToPartners,
-  onNavigateToStaff,
-  onLogout
+  isOnline = true
 }) {
   // State from Database
   const [products, setProducts] = useState([]);
@@ -220,7 +214,7 @@ export default function InventoryPage({
       } catch (err) {
         // Server từ chối (ví dụ tài khoản thu ngân không có quyền nhập kho): không cộng kho giả trên giao diện
         if (err.response) {
-          alert(`❌ Không thể nhập kho: ${err.response.data?.message || 'Máy chủ từ chối phiếu nhập'}`);
+          alert(`Không thể nhập kho: ${err.response.data?.message || 'Máy chủ từ chối phiếu nhập'}`);
           return;
         }
         console.warn('Backend createStockIn failed, saved locally:', err.message);
@@ -246,7 +240,7 @@ export default function InventoryPage({
 
     // 3. Append to history
     setStockInHistory([newStockIn, ...stockInHistory]);
-    alert(`✔ Đã hoàn tất nhập kho phiếu: ${newStockIn.id}! Tồn kho đã được cộng tự động.`);
+    alert(`Đã hoàn tất nhập kho phiếu: ${newStockIn.id}! Tồn kho đã được cộng tự động.`);
   };
 
   // Handle Stock Transfer
@@ -340,12 +334,12 @@ export default function InventoryPage({
           <button
             type="button"
             style={{
-              background: 'rgba(56, 189, 248, 0.1)',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
+              background: 'var(--warning-50)',
+              border: '1px solid var(--warning-border)',
               borderRadius: '4px',
               padding: '2px 6px',
               cursor: 'pointer',
-              color: '#38BDF8',
+              color: 'var(--text-main)',
               fontSize: '11px',
               fontWeight: 600
             }}
@@ -356,7 +350,7 @@ export default function InventoryPage({
               setIsBarcodeModalOpen(true);
             }}
           >
-            🏷️ In
+            In
           </button>
         </div>
       )
@@ -376,7 +370,7 @@ export default function InventoryPage({
                 objectFit: 'contain',
                 borderRadius: 4,
                 backgroundColor: '#fff',
-                border: '1px solid #e2e8f0',
+                border: '1px solid var(--text-main)',
                 flexShrink: 0
               }}
               onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -531,99 +525,37 @@ export default function InventoryPage({
   return (
     <div className="inv-container">
       {/* Header */}
-      <header className="inv-header">
-        <div className="inv-header-left">
-          <span style={{ fontSize: '20px' }}>📦</span>
-          <span className="inv-logo-title">QUẢN LÝ KHO & NHẬP HÀNG</span>
-          <select
-            className="inv-select"
-            value={currentBranchId}
-            onChange={(e) => setCurrentBranchId(Number(e.target.value))}
-            style={{ height: '32px', backgroundColor: 'var(--brand-800)', color: '#ffffff', borderColor: 'rgba(255,255,255,0.2)' }}
-          >
-            {branches.map((b) => (
-              <option key={b.id} value={b.id} style={{ color: '#000000' }}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="inv-header-right">
-          <Button
-            variant="success"
-            size="md"
-            onClick={() => setIsStockInOpen(true)}
-            title="Tạo phiếu nhập hàng mới từ nhà cung cấp"
-          >
-            + Tạo phiếu nhập kho (F3)
-          </Button>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => setIsTransferOpen(true)}
-            title="Điều chuyển hàng hóa giữa các chi nhánh"
-          >
-            🔄 Điều chuyển kho
-          </Button>
-          {onNavigateToForecast && (
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={onNavigateToForecast}
-              title="Chuyển sang màn hình Dự báo AI & Doanh số"
-            >
-              📈 Dự báo AI
-            </Button>
-          )}
-          {onNavigateToReport && (
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={onNavigateToReport}
-              title="Xem báo cáo doanh thu & sản phẩm bán chạy"
-            >
-              📊 Báo cáo
-            </Button>
-          )}
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={onNavigateToPartners}
-            title="Quản lý khách hàng thân thiết & nhà cung cấp"
-          >
-            👥 Khách & NCC
-          </Button>
-          {currentUser?.role === 'ADMIN' && onNavigateToStaff && (
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={onNavigateToStaff}
-              title="Quản lý tài khoản nhân viên"
-            >
-              👤 Nhân viên
-            </Button>
-          )}
-          <Button
-            variant="primary"
-            size="md"
-            onClick={onNavigateToPos}
-            title="Quay lại màn hình bán hàng tại quầy"
-          >
-            🏪 Màn hình Bán hàng (POS)
-          </Button>
-
-          {onLogout && (
-            <Button
-              variant="danger"
-              size="md"
-              onClick={onLogout}
-              title="Đăng xuất khỏi ca làm việc"
-            >
-              Đăng xuất
-            </Button>
-          )}
-        </div>
+      <header className="page-header">
+        <h1 className="page-title">Kho hàng</h1>
+        <select
+          className="inv-select"
+          value={currentBranchId}
+          onChange={(e) => setCurrentBranchId(Number(e.target.value))}
+          aria-label="Chi nhánh"
+        >
+          {branches.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+        <div className="page-header-spacer" />
+        <Button
+          variant="secondary"
+          size="md"
+          onClick={() => setIsTransferOpen(true)}
+          title="Điều chuyển hàng hóa giữa các chi nhánh"
+        >
+          Điều chuyển kho
+        </Button>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => setIsStockInOpen(true)}
+          title="Tạo phiếu nhập hàng mới từ nhà cung cấp"
+        >
+          Tạo phiếu nhập (F3)
+        </Button>
       </header>
 
       {/* Main Body */}
@@ -644,7 +576,7 @@ export default function InventoryPage({
             onClick={() => setStockStatusFilter('LOW_STOCK')}
           >
             <span className="inv-metric-label" style={{ color: 'var(--warning-700)' }}>
-              ⚠️ Cảnh báo sắp hết hàng
+              Cảnh báo sắp hết hàng
             </span>
             <span className="inv-metric-val" style={{ color: 'var(--warning-700)' }}>
               {lowStockCount} mặt hàng
@@ -657,7 +589,7 @@ export default function InventoryPage({
             onClick={() => setStockStatusFilter('OUT_OF_STOCK')}
           >
             <span className="inv-metric-label" style={{ color: 'var(--danger-700)' }}>
-              ❌ Đã hết hàng
+              Đã hết hàng
             </span>
             <span className="inv-metric-val" style={{ color: 'var(--danger-700)' }}>
               {outOfStockCount} mặt hàng
@@ -733,7 +665,7 @@ export default function InventoryPage({
                       setSearchTerm('');
                     }}
                   >
-                    ✕ Xóa bộ lọc
+                    Xóa bộ lọc
                   </Button>
                 )}
               </div>
@@ -742,7 +674,6 @@ export default function InventoryPage({
                 <div style={{ width: '300px' }}>
                   <Input
                     placeholder="Tìm theo tên hàng hoặc mã vạch..."
-                    prefix="🔍"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -756,7 +687,7 @@ export default function InventoryPage({
                   }}
                   title="Mở trình in tem mã vạch cho tất cả sản phẩm hoặc theo danh mục"
                 >
-                  🏷️ In tem mã vạch
+                  In tem mã vạch
                 </Button>
                 <Button
                   size="md"
@@ -764,7 +695,7 @@ export default function InventoryPage({
                   onClick={handleExportInventory}
                   title="Xuất bảng tồn kho ra file Excel/CSV"
                 >
-                  📥 Xuất CSV
+                  Xuất CSV
                 </Button>
               </div>
             </div>
