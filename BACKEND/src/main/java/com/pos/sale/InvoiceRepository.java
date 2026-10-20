@@ -69,4 +69,12 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
            "WHERE (:branchId IS NULL OR i.branch.id = :branchId) AND i.createdAt BETWEEN :start AND :end " +
            "AND i.status <> com.pos.sale.InvoiceStatus.REFUNDED ORDER BY i.createdAt DESC")
     List<Invoice> findInvoicesByFilter(@Param("branchId") Long branchId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    /** Doanh số đã thanh toán của một ca theo phương thức. Mỗi dòng: [phương thức, số hóa đơn, tổng tiền]. */
+    @Query("SELECT i.paymentMethod, COUNT(i), SUM(i.totalAmount) FROM Invoice i " +
+           "WHERE i.shiftSessionId = :shiftId AND i.status = com.pos.sale.InvoiceStatus.PAID " +
+           "GROUP BY i.paymentMethod")
+    List<Object[]> sumPaidByShift(@Param("shiftId") Long shiftId);
+
+    long countByShiftSessionIdAndStatus(Long shiftSessionId, InvoiceStatus status);
 }

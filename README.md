@@ -306,6 +306,19 @@ FRONTEND/
 | GET | `/api/forecast/demand?branchId=&days=&algorithm=` | Dự báo nhu cầu (EXP_SMOOTH hoặc MOVING_AVG) |
 | GET | `/api/forecast/recommendations?branchId=` | Danh sách gợi ý nhập hàng ưu tiên |
 
+### Shifts (Ca làm việc)
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| GET | `/api/shifts/work-shifts` | 5 ca cố định trong ngày (mặc định 06–09, 09–12, 12–15, 15–18, 18–22) |
+| PUT | `/api/shifts/work-shifts/{id}` | ADMIN sửa tên/giờ ca |
+| GET | `/api/shifts/current` | Ca đang mở của tài khoản, hoặc gợi ý tiền và ghi chú bàn giao từ ca trước |
+| POST | `/api/shifts/open` | Mở ca với tiền mặt đầu ca |
+| POST | `/api/shifts/current/close` | Đóng ca: nhập tiền mặt đếm được, hệ thống tính chênh lệch so với tiền đầu ca + doanh số tiền mặt |
+| GET | `/api/shifts?branchId=&from=&to=` | ADMIN/MANAGER xem lịch sử ca (MANAGER chỉ chi nhánh mình) |
+| POST | `/api/shifts/{id}/close` | ADMIN/MANAGER đóng hộ ca nhân viên quên đóng |
+
+Thu ngân phải mở ca mới tạo được hóa đơn (tắt bằng `POS_REQUIRE_OPEN_SHIFT=false`). Mỗi hóa đơn lưu `shift_session_id` của ca đang mở.
+
 ### Users (Admin only)
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|

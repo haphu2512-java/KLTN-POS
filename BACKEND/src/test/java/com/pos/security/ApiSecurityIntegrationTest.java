@@ -90,6 +90,10 @@ class ApiSecurityIntegrationTest {
     @Test
     @DisplayName("Thu ngân bán sai giá niêm yết bị từ chối; đúng giá thì thành công và ghi đúng nhân viên")
     void cashierSaleUsesListPrice() throws Exception {
+        // Thu ngân phải mở ca trước khi bán (409 nếu ca đã mở từ test khác)
+        mvc.perform(post("/api/shifts/open").header("Authorization", cashierToken)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"workShiftId\":1,\"openingCash\":0}"));
+
         String tampered = "{\"branchId\":1,\"paymentMethod\":\"CARD\",\"items\":[{\"productId\":1,\"quantity\":1,\"unitPrice\":1}]}";
         mvc.perform(post("/api/invoices").header("Authorization", cashierToken)
                         .contentType(MediaType.APPLICATION_JSON).content(tampered))

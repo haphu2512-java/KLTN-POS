@@ -8,6 +8,8 @@ import com.pos.product.Product;
 import com.pos.product.ProductRepository;
 import com.pos.purchase.Supplier;
 import com.pos.purchase.SupplierRepository;
+import com.pos.shift.WorkShift;
+import com.pos.shift.WorkShiftRepository;
 import com.pos.user.Role;
 import com.pos.user.User;
 import com.pos.user.UserRepository;
@@ -19,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
 import java.util.List;
 
 @Component
@@ -31,6 +34,7 @@ public class DatabaseInitializer implements CommandLineRunner {
     private final SupplierRepository supplierRepository;
     private final ProductRepository productRepository;
     private final InventoryRepository inventoryRepository;
+    private final WorkShiftRepository workShiftRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${app.seed.default-password:}")
@@ -38,6 +42,8 @@ public class DatabaseInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        seedWorkShifts();
+
         if (branchRepository.count() == 0) {
             if (seedPassword == null || seedPassword.isBlank()) {
                 throw new IllegalStateException("Database trống nhưng chưa đặt SEED_DEFAULT_PASSWORD trong file .env "
@@ -121,5 +127,27 @@ public class DatabaseInitializer implements CommandLineRunner {
 
             log.info("Đã khởi tạo thành công dữ liệu mẫu cho hệ thống POS!");
         }
+    }
+
+    /** 5 ca cố định trong ngày; chạy cả với database cũ chưa có bảng ca. ADMIN sửa giờ qua /api/shifts/work-shifts */
+    private void seedWorkShifts() {
+        if (workShiftRepository.count() > 0) return;
+        String[][] shifts = {
+                {"Ca 1 (sáng sớm)", "06:00", "09:00"},
+                {"Ca 2 (sáng)", "09:00", "12:00"},
+                {"Ca 3 (trưa)", "12:00", "15:00"},
+                {"Ca 4 (chiều)", "15:00", "18:00"},
+                {"Ca 5 (tối)", "18:00", "22:00"},
+        };
+        for (int i = 0; i < shifts.length; i++) {
+            workShiftRepository.save(WorkShift.builder()
+                    .name(shifts[i][0])
+                    .startTime(LocalTime.parse(shifts[i][1]))
+                    .endTime(LocalTime.parse(shifts[i][2]))
+                    .sortOrder(i + 1)
+                    .active(true)
+                    .build());
+        }
+        log.info("Đã tạo {} ca làm việc mặc định", shifts.length);
     }
 }

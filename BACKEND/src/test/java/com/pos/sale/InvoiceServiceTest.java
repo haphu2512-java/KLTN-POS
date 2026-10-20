@@ -8,6 +8,7 @@ import com.pos.customer.CustomerRepository;
 import com.pos.inventory.InventoryService;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
+import com.pos.shift.ShiftService;
 import com.pos.user.Role;
 import com.pos.user.User;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +45,9 @@ class InvoiceServiceTest {
 
     @Mock
     private InventoryService inventoryService;
+
+    @Mock
+    private ShiftService shiftService;
 
     @InjectMocks
     private InvoiceService invoiceService;

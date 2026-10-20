@@ -69,6 +69,10 @@ public class Invoice {
     @Column(name = "client_request_id", length = 64, unique = true)
     private String clientRequestId;
 
+    /** Ca trực lúc bán (null với hóa đơn cũ hoặc tài khoản không trực ca) */
+    @Column(name = "shift_session_id")
+    private Long shiftSessionId;
+
     @Builder.Default
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
