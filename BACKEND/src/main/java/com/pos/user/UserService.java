@@ -1,13 +1,17 @@
 package com.pos.user;
 
 import com.pos.common.BusinessException;
+import com.pos.shift.ShiftSessionRepository;
+import com.pos.shift.ShiftStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -18,6 +22,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ShiftSessionRepository shiftSessionRepository;
 
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
@@ -56,6 +61,14 @@ public class UserService {
     public UserResponse updateUser(Long id, UpdateUserRequest req) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("USER_NOT_FOUND", "Không tìm thấy người dùng với ID: " + id));
+
+        // Ca đang mở thuộc chi nhánh cũ: đổi chi nhánh lúc này làm nhân viên không bán được
+        // ở chi nhánh mới và cũng không mở được ca mới, nên phải đóng ca trước
+        if (!Objects.equals(user.getBranchId(), req.getBranchId())
+                && shiftSessionRepository.findByEmployeeIdAndStatus(user.getId(), ShiftStatus.OPEN).isPresent()) {
+            throw new BusinessException("SHIFT_OPEN_BRANCH_CHANGE",
+                    "Nhân viên đang có ca chưa đóng. Đóng ca trước khi chuyển chi nhánh.", HttpStatus.CONFLICT);
+        }
 
         user.setFullName(req.getFullName().trim());
         user.setRole(req.getRole());
