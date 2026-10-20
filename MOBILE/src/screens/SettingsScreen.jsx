@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Switch, Alert, StyleSheet } from 'react-native';
 import { ScreenHeader, Card, SectionTitle, Button, Icon } from '../components/ui';
-import { AppConfig } from '../api/config';
+import { AppConfig, getAutoDetectedHost } from '../api/config';
 import { ScannerApi } from '../api/scannerApi';
 import { OfflineStorage } from '../storage/offlineStorage';
 import { colors, fonts, radius, type } from '../theme';
@@ -58,6 +58,30 @@ export default function SettingsScreen({
     setPingResult(null);
     try {
       setPingResult(await ScannerApi.testConnection(serverUrl.trim()));
+    } catch (e) {
+      setPingResult({ online: false, message: e.message });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleAutoDetect = async () => {
+    setIsTesting(true);
+    setPingResult(null);
+    try {
+      const res = await AppConfig.autoDetectServer();
+      if (res.success) {
+        setServerUrl(res.url);
+        setPingResult({ online: true, message: `Đã tự động tìm thấy máy chủ: ${res.url}` });
+      } else {
+        const detected = getAutoDetectedHost();
+        if (detected) {
+          setServerUrl(detected);
+          setPingResult({ online: false, message: `Đã lấy IP máy chủ: ${detected}. Vui lòng kiểm tra Firewall nếu ping thất bại.` });
+        } else {
+          setPingResult({ online: false, message: 'Không thể tự động tìm máy chủ. Đảm bảo điện thoại và máy tính cùng chung Wi-Fi.' });
+        }
+      }
     } catch (e) {
       setPingResult({ online: false, message: e.message });
     } finally {
@@ -204,7 +228,15 @@ export default function SettingsScreen({
             autoCorrect={false}
             keyboardType="url"
           />
-          <View style={[styles.rowCenter, { marginTop: 8 }]}>
+          <View style={[styles.rowCenter, { marginTop: 8, flexWrap: 'wrap', gap: 6 }]}>
+            <TouchableOpacity
+              style={[styles.preset, { backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }]}
+              onPress={handleAutoDetect}
+            >
+              <Text style={[styles.presetText, { color: '#0284c7', fontFamily: fonts.medium }]}>
+                ⚡ Tự động tìm IP máy chủ
+              </Text>
+            </TouchableOpacity>
             {[
               { label: 'Máy ảo Android', url: 'http://10.0.2.2:8080' },
               { label: 'Localhost', url: 'http://localhost:8080' }

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 const STORAGE_KEYS = {
   SERVER_URL: '@pos_scanner_server_url',
@@ -11,9 +12,31 @@ const STORAGE_KEYS = {
   PAIRING: '@pos_scanner_pairing' // { pairingId, terminalName }
 };
 
-// Default server URL based on .env and platform
+// Tự động phát hiện IP của máy tính host thông qua Expo Metro bundler
+export const getAutoDetectedHost = () => {
+  try {
+    const hostUri =
+      Constants.expoConfig?.hostUri ||
+      Constants.manifest2?.extra?.expoGo?.debuggerHost ||
+      Constants.manifest?.debuggerHost;
+    if (hostUri) {
+      const ip = hostUri.split(':')[0];
+      if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+        return `http://${ip}:8080`;
+      }
+    }
+  } catch {}
+  return null;
+};
+
+// Default server URL based on Auto-detected Expo host, .env and platform
 const getDefaultServerUrl = () => {
-  // Read from EXPO_PUBLIC_SERVER_URL in .env if defined
+  // 1. Tự động lấy IP của máy tính đang chạy Expo (tự cập nhật khi đổi Wi-Fi)
+  const autoHost = getAutoDetectedHost();
+  if (autoHost) {
+    return autoHost;
+  }
+  // 2. Đọc từ biến EXPO_PUBLIC_SERVER_URL trong .env nếu có
   const envUrl = process.env.EXPO_PUBLIC_SERVER_URL;
   if (envUrl && typeof envUrl === 'string' && envUrl.trim().length > 0) {
     return envUrl.trim().replace(/\/+$/, '');
@@ -62,11 +85,55 @@ export const AppConfig = {
   },
 
   async getServerUrl() {
+    const autoHost = getAutoDetectedHost();
+    const envUrl = process.env.EXPO_PUBLIC_SERVER_URL;
     try {
       const saved = await AsyncStorage.getItem(STORAGE_KEYS.SERVER_URL);
-      if (saved) return saved;
+      if (saved) {
+        // Nếu có IP từ Expo Metro và IP đã lưu là IP cũ/ảo (10.0.2.2 hoặc IP dải mạng cũ)
+        if (autoHost && saved !== autoHost) {
+          if (
+            saved.includes('10.0.2.2') ||
+            saved.includes('192.168.100.53') ||
+            !saved.startsWith('http')
+          ) {
+            await AsyncStorage.setItem(STORAGE_KEYS.SERVER_URL, autoHost);
+            return autoHost;
+          }
+        }
+        return saved;
+      }
     } catch {}
     return getDefaultServerUrl();
+  },
+
+  // Tự động dò tìm và kiểm tra kết nối với các ứng viên server URL
+  async autoDetectServer() {
+    const candidateUrls = [];
+    const autoHost = getAutoDetectedHost();
+    if (autoHost) candidateUrls.push(autoHost);
+    const envUrl = process.env.EXPO_PUBLIC_SERVER_URL;
+    if (envUrl && !candidateUrls.includes(envUrl.trim())) {
+      candidateUrls.push(envUrl.trim().replace(/\/+$/, ''));
+    }
+    if (Platform.OS === 'android') candidateUrls.push('http://10.0.2.2:8080');
+    candidateUrls.push('http://localhost:8080');
+
+    for (const url of candidateUrls) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const res = await fetch(`${url}/api/scanner/ping`, {
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          await this.setServerUrl(url);
+          return { success: true, url };
+        }
+      } catch {}
+    }
+    return { success: false, url: candidateUrls[0] || null };
   },
 
   async setServerUrl(url) {

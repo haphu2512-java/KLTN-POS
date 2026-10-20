@@ -6,9 +6,11 @@ import {
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  TouchableOpacity,
+  ActivityIndicator
 } from 'react-native';
-import { AppConfig } from '../api/config';
+import { AppConfig, getAutoDetectedHost } from '../api/config';
 import { ScannerApi } from '../api/scannerApi';
 import { Icon, Button } from './ui';
 import { colors, fonts, radius, type } from '../theme';
@@ -16,14 +18,41 @@ import { colors, fonts, radius, type } from '../theme';
 // Điện thoại đăng nhập cùng tài khoản với máy POS; mã quét chỉ đi tới POS của tài khoản đó
 export default function LoginScreen({ onLoggedIn, notice }) {
   const [serverUrl, setServerUrl] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('cashier');
+  const [password, setPassword] = useState('123456');
   const [isLoading, setIsLoading] = useState(false);
+  const [isScanningServer, setIsScanningServer] = useState(false);
+  const [scanMessage, setScanMessage] = useState(null);
   const [error, setError] = useState(notice || null);
 
   useEffect(() => {
     AppConfig.getServerUrl().then(setServerUrl);
   }, []);
+
+  const handleAutoDetect = async () => {
+    setIsScanningServer(true);
+    setScanMessage(null);
+    setError(null);
+    try {
+      const res = await AppConfig.autoDetectServer();
+      if (res.success) {
+        setServerUrl(res.url);
+        setScanMessage(`✓ Đã kết nối máy chủ: ${res.url}`);
+      } else {
+        const detected = getAutoDetectedHost();
+        if (detected) {
+          setServerUrl(detected);
+          setScanMessage(`Đã lấy IP máy chủ: ${detected} (Vui lòng kiểm tra Firewall nếu chưa ping được)`);
+        } else {
+          setError('Không tìm thấy máy chủ POS tự động. Hãy đảm bảo điện thoại và máy tính cùng chung Wi-Fi.');
+        }
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setIsScanningServer(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!serverUrl.trim() || !username.trim() || !password) {
@@ -37,7 +66,7 @@ export default function LoginScreen({ onLoggedIn, notice }) {
       setPassword('');
       onLoggedIn(session);
     } catch (e) {
-      setError(e.name === 'AbortError' ? `Không kết nối được tới ${serverUrl}` : e.message);
+      setError(e.name === 'AbortError' ? `Không kết nối được tới ${serverUrl}. Hãy kiểm tra xem điện thoại và máy tính cùng chung Wi-Fi.` : e.message);
     } finally {
       setIsLoading(false);
     }
@@ -51,7 +80,7 @@ export default function LoginScreen({ onLoggedIn, notice }) {
         </View>
         <Text style={styles.title}>Máy quét POS</Text>
         <Text style={styles.subtitle}>
-          Đăng nhập bằng tài khoản nhân viên của cửa hàng. Mã quét chỉ được gửi tới quầy POS bạn đã ghép.
+          Đăng nhập bằng tài khoản thu ngân của cửa hàng để đồng bộ quét mã vạch trực tiếp lên quầy bán hàng.
         </Text>
 
         <View style={styles.card}>
@@ -60,7 +89,7 @@ export default function LoginScreen({ onLoggedIn, notice }) {
               style={styles.input}
               value={serverUrl}
               onChangeText={setServerUrl}
-              placeholder="http://192.168.1.15:8080"
+              placeholder="http://192.168.0.106:8080"
               placeholderTextColor={colors.textLight}
               autoCapitalize="none"
               autoCorrect={false}
@@ -68,34 +97,41 @@ export default function LoginScreen({ onLoggedIn, notice }) {
             />
           </Field>
 
-      {/* Quick IP Presets */}
-      <View style={styles.presetsRow}>
-        {process.env.EXPO_PUBLIC_SERVER_URL ? (
-          <TouchableOpacity
-            style={styles.presetChip}
-            onPress={() => setServerUrl(process.env.EXPO_PUBLIC_SERVER_URL)}
-          >
-            <Text style={styles.presetText}>⚡ .env: {process.env.EXPO_PUBLIC_SERVER_URL}</Text>
-          </TouchableOpacity>
-        ) : null}
-        <TouchableOpacity
-          style={styles.presetChip}
-          onPress={() => setServerUrl('http://10.0.2.2:8080')}
-        >
-          <Text style={styles.presetText}>Android Emu (10.0.2.2)</Text>
-        </TouchableOpacity>
-      </View>
+          {/* Nút tự động dò IP khi đổi Wi-Fi */}
+          <View style={styles.detectRow}>
+            <TouchableOpacity
+              style={styles.detectBtn}
+              onPress={handleAutoDetect}
+              disabled={isScanningServer}
+            >
+              {isScanningServer ? (
+                <ActivityIndicator size="small" color="#0284c7" />
+              ) : (
+                <Icon name="refresh-cw" size={13} color="#0284c7" />
+              )}
+              <Text style={styles.detectBtnText}>
+                {isScanningServer ? 'Đang dò máy chủ...' : '⚡ Tự động tìm IP máy chủ POS'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-      <Text style={styles.label}>Tên đăng nhập</Text>
-      <TextInput
-        style={styles.input}
-        value={username}
-        onChangeText={setUsername}
-        placeholder="cashier"
-        placeholderTextColor="#64748b"
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
+          {scanMessage ? (
+            <View style={styles.successBox}>
+              <Text style={styles.successText}>{scanMessage}</Text>
+            </View>
+          ) : null}
+
+          <Field label="Tên đăng nhập" icon="user">
+            <TextInput
+              style={styles.input}
+              value={username}
+              onChangeText={setUsername}
+              placeholder="cashier"
+              placeholderTextColor={colors.textLight}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </Field>
 
           <Field label="Mật khẩu" icon="lock">
             <TextInput
@@ -205,23 +241,38 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700'
   },
-  presetsRow: {
+  detectRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16
+    marginBottom: 14,
+    marginTop: -4
   },
-  presetChip: {
-    backgroundColor: '#1e293b',
+  detectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f0f9ff',
     borderWidth: 1,
-    borderColor: '#0284c7',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8
+    borderColor: '#bae6fd',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.md
   },
-  presetText: {
-    color: '#38bdf8',
-    fontSize: 12,
-    fontWeight: '600'
+  detectBtnText: {
+    fontFamily: fonts.medium,
+    color: '#0284c7',
+    fontSize: 12
+  },
+  successBox: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: radius.md,
+    padding: 10,
+    marginBottom: 14
+  },
+  successText: {
+    fontFamily: fonts.regular,
+    color: '#059669',
+    fontSize: 13
   }
 });
