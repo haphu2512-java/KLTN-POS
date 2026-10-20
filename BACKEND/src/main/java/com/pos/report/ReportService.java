@@ -25,7 +25,9 @@ public class ReportService {
     private final InvoiceRepository invoiceRepository;
 
     public RevenueSummaryResponse getRevenueSummary(Long branchId, int days) {
-        LocalDateTime start = LocalDateTime.now().minusDays(days);
+        // Khoảng đúng `days` ngày lịch, tính cả hôm nay
+        LocalDate firstDay = LocalDate.now().minusDays(Math.max(days, 1) - 1L);
+        LocalDateTime start = firstDay.atStartOfDay();
         LocalDateTime end = LocalDateTime.now();
 
         List<Invoice> invoices = invoiceRepository.findInvoicesByFilter(branchId, start, end);
@@ -34,22 +36,15 @@ public class ReportService {
         BigDecimal totalCost = BigDecimal.ZERO;
         int totalOrders = invoices.size();
 
-        Map<String, List<Invoice>> groupedByDate = new TreeMap<>();
+        // Nhóm theo LocalDate (không phải chuỗi "dd/MM") để thứ tự ngày đúng khi qua tháng/năm mới
+        Map<LocalDate, List<Invoice>> groupedByDate = new TreeMap<>();
         DateTimeFormatter df = DateTimeFormatter.ofPattern("dd/MM");
 
         for (Invoice inv : invoices) {
             totalRevenue = totalRevenue.add(inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO);
+            totalCost = totalCost.add(invoiceCost(inv));
 
-            if (inv.getDetails() != null) {
-                for (InvoiceDetail item : inv.getDetails()) {
-                    BigDecimal cost = (item.getProduct() != null && item.getProduct().getCostPrice() != null)
-                            ? item.getProduct().getCostPrice()
-                            : BigDecimal.ZERO;
-                    totalCost = totalCost.add(cost.multiply(BigDecimal.valueOf(item.getQuantity())));
-                }
-            }
-
-            String dateKey = inv.getCreatedAt() != null ? inv.getCreatedAt().format(df) : LocalDate.now().format(df);
+            LocalDate dateKey = inv.getCreatedAt() != null ? inv.getCreatedAt().toLocalDate() : LocalDate.now();
             groupedByDate.computeIfAbsent(dateKey, k -> new ArrayList<>()).add(inv);
         }
 
@@ -62,43 +57,28 @@ public class ReportService {
                 ? totalRevenue.divide(BigDecimal.valueOf(totalOrders), 0, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
+        // Điền đủ mọi ngày trong khoảng (ngày không có đơn = 0) để biểu đồ liên tục
+        for (LocalDate d = firstDay; !d.isAfter(LocalDate.now()); d = d.plusDays(1)) {
+            groupedByDate.putIfAbsent(d, new ArrayList<>());
+        }
+
         List<RevenueSummaryResponse.DailyRevenueItem> dailyTrend = new ArrayList<>();
-        for (Map.Entry<String, List<Invoice>> entry : groupedByDate.entrySet()) {
+        for (Map.Entry<LocalDate, List<Invoice>> entry : groupedByDate.entrySet()) {
             BigDecimal dayRev = BigDecimal.ZERO;
             BigDecimal dayCost = BigDecimal.ZERO;
 
             for (Invoice i : entry.getValue()) {
                 dayRev = dayRev.add(i.getTotalAmount() != null ? i.getTotalAmount() : BigDecimal.ZERO);
-                if (i.getDetails() != null) {
-                    for (InvoiceDetail it : i.getDetails()) {
-                        BigDecimal c = (it.getProduct() != null && it.getProduct().getCostPrice() != null)
-                                ? it.getProduct().getCostPrice()
-                                : BigDecimal.ZERO;
-                        dayCost = dayCost.add(c.multiply(BigDecimal.valueOf(it.getQuantity())));
-                    }
-                }
+                dayCost = dayCost.add(invoiceCost(i));
             }
 
             dailyTrend.add(RevenueSummaryResponse.DailyRevenueItem.builder()
-                    .date(entry.getKey())
+                    .date(entry.getKey().format(df))
                     .revenue(dayRev)
                     .cost(dayCost)
                     .profit(dayRev.subtract(dayCost))
                     .orderCount(entry.getValue().size())
                     .build());
-        }
-
-        // If no records in range, populate dummy calendar days with zero
-        if (dailyTrend.isEmpty()) {
-            for (int i = days - 1; i >= 0; i--) {
-                dailyTrend.add(RevenueSummaryResponse.DailyRevenueItem.builder()
-                        .date(LocalDate.now().minusDays(i).format(df))
-                        .revenue(BigDecimal.ZERO)
-                        .cost(BigDecimal.ZERO)
-                        .profit(BigDecimal.ZERO)
-                        .orderCount(0)
-                        .build());
-            }
         }
 
         return RevenueSummaryResponse.builder()
@@ -110,6 +90,22 @@ public class ReportService {
                 .averageOrderValue(averageOrderValue)
                 .dailyTrend(dailyTrend)
                 .build();
+    }
+
+    /** Giá vốn của hóa đơn: ưu tiên giá vốn lưu lúc bán, hóa đơn cũ chưa có thì dùng giá vốn hiện tại */
+    private BigDecimal invoiceCost(Invoice inv) {
+        BigDecimal cost = BigDecimal.ZERO;
+        if (inv.getDetails() == null) return cost;
+        for (InvoiceDetail item : inv.getDetails()) {
+            BigDecimal unitCost = item.getCostPrice();
+            if (unitCost == null && item.getProduct() != null) {
+                unitCost = item.getProduct().getCostPrice();
+            }
+            if (unitCost != null && item.getQuantity() != null) {
+                cost = cost.add(unitCost.multiply(BigDecimal.valueOf(item.getQuantity())));
+            }
+        }
+        return cost;
     }
 
     public List<TopProductResponse> getTopSellingProducts(Long branchId, int days, int limit) {
@@ -125,6 +121,7 @@ public class ReportService {
             String barcode = (String) row[2];
             int qty = row[3] != null ? ((Number) row[3]).intValue() : 0;
             BigDecimal rev = row[4] != null ? (BigDecimal) row[4] : BigDecimal.ZERO;
+            BigDecimal cost = row[5] != null ? new BigDecimal(row[5].toString()) : BigDecimal.ZERO;
 
             result.add(TopProductResponse.builder()
                     .productId(prodId)
@@ -132,7 +129,7 @@ public class ReportService {
                     .barcode(barcode)
                     .quantitySold(qty)
                     .totalRevenue(rev)
-                    .estimatedProfit(rev.multiply(BigDecimal.valueOf(0.25))) // estimated 25% margin
+                    .estimatedProfit(rev.subtract(cost))
                     .build());
 
             if (result.size() >= limit) break;

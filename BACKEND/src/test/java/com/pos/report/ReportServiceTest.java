@@ -55,4 +55,38 @@ class ReportServiceTest {
         // Margin: 20000 / 60000 = 33.3%
         assertEquals(33.3, summary.getProfitMarginPercent(), 0.1);
     }
+
+    @Test
+    @DisplayName("Xu hướng theo ngày đúng thứ tự khi qua tháng mới và đủ mọi ngày trong khoảng")
+    void testDailyTrendOrderedAcrossMonths() {
+        LocalDateTime today = LocalDateTime.now();
+        // Hóa đơn ở ngày đầu khoảng (có thể là tháng trước) và hôm nay
+        Invoice older = Invoice.builder().totalAmount(BigDecimal.valueOf(10000))
+                .details(List.of()).createdAt(today.minusDays(39)).build();
+        Invoice newer = Invoice.builder().totalAmount(BigDecimal.valueOf(20000))
+                .details(List.of()).createdAt(today).build();
+
+        when(invoiceRepository.findInvoicesByFilter(eq(1L), any(), any()))
+                .thenReturn(List.of(newer, older));
+
+        RevenueSummaryResponse summary = reportService.getRevenueSummary(1L, 40);
+
+        assertEquals(40, summary.getDailyTrend().size());
+        assertEquals(BigDecimal.valueOf(10000), summary.getDailyTrend().get(0).getRevenue());
+        assertEquals(BigDecimal.valueOf(20000), summary.getDailyTrend().get(39).getRevenue());
+    }
+
+    @Test
+    @DisplayName("Lợi nhuận dùng giá vốn lúc bán, không dùng giá vốn hiện tại")
+    void testCostUsesPriceAtSale() {
+        Product prod = Product.builder().costPrice(BigDecimal.valueOf(30000)).build(); // giá vốn đã tăng
+        InvoiceDetail detail = InvoiceDetail.builder().product(prod).quantity(1)
+                .costPrice(BigDecimal.valueOf(20000)).build();
+        Invoice inv = Invoice.builder().totalAmount(BigDecimal.valueOf(36000))
+                .details(List.of(detail)).createdAt(LocalDateTime.now()).build();
+
+        when(invoiceRepository.findInvoicesByFilter(eq(1L), any(), any())).thenReturn(List.of(inv));
+
+        assertEquals(BigDecimal.valueOf(20000), reportService.getRevenueSummary(1L, 7).getTotalCost());
+    }
 }
