@@ -53,7 +53,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         // Topic for broadcasting realtime updates to all connected cashiers and branches
-        registry.enableSimpleBroker("/topic");
+        // /queue dùng cho tin riêng từng tài khoản (/user/queue/...), ví dụ mã quét từ điện thoại
+        registry.enableSimpleBroker("/topic", "/queue");
         registry.setApplicationDestinationPrefixes("/app");
     }
 

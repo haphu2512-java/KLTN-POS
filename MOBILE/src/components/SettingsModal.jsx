@@ -12,17 +12,19 @@ import {
   ScrollView
 } from 'react-native';
 import { AppConfig } from '../api/config';
-import { ScannerApi } from '../api/scannerApi';
+import { ScannerApi, AuthError } from '../api/scannerApi';
 import { OfflineStorage } from '../storage/offlineStorage';
 import { formatDate } from '../utils/formatters';
 
 export default function SettingsModal({
   visible,
   onClose,
-  onSettingsSaved
+  onSettingsSaved,
+  session,
+  onLogout,
+  onAuthError
 }) {
   const [serverUrl, setServerUrl] = useState('');
-  const [branchId, setBranchId] = useState(1);
   const [hapticEnabled, setHapticEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [isTesting, setIsTesting] = useState(false);
@@ -40,7 +42,6 @@ export default function SettingsModal({
   const loadCurrentSettings = async () => {
     const s = await AppConfig.getSettings();
     setServerUrl(s.serverUrl);
-    setBranchId(s.branchId);
     setHapticEnabled(s.hapticEnabled);
     setSoundEnabled(s.soundEnabled);
 
@@ -78,7 +79,11 @@ export default function SettingsModal({
         Alert.alert('Lỗi tải danh mục', res.message);
       }
     } catch (e) {
-      Alert.alert('Lỗi', e.message);
+      if (e instanceof AuthError) {
+        onAuthError(e);
+      } else {
+        Alert.alert('Lỗi', e.message);
+      }
     } finally {
       setIsSyncingCatalog(false);
     }
@@ -87,7 +92,6 @@ export default function SettingsModal({
   const handleSave = async () => {
     await AppConfig.saveSettings({
       serverUrl: serverUrl.trim(),
-      branchId: Number(branchId),
       hapticEnabled,
       soundEnabled
     });
@@ -173,30 +177,24 @@ export default function SettingsModal({
               )}
             </View>
 
-            {/* BRANCH SELECTION */}
+            {/* ACCOUNT: chi nhánh lấy theo tài khoản đăng nhập, không chọn tay */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Chi nhánh bán hàng</Text>
-              <View style={styles.branchRow}>
-                {[1, 2].map((id) => (
-                  <TouchableOpacity
-                    key={id}
-                    style={[
-                      styles.branchChip,
-                      branchId === id && styles.branchChipActive
-                    ]}
-                    onPress={() => setBranchId(id)}
-                  >
-                    <Text
-                      style={[
-                        styles.branchText,
-                        branchId === id && styles.branchTextActive
-                      ]}
-                    >
-                      Chi nhánh #{id}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <Text style={styles.sectionTitle}>Tài khoản</Text>
+              <View style={styles.cacheInfoBox}>
+                <Text style={styles.cacheCount}>
+                  Đăng nhập: <Text style={styles.highlightText}>{session?.fullName || session?.username}</Text>
+                </Text>
+                <Text style={styles.cacheTime}>
+                  {session?.role} · {session?.branchId ? `Chi nhánh #${session.branchId}` : 'Không gắn chi nhánh'}
+                </Text>
               </View>
+              <TouchableOpacity
+                style={[styles.syncCatalogBtn, { backgroundColor: '#7f1d1d' }]}
+                onPress={onLogout}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.syncCatalogBtnText}>Đăng xuất</Text>
+              </TouchableOpacity>
             </View>
 
             {/* OFFLINE CATALOG SECTION */}
@@ -369,32 +367,6 @@ const styles = StyleSheet.create({
   pingResultText: {
     fontSize: 11,
     fontWeight: '600'
-  },
-  branchRow: {
-    flexDirection: 'row',
-    gap: 10
-  },
-  branchChip: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155'
-  },
-  branchChipActive: {
-    backgroundColor: '#059669',
-    borderColor: '#10b981'
-  },
-  branchText: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  branchTextActive: {
-    color: '#fff',
-    fontWeight: '700'
   },
   cacheInfoBox: {
     backgroundColor: '#0f172a',
