@@ -18,12 +18,23 @@ public class ForecastController {
     private final ForecastService forecastService;
 
     @GetMapping({"/demand", "/replenishment"})
-    @Operation(summary = "Tính toán dự báo nhu cầu bán hàng và đề xuất nhập kho cho chi nhánh")
+    @Operation(summary = "Dự báo nhu cầu bán hàng (đọc từ cache nightly job, fallback tính realtime)")
     public ResponseEntity<ApiResponse<List<ForecastResponse>>> getDemandForecast(
             @RequestParam(defaultValue = "1") Long branchId,
             @RequestParam(defaultValue = "7") int days,
             @RequestParam(defaultValue = "EXP_SMOOTHING") String algorithm) {
-        List<ForecastResponse> results = forecastService.getDemandForecastAndReplenishment(branchId, days, algorithm);
+        List<ForecastResponse> results = forecastService.getCachedOrComputeForecast(branchId, days, algorithm);
         return ResponseEntity.ok(ApiResponse.ok(results));
+    }
+
+    @GetMapping("/recommendations")
+    @Operation(summary = "Danh sách sản phẩm cần nhập hàng ưu tiên (lọc từ kết quả dự báo)")
+    public ResponseEntity<ApiResponse<List<ForecastResponse>>> getRecommendations(
+            @RequestParam(defaultValue = "1") Long branchId) {
+        List<ForecastResponse> all = forecastService.getCachedOrComputeForecast(branchId, 7, "EXP_SMOOTH");
+        List<ForecastResponse> needRestock = all.stream()
+                .filter(r -> r.getSuggestedRestockQty() > 0)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.ok(needRestock));
     }
 }

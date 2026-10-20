@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import useAppNavigate from './hooks/useAppNavigate';
 import LoginPage from './pages/auth/LoginPage';
 import PosPage from './pages/pos/PosPage';
 import InventoryPage from './pages/inventory/InventoryPage';
@@ -8,10 +10,14 @@ import ReportPage from './pages/report/ReportPage';
 import PartnerPage from './pages/partner/PartnerPage';
 import StaffPage from './pages/admin/StaffPage';
 
-function MainApp() {
+/**
+ * Wrapper component cung cấp navigation props cho từng page
+ * thông qua React Router thay vì quản lý bằng useState.
+ */
+function AppRoutes() {
   const { user, branchId, isBackendOnline, isWsConnected, logout, isAuthenticated } = useAuth();
-  const [currentScreen, setCurrentScreen] = useState('pos'); // 'pos' | 'inventory' | 'forecast' | 'report' | 'partners' | 'staff'
   const [isOfflineDemo, setIsOfflineDemo] = useState(false);
+  const nav = useAppNavigate();
 
   // If user is not authenticated and hasn't selected offline demo, show Login Screen
   if (!isAuthenticated && !isOfflineDemo) {
@@ -30,122 +36,78 @@ function MainApp() {
     logout();
   };
 
-  if (currentScreen === 'inventory') {
-    return (
-      <InventoryPage
-        currentUser={currentUser}
-        branchId={branchId}
-        isOnline={isBackendOnline}
-        isWsConnected={isWsConnected}
-        onNavigateToPos={() => setCurrentScreen('pos')}
-        onNavigateToForecast={() => setCurrentScreen('forecast')}
-        onNavigateToReport={() => setCurrentScreen('report')}
-        onNavigateToPartners={() => setCurrentScreen('partners')}
-        onNavigateToStaff={() => setCurrentScreen('staff')}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  if (currentScreen === 'forecast') {
-    return (
-      <ForecastPage
-        currentUser={currentUser}
-        branchId={branchId}
-        isOnline={isBackendOnline}
-        isWsConnected={isWsConnected}
-        onNavigateToPos={() => setCurrentScreen('pos')}
-        onNavigateToInventory={() => setCurrentScreen('inventory')}
-        onNavigateToReport={() => setCurrentScreen('report')}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  if (currentScreen === 'report') {
-    return (
-      <ReportPage
-        currentUser={currentUser}
-        branchId={branchId}
-        isOnline={isBackendOnline}
-        onNavigateToPos={() => setCurrentScreen('pos')}
-        onNavigateToInventory={() => setCurrentScreen('inventory')}
-        onNavigateToForecast={() => setCurrentScreen('forecast')}
-        onNavigateToPartners={() => setCurrentScreen('partners')}
-        onNavigateToStaff={() => setCurrentScreen('staff')}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  if (currentScreen === 'partners') {
-    return (
-      <PartnerPage
-        currentUser={currentUser}
-        branchId={branchId}
-        isOnline={isBackendOnline}
-        onNavigateToPos={() => setCurrentScreen('pos')}
-        onNavigateToInventory={() => setCurrentScreen('inventory')}
-        onNavigateToForecast={() => setCurrentScreen('forecast')}
-        onNavigateToReport={() => setCurrentScreen('report')}
-        onNavigateToStaff={() => setCurrentScreen('staff')}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  if (currentScreen === 'staff') {
-    if (currentUser?.role !== 'ADMIN') {
-      return (
-        <PosPage
-          currentUser={currentUser}
-          branchId={branchId}
-          isOnline={isBackendOnline}
-          isWsConnected={isWsConnected}
-          onNavigateToInventory={() => setCurrentScreen('inventory')}
-          onNavigateToForecast={() => setCurrentScreen('forecast')}
-          onNavigateToReport={() => setCurrentScreen('report')}
-          onNavigateToPartners={() => setCurrentScreen('partners')}
-          onNavigateToStaff={() => setCurrentScreen('staff')}
-          onLogout={handleLogout}
-        />
-      );
-    }
-    return (
-      <StaffPage
-        currentUser={currentUser}
-        branchId={branchId}
-        isOnline={isBackendOnline}
-        onNavigateToPos={() => setCurrentScreen('pos')}
-        onNavigateToInventory={() => setCurrentScreen('inventory')}
-        onNavigateToForecast={() => setCurrentScreen('forecast')}
-        onNavigateToReport={() => setCurrentScreen('report')}
-        onNavigateToPartners={() => setCurrentScreen('partners')}
-        onLogout={handleLogout}
-      />
-    );
-  }
+  // Shared props cho mọi page
+  const sharedProps = {
+    currentUser,
+    branchId,
+    isOnline: isBackendOnline,
+    isWsConnected,
+    onLogout: handleLogout,
+    ...nav, // onNavigateToPos, onNavigateToInventory, onNavigateToForecast, ...
+  };
 
   return (
-    <PosPage
-      currentUser={currentUser}
-      branchId={branchId}
-      isOnline={isBackendOnline}
-      isWsConnected={isWsConnected}
-      onNavigateToInventory={() => setCurrentScreen('inventory')}
-      onNavigateToForecast={() => setCurrentScreen('forecast')}
-      onNavigateToReport={() => setCurrentScreen('report')}
-      onNavigateToPartners={() => setCurrentScreen('partners')}
-      onNavigateToStaff={() => setCurrentScreen('staff')}
-      onLogout={handleLogout}
-    />
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <PosPage
+            {...sharedProps}
+          />
+        }
+      />
+      <Route
+        path="/inventory"
+        element={
+          <InventoryPage
+            {...sharedProps}
+          />
+        }
+      />
+      <Route
+        path="/forecast"
+        element={
+          <ForecastPage
+            {...sharedProps}
+          />
+        }
+      />
+      <Route
+        path="/report"
+        element={
+          <ReportPage
+            {...sharedProps}
+          />
+        }
+      />
+      <Route
+        path="/partners"
+        element={
+          <PartnerPage
+            {...sharedProps}
+          />
+        }
+      />
+      <Route
+        path="/staff"
+        element={
+          currentUser?.role === 'ADMIN'
+            ? <StaffPage {...sharedProps} />
+            : <Navigate to="/" replace />
+        }
+      />
+      {/* Fallback: redirect unknown routes to POS */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <MainApp />
-    </AuthProvider>
+    <HashRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </HashRouter>
   );
 }

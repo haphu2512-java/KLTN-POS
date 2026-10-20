@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -84,7 +85,7 @@ public class InventoryService {
     private void notifyInventoryUpdate(Long branchId, Long productId) {
         try {
             messagingTemplate.convertAndSend("/topic/inventory-updates",
-                    String.format("{\"branchId\": %d, \"productId\": %d}", branchId, productId));
+                    Map.of("branchId", branchId, "productId", productId));
         } catch (Exception e) {
             log.warn("WS notify failed branchId={} productId={}: {}", branchId, productId, e.getMessage());
         }

@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -26,6 +27,7 @@ public class ForecastService {
     private final InventoryRepository inventoryRepository;
     private final InvoiceRepository invoiceRepository;
     private final BranchRepository branchRepository;
+    private final ForecastResultRepository forecastResultRepository;
 
     @Value("${ai.forecast.algorithm:EXP_SMOOTH}")
     private String configuredAlgorithm = "EXP_SMOOTH";
@@ -138,7 +140,81 @@ public class ForecastService {
     }
 
     /**
-     * Nightly scheduled background job to refresh AI forecasts (cron 01:00 AM)
+     * Đọc kết quả dự báo đã được cache từ nightly job.
+     * Nếu chưa có cache (lần đầu chạy), fallback tính toán realtime.
+     */
+    public List<ForecastResponse> getCachedOrComputeForecast(Long branchId, int forecastDays, String algorithm) {
+        List<ForecastResult> cached = forecastResultRepository
+                .findByBranchIdOrderByUrgencyAscProductProductNameAsc(branchId);
+
+        if (!cached.isEmpty()) {
+            // Trả kết quả từ cache, bổ sung thông tin sản phẩm
+            List<ForecastResponse> responses = new ArrayList<>();
+            for (ForecastResult fr : cached) {
+                Product product = fr.getProduct();
+                responses.add(ForecastResponse.builder()
+                        .productId(product.getId())
+                        .barcode(product.getBarcode())
+                        .productName(product.getName())
+                        .category(product.getCategory())
+                        .unit(product.getUnit())
+                        .currentStock(fr.getCurrentStock())
+                        .costPrice(product.getCostPrice())
+                        .dailyDemandForecast(fr.getDailyDemandForecast())
+                        .totalPredictedDemand(fr.getTotalPredictedDemand())
+                        .suggestedRestockQty(fr.getSuggestedRestockQty())
+                        .urgency(fr.getUrgency())
+                        .hasHistory(fr.getHasHistory())
+                        .historicalDailySales(null) // Không lưu raw sales trong cache
+                        .build());
+            }
+            return responses;
+        }
+
+        // Fallback: chưa có cache → tính toán realtime
+        log.info("[FORECAST] Chưa có cache cho branchId={}, tính toán realtime...", branchId);
+        return getDemandForecastAndReplenishment(branchId, forecastDays, algorithm);
+    }
+
+    /**
+     * Lưu kết quả dự báo vào DB cho 1 chi nhánh (gọi bởi nightly job).
+     */
+    @Transactional
+    public void persistForecastResults(Long branchId, List<ForecastResponse> results, String algorithm, int forecastDays) {
+        // Xóa kết quả cũ
+        forecastResultRepository.deleteByBranchId(branchId);
+
+        Branch branch = branchRepository.findById(branchId).orElse(null);
+        if (branch == null) return;
+
+        LocalDateTime now = LocalDateTime.now();
+        List<ForecastResult> entities = new ArrayList<>();
+
+        for (ForecastResponse r : results) {
+            Product product = productRepository.findById(r.getProductId()).orElse(null);
+            if (product == null) continue;
+
+            entities.add(ForecastResult.builder()
+                    .product(product)
+                    .branch(branch)
+                    .dailyDemandForecast(r.getDailyDemandForecast())
+                    .totalPredictedDemand(r.getTotalPredictedDemand())
+                    .suggestedRestockQty(r.getSuggestedRestockQty())
+                    .urgency(r.getUrgency())
+                    .currentStock(r.getCurrentStock())
+                    .hasHistory(r.getHasHistory())
+                    .algorithm(algorithm)
+                    .forecastDays(forecastDays)
+                    .calculatedAt(now)
+                    .build());
+        }
+
+        forecastResultRepository.saveAll(entities);
+    }
+
+    /**
+     * Nightly scheduled background job to refresh AI forecasts (cron 01:00 AM).
+     * Kết quả được persist vào bảng forecast_result để API đọc nhanh.
      */
     @Scheduled(cron = "0 0 1 * * ?")
     public void runNightlyForecastJob() {
@@ -147,9 +223,14 @@ public class ForecastService {
         try {
             List<Branch> branches = branchRepository.findAll();
             for (Branch branch : branches) {
-                List<ForecastResponse> results = getDemandForecastAndReplenishment(branch.getId(), configuredForecastDays, configuredAlgorithm);
+                List<ForecastResponse> results = getDemandForecastAndReplenishment(
+                        branch.getId(), configuredForecastDays, configuredAlgorithm);
                 long restockCount = results.stream().filter(r -> r.getSuggestedRestockQty() > 0).count();
-                log.info("[AI FORECAST JOB] Chi nhánh '{}' (ID: {}): phân tích {} sản phẩm, {} sản phẩm cần nhập hàng.",
+
+                // Persist kết quả vào DB
+                persistForecastResults(branch.getId(), results, configuredAlgorithm, configuredForecastDays);
+
+                log.info("[AI FORECAST JOB] Chi nhánh '{}' (ID: {}): phân tích {} sản phẩm, {} sản phẩm cần nhập hàng. Đã lưu cache.",
                         branch.getName(), branch.getId(), results.size(), restockCount);
             }
             log.info("[AI FORECAST JOB] Hoàn thành tác vụ tính toán dự báo định kỳ ban đêm.");
