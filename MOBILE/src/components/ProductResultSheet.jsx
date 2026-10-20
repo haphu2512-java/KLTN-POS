@@ -6,7 +6,16 @@ import { colors, fonts, radius, type } from '../theme';
 import { formatCurrency } from '../utils/formatters';
 
 // result.mode: 'POS_REMOTE' (vừa gửi vào giỏ) | 'PRICE_CHECK' (chỉ tra giá)
-export default function ProductResultSheet({ visible, result, canSendToPos, closeLabel, onClose, onSendToPos }) {
+export default function ProductResultSheet({
+  visible,
+  result,
+  canSendToPos,
+  canAssignBarcode,
+  closeLabel,
+  onClose,
+  onSendToPos,
+  onAssignBarcode
+}) {
   const insets = useSafeAreaInsets();
   if (!result) return null;
 
@@ -15,6 +24,8 @@ export default function ProductResultSheet({ visible, result, canSendToPos, clos
   const isPosMode = mode === 'POS_REMOTE';
   // Mã vừa vào hàng đợi offline thì không cho gửi lại, tránh thêm trùng khi đồng bộ
   const showSend = found && (isPosMode ? online : canSendToPos);
+  // Gán mã cần máy chủ, nên chỉ hiện khi đang trực tuyến
+  const showAssign = !found && online && canAssignBarcode;
 
   const tone = !online
     ? { icon: 'cloud-off', fg: colors.warningDark, bg: colors.warningSoft, border: colors.warningBorder }
@@ -65,7 +76,9 @@ export default function ProductResultSheet({ visible, result, canSendToPos, clos
               <Text style={styles.name}>Không tìm thấy sản phẩm</Text>
               <Text style={styles.barcode}>{barcode}</Text>
               <Text style={[type.small, { marginTop: 8, lineHeight: 18 }]}>
-                Mã vạch này chưa có trong danh mục của cửa hàng. Báo quản lý để thêm sản phẩm.
+                {canAssignBarcode
+                  ? 'Mã vạch này chưa gắn với sản phẩm nào. Nếu sản phẩm đã có trong danh mục, hãy gán mã này cho nó.'
+                  : 'Mã vạch này chưa có trong danh mục của cửa hàng. Báo quản lý để gán mã hoặc thêm sản phẩm.'}
               </Text>
             </View>
           )}
@@ -77,6 +90,15 @@ export default function ProductResultSheet({ visible, result, canSendToPos, clos
                 icon="shopping-cart"
                 variant="secondary"
                 onPress={() => onSendToPos(barcode)}
+                style={{ flex: 1 }}
+              />
+            )}
+            {showAssign && (
+              <Button
+                label="Gán mã cho sản phẩm"
+                icon="link"
+                variant="secondary"
+                onPress={() => onAssignBarcode(barcode)}
                 style={{ flex: 1 }}
               />
             )}

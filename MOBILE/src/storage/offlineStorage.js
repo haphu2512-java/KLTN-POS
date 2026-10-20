@@ -122,6 +122,19 @@ export const OfflineStorage = {
     return SEED_PRODUCTS;
   },
 
+  // Cập nhật một sản phẩm trong danh mục trên máy (sau khi gán mã vạch mới)
+  async upsertCachedProduct(product) {
+    if (!product?.id) return;
+    const list = await this.loadCachedProducts();
+    const rest = list.filter(p => p.id !== product.id);
+    // Giữ nguyên thời điểm tải danh mục: chỉ một sản phẩm thay đổi
+    const lastSync = await this.getLastSyncTime();
+    await this.saveCachedProducts([product, ...rest]);
+    if (lastSync) {
+      await AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC_TIME, lastSync).catch(() => {});
+    }
+  },
+
   // Offline product lookup by barcode
   async lookupProductOffline(barcode) {
     if (!barcode) return null;

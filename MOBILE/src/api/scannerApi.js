@@ -286,6 +286,40 @@ export const ScannerApi = {
     }
   },
 
+  // Tìm sản phẩm trên máy chủ để gán mã vạch vừa quét (chỉ quản lý / kho)
+  async searchProducts(query) {
+    const q = String(query || '').trim();
+    if (!q) return [];
+    const response = await authFetch(`/api/scanner/products/search?q=${encodeURIComponent(q)}`, {}, 8000);
+    const json = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(json?.message || `Tìm sản phẩm thất bại (HTTP ${response.status})`);
+    }
+    return Array.isArray(json?.data) ? json.data : [];
+  },
+
+  // Thay mã cũ của sản phẩm (vd. mã nội bộ Bách Hóa Xanh) bằng mã vạch vừa quét trên bao bì
+  async assignBarcode(productId, barcode) {
+    const cleanBarcode = String(barcode || '').trim();
+    const response = await authFetch(
+      `/api/scanner/products/${productId}/barcode`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode: cleanBarcode })
+      },
+      8000
+    );
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !json?.data) {
+      throw new Error(json?.message || `Gán mã vạch thất bại (HTTP ${response.status})`);
+    }
+    const product = json.data;
+    await OfflineStorage.upsertCachedProduct(product);
+    await OfflineStorage.addScanHistory({ barcode: cleanBarcode, product, status: 'LOOKUP' });
+    return product;
+  },
+
   // Sync entire product catalog to phone for offline lookups
   async fetchProductsForCache() {
     try {
