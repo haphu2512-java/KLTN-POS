@@ -58,7 +58,7 @@
 .badge-brand {
   background-color: var(--primary-50);
   color: var(--primary-700);
-  border-color: #bfdbfe;
+  border-color: var(--primary-border);
 }
 .badge-brand .badge-dot {
   background-color: var(--primary-600);

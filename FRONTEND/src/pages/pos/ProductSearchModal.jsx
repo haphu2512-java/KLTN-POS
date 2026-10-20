@@ -65,7 +65,7 @@ export default function ProductSearchModal({
               minWidth: 40,
               borderRadius: 6,
               backgroundColor: '#fff',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--text-main)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -90,14 +90,6 @@ export default function ProductSearchModal({
                 }}
               />
             ) : null}
-            <span
-              style={{
-                fontSize: '18px',
-                display: row.imageUrl ? 'none' : 'flex'
-              }}
-            >
-              🛍️
-            </span>
           </div>
           <div>
             <div className="font-medium">{val}</div>
@@ -172,7 +164,6 @@ export default function ProductSearchModal({
           placeholder="Nhập tên hàng hóa, mã vạch hoặc danh mục..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          prefix="🔍"
           autoFocus
         />
 

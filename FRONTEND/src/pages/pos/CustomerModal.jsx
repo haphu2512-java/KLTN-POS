@@ -146,7 +146,6 @@ export default function CustomerModal({
             placeholder="Tìm theo tên hoặc số điện thoại..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            prefix="🔍"
           />
           <Table
             columns={columns}

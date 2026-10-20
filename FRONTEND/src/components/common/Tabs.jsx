@@ -30,8 +30,7 @@ export default function Tabs({
               }}
               title="Đóng đơn"
             >
-              ✕
-            </span>
+                          </span>
           )}
         </button>
       ))}

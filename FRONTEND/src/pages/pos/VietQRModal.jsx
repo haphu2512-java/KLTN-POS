@@ -30,7 +30,7 @@ export default function VietQRModal({
             Hủy / Đổi tiền mặt (Esc)
           </Button>
           <Button variant="success" onClick={onConfirmSuccess}>
-            ✔ Đã nhận được tiền
+            Đã nhận được tiền
           </Button>
         </>
       }

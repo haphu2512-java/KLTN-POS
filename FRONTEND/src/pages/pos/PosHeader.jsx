@@ -1,21 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Badge, Button } from '../../components/common';
+import { Button } from '../../components/common';
 import { formatDateTime } from '../../utils/formatters';
 
 export default function PosHeader({
-  branchName = 'Chi nhánh Quận 1',
-  cashierName = 'Nguyễn Văn A',
+  branchName = 'Chi nhánh 1',
+  cashierName = 'Thu ngân',
   role = 'CASHIER',
-  shiftName = 'Ca Sáng',
+  shiftName = 'Ca sáng',
   isOnline = true,
   isWsConnected = false,
-  onOpenHelp,
-  onLogout,
-  onNavigateToInventory,
-  onNavigateToForecast,
-  onNavigateToReport,
-  onNavigateToPartners,
-  onNavigateToStaff
+  onOpenHelp
 }) {
   const [timeStr, setTimeStr] = useState(formatDateTime());
 
@@ -26,104 +20,35 @@ export default function PosHeader({
     return () => clearInterval(timer);
   }, []);
 
+  const roleLabel = role === 'ADMIN' ? 'Quản lý' : 'Thu ngân';
+  const status = !isOnline ? 'offline' : isWsConnected ? 'live' : 'online';
+  const statusText = {
+    offline: 'Ngoại tuyến',
+    live: 'Đã kết nối máy chủ',
+    online: 'Đang kết nối thời gian thực'
+  }[status];
+
   return (
     <header className="pos-header">
-      <div className="pos-header-left">
-        <div className="pos-logo">
-          <span className="pos-logo-icon">🏪</span>
-          <span className="pos-logo-title">POS RETAIL</span>
-        </div>
-        <div className="pos-branch-badge">
-          <Badge variant="brand" withDot={false}>{branchName}</Badge>
-        </div>
-      </div>
-
-      <div className="pos-header-center">
-        <span className="pos-time">{timeStr}</span>
+      <div className="pos-header-title">
+        <h1 className="pos-branch">{branchName}</h1>
+        <span className="pos-shift">
+          {shiftName} · {roleLabel} {cashierName}
+        </span>
       </div>
 
       <div className="pos-header-right">
-        <div className="pos-user-info">
-          <span>{role === 'ADMIN' ? '👑 Quản lý' : '💼 Thu ngân'}: <strong>{cashierName}</strong></span>
-          <span className="pos-divider">•</span>
-          <span>{shiftName}</span>
-        </div>
-
-        <Badge variant={isOnline ? 'success' : 'secondary'} title={isWsConnected ? 'STOMP WebSocket Realtime: Đã kết nối' : 'WebSocket: Đang chờ...'}>
-          {isOnline ? (isWsConnected ? '🟢 Máy chủ & WS' : '🟢 API Online') : '⚪ Ngoại tuyến'}
-        </Badge>
-
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onNavigateToInventory}
-          title="Chuyển sang màn hình Quản lý Kho & Nhập hàng"
+        <span
+          className={`pos-status pos-status-${status}`}
+          title={isWsConnected ? 'Đồng bộ tồn kho theo thời gian thực' : 'Chưa kết nối đồng bộ thời gian thực'}
         >
-          📦 Quản lý Kho
+          <span className="pos-status-dot" aria-hidden="true" />
+          {statusText}
+        </span>
+        <span className="pos-time">{timeStr}</span>
+        <Button variant="secondary" size="sm" hotkey="F1" onClick={onOpenHelp} title="Xem hướng dẫn phím tắt">
+          Phím tắt
         </Button>
-
-        {onNavigateToForecast && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onNavigateToForecast}
-            title="Chuyển sang màn hình Dự báo AI"
-          >
-            📈 Dự báo AI
-          </Button>
-        )}
-
-        {onNavigateToReport && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onNavigateToReport}
-            title="Xem báo cáo doanh thu & sản phẩm bán chạy"
-          >
-            📊 Báo cáo
-          </Button>
-        )}
-
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onNavigateToPartners}
-          title="Quản lý khách hàng thân thiết & nhà cung cấp"
-        >
-          👥 Khách & NCC
-        </Button>
-
-        {role === 'ADMIN' && onNavigateToStaff && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onNavigateToStaff}
-            title="Quản lý tài khoản nhân viên"
-          >
-            👤 Nhân viên
-          </Button>
-        )}
-
-        <Button
-          variant="ghost"
-          size="sm"
-          hotkey="F1"
-          onClick={onOpenHelp}
-          title="Xem hướng dẫn phím tắt"
-        >
-          Trợ giúp
-        </Button>
-
-        {onLogout && (
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={onLogout}
-            title="Đăng xuất khỏi ca làm việc"
-          >
-            Đăng xuất
-          </Button>
-        )}
       </div>
     </header>
   );

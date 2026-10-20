@@ -33,13 +33,13 @@ export default function LoginPage({ onSkipOffline }) {
       <div className="login-card">
         <div className="login-header">
           <div className="login-brand-badge">POS RETAIL & WAREHOUSE SYSTEM</div>
-          <h1 className="login-title">Đăng Nhập Hệ Thống</h1>
+          <h1 className="login-title">Đăng nhập</h1>
           <p className="login-subtitle">Vui lòng đăng nhập tài khoản thu ngân hoặc quản lý</p>
         </div>
 
         {errorMsg && (
           <div className="login-error">
-            ⚠️ {errorMsg}
+            {errorMsg}
           </div>
         )}
 
@@ -73,7 +73,7 @@ export default function LoginPage({ onSkipOffline }) {
             disabled={loading}
             style={{ width: '100%', height: '42px', marginTop: '6px' }}
           >
-            {loading ? 'Đang xác thực...' : 'ĐĂNG NHẬP (ENTER)'}
+            {loading ? 'Đang xác thực...' : 'Đăng nhập'}
           </Button>
         </form>
 
@@ -85,14 +85,14 @@ export default function LoginPage({ onSkipOffline }) {
               className="quick-role-btn"
               onClick={() => handleQuickSelect('admin', '123456')}
             >
-              👑 Quản trị (admin)
+              Quản trị (admin)
             </button>
             <button
               type="button"
               className="quick-role-btn"
               onClick={() => handleQuickSelect('cashier', '123456')}
             >
-              💼 Thu ngân (cashier)
+              Thu ngân (cashier)
             </button>
           </div>
         </div>
@@ -103,7 +103,7 @@ export default function LoginPage({ onSkipOffline }) {
             className="login-offline-btn"
             onClick={onSkipOffline}
           >
-            ⚡ Dùng thử ngoại tuyến (Offline Demo)
+            Dùng thử ngoại tuyến (Offline Demo)
           </button>
         )}
       </div>

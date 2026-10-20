@@ -38,9 +38,7 @@ export default function Modal({
             className="modal-close-btn"
             onClick={onClose}
             aria-label="Đóng"
-          >
-            ✕
-          </button>
+          >×</button>
         </div>
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-footer">{footer}</div>}

@@ -11,31 +11,6 @@
   overflow: hidden;
 }
 
-/* Header */
-.forecast-header {
-  height: var(--header-height);
-  background-color: var(--brand-900);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  flex-shrink: 0;
-}
-
-.forecast-header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.forecast-header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
 /* Main Workspace */
 .forecast-body {
   flex: 1;

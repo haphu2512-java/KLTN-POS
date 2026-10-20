@@ -123,7 +123,7 @@ export default function StockInModal({
             Hủy (Esc)
           </Button>
           <Button variant="success" onClick={handleSubmit}>
-            ✔ Hoàn tất & Nhập Kho
+            Hoàn tất & Nhập Kho
           </Button>
         </>
       }
@@ -274,9 +274,7 @@ export default function StockInModal({
                         className="cart-delete-btn"
                         onClick={() => handleRemoveRow(idx)}
                         title="Xóa dòng"
-                      >
-                        ✕
-                      </button>
+                      >×</button>
                     </td>
                   </tr>
                 ))}

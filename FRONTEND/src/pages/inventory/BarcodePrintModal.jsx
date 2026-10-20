@@ -88,14 +88,14 @@ export default function BarcodePrintModal({
         new CustomEvent('pos:barcode_scanned', { detail: { barcode: product.barcode, product } })
       );
     }
-    alert(`⚡ Đã mô phỏng quét mã vạch: ${product.barcode} (${product.name})`);
+    alert(`Đã mô phỏng quét mã vạch: ${product.barcode} (${product.name})`);
   };
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="🏷️ IN TEM MÃ VẠCH SẢN PHẨM (BARCODE PRINTING & SHEET)"
+      title="IN TEM MÃ VẠCH SẢN PHẨM (BARCODE PRINTING & SHEET)"
       width="960px"
     >
       <div className="barcode-modal-content">
@@ -104,7 +104,7 @@ export default function BarcodePrintModal({
           <div className="barcode-toolbar-group">
             <input
               type="text"
-              placeholder="🔍 Tìm theo tên hoặc mã vạch..."
+              placeholder="Tìm theo tên hoặc mã vạch..."
               className="barcode-input"
               style={{ width: '220px' }}
               value={searchTerm}
@@ -136,7 +136,7 @@ export default function BarcodePrintModal({
             </select>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '12px', color: '#94A3B8' }}>Số tem/mã:</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Số tem/mã:</span>
               <input
                 type="number"
                 min="1"
@@ -182,13 +182,13 @@ export default function BarcodePrintModal({
         </div>
 
         {/* Stats & Notice */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', color: '#64748B' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
           <span>
             Đang hiển thị <strong>{displayProducts.length}</strong> sản phẩm ({stickers.length} tem in)
             {displayProducts.length > 500 && ' (giới hạn 500 tem đầu tiên trong bản xem trước)'}
           </span>
-          <span style={{ fontSize: '11px', color: '#0284C7' }}>
-            💡 Hỗ trợ máy in tem nhiệt Xprinter, Gprinter, Bixolon hoặc in trực tiếp ra giấy A4
+          <span style={{ fontSize: '11px', color: 'var(--text-main)' }}>
+            Hỗ trợ máy in tem nhiệt Xprinter, Gprinter, Bixolon hoặc in trực tiếp ra giấy A4
           </span>
         </div>
 
@@ -203,7 +203,7 @@ export default function BarcodePrintModal({
                   title="Mô phỏng máy quét HID quét mã này"
                   onClick={() => handleSimulateScan(item)}
                 >
-                  ⚡ Quét thử
+                  Quét thử
                 </button>
 
                 {showStoreName && <div className="sticker-store">{storeName}</div>}
@@ -233,7 +233,7 @@ export default function BarcodePrintModal({
         {/* Modal Actions */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
           <Button variant="secondary" onClick={handleExportCsv} title="Xuất file CSV danh sách mã vạch">
-            📥 Xuất CSV Barcode
+            Xuất CSV Barcode
           </Button>
 
           <div style={{ display: 'flex', gap: '10px' }}>
@@ -241,7 +241,7 @@ export default function BarcodePrintModal({
               Đóng
             </Button>
             <Button variant="primary" onClick={handlePrint} title="Kích hoạt lệnh in máy in tem hoặc PDF">
-              🖨️ In tem mã vạch (Print)
+              In tem mã vạch (Print)
             </Button>
           </div>
         </div>

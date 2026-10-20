@@ -22,13 +22,7 @@ export default function PosPage({
   currentUser,
   branchId = 1,
   isOnline = true,
-  isWsConnected = false,
-  onNavigateToInventory,
-  onNavigateToForecast,
-  onNavigateToReport,
-  onNavigateToPartners,
-  onNavigateToStaff,
-  onLogout
+  isWsConnected = false
 }) {
   // Products & Customers from Database
   const [products, setProducts] = useState([]);
@@ -379,7 +373,7 @@ export default function PosPage({
         // dừng thanh toán, không in hóa đơn cho đơn chưa được ghi nhận
         if (err.response) {
           playBeepWarning();
-          alert(`❌ Không thể thanh toán: ${err.response.data?.message || 'Máy chủ từ chối hóa đơn'}`);
+          alert(`Không thể thanh toán: ${err.response.data?.message || 'Máy chủ từ chối hóa đơn'}`);
           return;
         }
         // Mất kết nối: giữ hành vi ghi nhận cục bộ như trước
@@ -404,12 +398,12 @@ export default function PosPage({
     printInvoiceReceipt(currentOrder, invoiceCode, branchName, cashierName);
 
     alert(
-      `🎉 THANH TOÁN THÀNH CÔNG [${invoiceCode}]!\n\n` +
+      `Thanh toán thành công [${invoiceCode}]!\n\n` +
         `• Khách hàng: ${currentOrder.customer ? currentOrder.customer.name : 'Khách lẻ'}\n` +
         `• Tổng thanh toán: ${formatCurrency(finalAmount)}\n` +
         `• Phương thức: ${currentOrder.paymentMethod}\n` +
         `• Tiền thừa trả khách: ${formatCurrency(Math.max(0, changeAmount))}\n\n` +
-        `✔ Hóa đơn K80 đã được gửi đến lệnh in thành công!`
+        `Hóa đơn K80 đã được gửi đến lệnh in thành công!`
     );
 
     // Reset current order
@@ -483,16 +477,10 @@ export default function PosPage({
         branchName={`Chi nhánh ${branchId || 1}`}
         cashierName={currentUser?.fullName || currentUser?.username || 'Thu ngân'}
         role={currentUser?.role || 'CASHIER'}
-        shiftName="Ca Sáng"
+        shiftName="Ca sáng"
         isOnline={isOnline}
         isWsConnected={isWsConnected}
         onOpenHelp={() => setIsHelpOpen(true)}
-        onLogout={onLogout}
-        onNavigateToInventory={onNavigateToInventory}
-        onNavigateToForecast={onNavigateToForecast}
-        onNavigateToReport={onNavigateToReport}
-        onNavigateToPartners={onNavigateToPartners}
-        onNavigateToStaff={onNavigateToStaff}
       />
 
       {/* Main 2-Column POS Workspace */}
@@ -549,7 +537,7 @@ export default function PosPage({
           <div className="pos-hotkey-item"><kbd>Esc</kbd> Đóng</div>
         </div>
         <div>
-          <span>Máy in: <strong>K80 Thermal (Đã kết nối)</strong></span>
+          <span>Máy in: <strong>K80 Thermal</strong></span>
         </div>
       </footer>
 
