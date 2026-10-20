@@ -15,6 +15,7 @@
 # Exception: Keep .env.example templates committed
 !.env.example
 !FRONTEND/.env.example
+!MOBILE/.env.example
 
 # --- Java & Spring Boot (BACKEND) ---
 BACKEND/target/
