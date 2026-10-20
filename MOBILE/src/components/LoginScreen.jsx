@@ -64,6 +64,24 @@ export default function LoginScreen({ onLoggedIn, notice }) {
         keyboardType="url"
       />
 
+      {/* Quick IP Presets */}
+      <View style={styles.presetsRow}>
+        {process.env.EXPO_PUBLIC_SERVER_URL ? (
+          <TouchableOpacity
+            style={styles.presetChip}
+            onPress={() => setServerUrl(process.env.EXPO_PUBLIC_SERVER_URL)}
+          >
+            <Text style={styles.presetText}>⚡ .env: {process.env.EXPO_PUBLIC_SERVER_URL}</Text>
+          </TouchableOpacity>
+        ) : null}
+        <TouchableOpacity
+          style={styles.presetChip}
+          onPress={() => setServerUrl('http://10.0.2.2:8080')}
+        >
+          <Text style={styles.presetText}>Android Emu (10.0.2.2)</Text>
+        </TouchableOpacity>
+      </View>
+
       <Text style={styles.label}>Tên đăng nhập</Text>
       <TextInput
         style={styles.input}
@@ -157,5 +175,24 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700'
+  },
+  presetsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16
+  },
+  presetChip: {
+    backgroundColor: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#0284c7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8
+  },
+  presetText: {
+    color: '#38bdf8',
+    fontSize: 12,
+    fontWeight: '600'
   }
 });
