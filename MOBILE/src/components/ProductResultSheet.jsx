@@ -1,142 +1,86 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Icon, Button, stockMeta } from './ui';
+import { colors, fonts, radius, type } from '../theme';
 import { formatCurrency } from '../utils/formatters';
 
-export default function ProductResultSheet({
-  visible,
-  result,
-  scanMode,
-  onClose,
-  onResendToPos
-}) {
+// result.mode: 'POS_REMOTE' (vừa gửi vào giỏ) | 'PRICE_CHECK' (chỉ tra giá)
+export default function ProductResultSheet({ visible, result, canSendToPos, closeLabel, onClose, onSendToPos }) {
+  const insets = useSafeAreaInsets();
   if (!result) return null;
 
-  const { product, barcode, online, queued, message, found } = result;
+  const { product, barcode, online, message, found, mode } = result;
+  const stock = stockMeta(product?.stock);
+  const isPosMode = mode === 'POS_REMOTE';
+  // Mã vừa vào hàng đợi offline thì không cho gửi lại, tránh thêm trùng khi đồng bộ
+  const showSend = found && (isPosMode ? online : canSendToPos);
 
-  const getStockBadge = (stock) => {
-    if (stock == null) return null;
-    if (stock <= 0) {
-      return { text: 'Hết hàng (0)', bg: '#ef4444', color: '#fff' };
-    }
-    if (stock <= 5) {
-      return { text: `Sắp hết (${stock})`, bg: '#f59e0b', color: '#000' };
-    }
-    return { text: `Còn hàng (${stock})`, bg: '#10b981', color: '#fff' };
-  };
-
-  const stockBadge = getStockBadge(product?.stock);
+  const tone = !online
+    ? { icon: 'cloud-off', fg: colors.warningDark, bg: colors.warningSoft, border: colors.warningBorder }
+    : found
+      ? { icon: isPosMode ? 'check-circle' : 'info', fg: colors.primaryDark, bg: colors.primarySoft, border: colors.primaryBorder }
+      : { icon: 'alert-circle', fg: colors.danger, bg: colors.dangerSoft, border: colors.dangerBorder };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.sheetContainer}>
-          {/* Header indicator */}
-          <View style={styles.dragIndicator} />
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <View style={[styles.sheet, { paddingBottom: 16 + insets.bottom }]}>
+          <View style={styles.handle} />
 
-          {/* Status banner */}
-          <View
-            style={[
-              styles.statusBanner,
-              { backgroundColor: online ? '#064e3b' : '#451a03' }
-            ]}
-          >
-            <Text style={styles.statusBannerIcon}>{online ? '⚡' : '💾'}</Text>
-            <Text
-              style={[
-                styles.statusBannerText,
-                { color: online ? '#34d399' : '#fbbf24' }
-              ]}
-              numberOfLines={2}
-            >
-              {message}
-            </Text>
-          </View>
-
-          {/* Barcode badge */}
-          <View style={styles.barcodeRow}>
-            <Text style={styles.barcodeLabel}>MÃ VẠCH (BARCODE):</Text>
-            <View style={styles.barcodeTag}>
-              <Text style={styles.barcodeText}>{barcode}</Text>
+          {message ? (
+            <View style={[styles.status, { backgroundColor: tone.bg, borderColor: tone.border }]}>
+              <Icon name={tone.icon} size={16} color={tone.fg} />
+              <Text style={[styles.statusText, { color: tone.fg }]} numberOfLines={3}>
+                {message}
+              </Text>
             </View>
-          </View>
+          ) : null}
 
-          {/* Product Info */}
           {found && product ? (
-            <View style={styles.productBox}>
-              <Text style={styles.productName}>{product.name}</Text>
-              
-              <View style={styles.metaRow}>
-                {product.category ? (
-                  <View style={styles.metaTag}>
-                    <Text style={styles.metaText}>{product.category}</Text>
-                  </View>
-                ) : null}
-                {product.unit ? (
-                  <View style={styles.metaTag}>
-                    <Text style={styles.metaText}>ĐVT: {product.unit}</Text>
-                  </View>
-                ) : null}
-                {stockBadge ? (
-                  <View style={[styles.metaTag, { backgroundColor: stockBadge.bg }]}>
-                    <Text style={[styles.metaText, { color: stockBadge.color, fontWeight: '700' }]}>
-                      {stockBadge.text}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
+            <>
+              <Text style={styles.name}>{product.name}</Text>
+              <Text style={styles.barcode}>{barcode}</Text>
 
-              {/* Price Row */}
               <View style={styles.priceRow}>
-                <Text style={styles.priceLabel}>Giá bán niêm yết:</Text>
-                <Text style={styles.priceValue}>
-                  {formatCurrency(product.salePrice ?? product.price ?? 0)}
-                </Text>
+                <View>
+                  <Text style={type.label}>GIÁ BÁN</Text>
+                  <Text style={styles.price}>{formatCurrency(product.salePrice ?? product.price ?? 0)}</Text>
+                </View>
+                {stock ? (
+                  <View style={[styles.stock, { backgroundColor: stock.bg }]}>
+                    <Text style={[styles.stockText, { color: stock.fg }]}>{stock.label}</Text>
+                  </View>
+                ) : null}
               </View>
 
-              {/* Action indicator for POS remote */}
-              {scanMode === 'POS_REMOTE' && (
-                <View style={styles.posAddedBox}>
-                  <Text style={styles.posAddedText}>
-                    {online
-                      ? '✓ Đã bắn trực tiếp vào giỏ hàng thu ngân POS'
-                      : 'Đã lưu hàng đợi. Khi có mạng, mở Hàng đợi và bấm Đồng bộ.'}
-                  </Text>
-                </View>
-              )}
-            </View>
+              <View style={styles.metaRow}>
+                {product.category ? <Meta icon="grid" text={product.category} /> : null}
+                {product.unit ? <Meta icon="box" text={`Đơn vị: ${product.unit}`} /> : null}
+              </View>
+            </>
           ) : (
-            <View style={styles.notFoundBox}>
-              <Text style={styles.notFoundTitle}>⚠️ Không tìm thấy sản phẩm</Text>
-              <Text style={styles.notFoundDesc}>
-                Mã vạch này chưa được đăng ký trong danh mục sản phẩm của cửa hàng.
+            <View style={{ marginBottom: 6 }}>
+              <Text style={styles.name}>Không tìm thấy sản phẩm</Text>
+              <Text style={styles.barcode}>{barcode}</Text>
+              <Text style={[type.small, { marginTop: 8, lineHeight: 18 }]}>
+                Mã vạch này chưa có trong danh mục của cửa hàng. Báo quản lý để thêm sản phẩm.
               </Text>
             </View>
           )}
 
-          {/* Action Buttons */}
-          <View style={styles.btnRow}>
-            {found && scanMode === 'POS_REMOTE' && (
-              <TouchableOpacity
-                style={styles.resendBtn}
-                onPress={() => onResendToPos(barcode)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.resendBtnText}>🛒 Bắn lại vào POS</Text>
-              </TouchableOpacity>
+          <View style={styles.actions}>
+            {showSend && (
+              <Button
+                label={isPosMode ? 'Gửi lại' : 'Thêm vào giỏ POS'}
+                icon="shopping-cart"
+                variant="secondary"
+                onPress={() => onSendToPos(barcode)}
+                style={{ flex: 1 }}
+              />
             )}
-
-            <TouchableOpacity
-              style={[styles.closeBtn, !(found && scanMode === 'POS_REMOTE') && { flex: 1 }]}
-              onPress={onClose}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.closeBtnText}>Tiếp tục quét</Text>
-            </TouchableOpacity>
+            <Button label={closeLabel || 'Tiếp tục quét'} onPress={onClose} style={{ flex: 1 }} />
           </View>
         </View>
       </View>
@@ -144,178 +88,110 @@ export default function ProductResultSheet({
   );
 }
 
+function Meta({ icon, text }) {
+  return (
+    <View style={styles.meta}>
+      <Icon name={icon} size={12} color={colors.textMuted} />
+      <Text style={styles.metaText}>{text}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'flex-end'
+    backgroundColor: 'rgba(35, 33, 28, 0.45)'
   },
-  sheetContainer: {
-    backgroundColor: '#1e293b',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#334155'
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 10
   },
-  dragIndicator: {
+  handle: {
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#64748b',
+    backgroundColor: colors.borderStrong,
     alignSelf: 'center',
     marginBottom: 14
   },
-  statusBanner: {
+  status: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: radius.md,
     padding: 10,
-    borderRadius: 10,
     marginBottom: 14
   },
-  statusBannerIcon: {
-    fontSize: 16,
-    marginRight: 8
+  statusText: {
+    flex: 1,
+    fontFamily: fonts.medium,
+    fontSize: 13
   },
-  statusBannerText: {
+  name: {
+    fontFamily: fonts.bold,
+    fontSize: 18,
+    color: colors.text,
+    lineHeight: 24
+  },
+  barcode: {
+    fontFamily: fonts.mono,
     fontSize: 13,
-    fontWeight: '600',
-    flex: 1
+    color: colors.textMuted,
+    marginTop: 4
   },
-  barcodeRow: {
+  priceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    marginBottom: 12
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: colors.border
   },
-  barcodeLabel: {
-    color: '#94a3b8',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5
+  price: {
+    fontFamily: fonts.bold,
+    fontSize: 26,
+    color: colors.primary,
+    marginTop: 2
   },
-  barcodeTag: {
-    backgroundColor: '#0f172a',
+  stock: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#475569'
+    paddingVertical: 5,
+    borderRadius: radius.sm
   },
-  barcodeText: {
-    color: '#38bdf8',
-    fontFamily: 'monospace',
-    fontSize: 13,
-    fontWeight: '700'
-  },
-  productBox: {
-    backgroundColor: '#0f172a',
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 16
-  },
-  productName: {
-    color: '#f8fafc',
-    fontSize: 16,
-    fontWeight: '700',
-    lineHeight: 22,
-    marginBottom: 8
+  stockText: {
+    fontFamily: fonts.semibold,
+    fontSize: 13
   },
   metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 12
+    gap: 8,
+    marginTop: 12
   },
-  metaTag: {
-    backgroundColor: '#1e293b',
+  meta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.subtle,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6
+    paddingVertical: 4
   },
   metaText: {
-    color: '#cbd5e1',
-    fontSize: 11,
-    fontWeight: '500'
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: '#1e293b',
-    paddingTop: 10
-  },
-  priceLabel: {
-    color: '#94a3b8',
-    fontSize: 13
-  },
-  priceValue: {
-    color: '#10b981',
-    fontSize: 22,
-    fontWeight: '800'
-  },
-  posAddedBox: {
-    marginTop: 10,
-    backgroundColor: '#064e3b',
-    padding: 8,
-    borderRadius: 8
-  },
-  posAddedText: {
-    color: '#6ee7b7',
+    fontFamily: fonts.medium,
     fontSize: 12,
-    textAlign: 'center',
-    fontWeight: '600'
+    color: colors.textMuted
   },
-  notFoundBox: {
-    backgroundColor: '#451a03',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#b45309'
-  },
-  notFoundTitle: {
-    color: '#fbbf24',
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 4
-  },
-  notFoundDesc: {
-    color: '#fef3c7',
-    fontSize: 12,
-    lineHeight: 18
-  },
-  btnRow: {
+  actions: {
     flexDirection: 'row',
-    gap: 10
-  },
-  resendBtn: {
-    flex: 1,
-    backgroundColor: '#059669',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  resendBtnText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '700'
-  },
-  closeBtn: {
-    flex: 1,
-    backgroundColor: '#334155',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  closeBtnText: {
-    color: '#f8fafc',
-    fontSize: 14,
-    fontWeight: '600'
+    gap: 10,
+    marginTop: 18
   }
 });

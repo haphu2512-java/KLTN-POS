@@ -122,6 +122,13 @@ export const AppConfig = {
     }
   },
 
+  async setFeedback({ hapticEnabled, soundEnabled }) {
+    await Promise.all([
+      AsyncStorage.setItem(STORAGE_KEYS.HAPTIC_ENABLED, String(hapticEnabled ?? true)),
+      AsyncStorage.setItem(STORAGE_KEYS.SOUND_ENABLED, String(soundEnabled ?? true))
+    ]);
+  },
+
   async saveSettings(settings) {
     await Promise.all([
       settings.serverUrl ? this.setServerUrl(settings.serverUrl) : Promise.resolve(),

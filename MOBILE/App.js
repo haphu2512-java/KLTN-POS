@@ -1,25 +1,46 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { StyleSheet, View, Alert } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  StyleSheet,
-  View,
-  SafeAreaView,
-  StatusBar,
-  Platform,
-  Alert
-} from 'react-native';
-import HeaderBar from './src/components/HeaderBar';
-import ScannerView from './src/components/ScannerView';
+  useFonts,
+  BeVietnamPro_400Regular,
+  BeVietnamPro_500Medium,
+  BeVietnamPro_600SemiBold,
+  BeVietnamPro_700Bold
+} from '@expo-google-fonts/be-vietnam-pro';
 import ProductResultSheet from './src/components/ProductResultSheet';
 import OfflineQueueModal from './src/components/OfflineQueueModal';
-import SettingsModal from './src/components/SettingsModal';
-import HistoryModal from './src/components/HistoryModal';
 import LoginScreen from './src/components/LoginScreen';
+import TabBar from './src/components/TabBar';
+import ScanScreen from './src/screens/ScanScreen';
+import LookupScreen from './src/screens/LookupScreen';
+import HistoryScreen from './src/screens/HistoryScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import { colors } from './src/theme';
 import { AppConfig } from './src/api/config';
 import { ScannerApi, AuthError, NotPairedError, parsePairingQr } from './src/api/scannerApi';
 import { OfflineStorage } from './src/storage/offlineStorage';
 import { triggerScanFeedback } from './src/utils/feedback';
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
+  );
+}
+
+function AppContent() {
+  const insets = useSafeAreaInsets();
+  // Nạp lỗi (ví dụ thiếu mạng lúc tải bundle) thì vẫn chạy bằng font hệ thống
+  const [fontsLoaded, fontError] = useFonts({
+    BeVietnamPro_400Regular,
+    BeVietnamPro_500Medium,
+    BeVietnamPro_600SemiBold,
+    BeVietnamPro_700Bold
+  });
+  const [activeTab, setActiveTab] = useState('scan'); // 'scan' | 'lookup' | 'history' | 'settings'
   const [session, setSession] = useState(null);
   const [isSessionLoaded, setIsSessionLoaded] = useState(false);
   const [authNotice, setAuthNotice] = useState(null);
@@ -31,10 +52,10 @@ export default function App() {
   const [scanResult, setScanResult] = useState(null);
   const [isResultOpen, setIsResultOpen] = useState(false);
 
-  // Modals
   const [isQueueOpen, setIsQueueOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSyncingCatalog, setIsSyncingCatalog] = useState(false);
+  // Tăng mỗi lần tải lại danh mục để màn Tra cứu / Cài đặt đọc lại bộ nhớ máy
+  const [catalogVersion, setCatalogVersion] = useState(0);
 
   // Data states
   const [queue, setQueue] = useState([]);
@@ -94,7 +115,7 @@ export default function App() {
     await ScannerApi.logout();
     setIsResultOpen(false);
     setIsQueueOpen(false);
-    setIsSettingsOpen(false);
+    setActiveTab('scan');
     setAuthNotice(err?.message || null);
     setPairing(null);
     setSession(null);
@@ -208,6 +229,7 @@ export default function App() {
 
         setScanResult({
           barcode: clean,
+          mode: scanMode,
           ...result
         });
         setIsResultOpen(true);
@@ -229,8 +251,27 @@ export default function App() {
     [scanMode, handleAuthError, handlePairCode, notifyNotPaired]
   );
 
-  // Resend to POS button in bottom sheet
-  const handleResendToPos = async (barcode) => {
+  // Tra giá một mã (từ Lịch sử, Tra cứu): không gửi gì tới POS
+  const handleLookup = async (barcode) => {
+    setIsProcessing(true);
+    try {
+      const result = await ScannerApi.lookupBarcode(barcode);
+      setScanResult({ barcode, mode: 'PRICE_CHECK', ...result });
+      setIsResultOpen(true);
+      await refreshData();
+    } catch (e) {
+      if (e instanceof AuthError) {
+        handleAuthError(e);
+      } else {
+        Alert.alert('Lỗi tra cứu', e.message);
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Nút "Gửi lại" / "Thêm vào giỏ POS" trong thẻ kết quả
+  const handleSendToPos = async (barcode) => {
     setIsProcessing(true);
     try {
       const res = await ScannerApi.broadcastBarcode(barcode);
@@ -238,7 +279,7 @@ export default function App() {
       setScanResult((prev) => ({
         ...prev,
         ...res,
-        message: res.online ? 'Đã bắn lại mã vào giỏ hàng POS!' : res.message
+        mode: 'POS_REMOTE'
       }));
       await refreshData();
     } catch (e) {
@@ -254,105 +295,158 @@ export default function App() {
     }
   };
 
-  if (!isSessionLoaded) {
-    return <SafeAreaView style={styles.safeArea} />;
+  const handleSyncCatalog = async () => {
+    setIsSyncingCatalog(true);
+    try {
+      const res = await ScannerApi.fetchProductsForCache();
+      if (res.success) {
+        Alert.alert('Đã tải danh mục', `${res.count} sản phẩm đã lưu trên máy để tra cứu khi mất mạng.`);
+      } else {
+        Alert.alert('Chưa tải được danh mục', res.message);
+      }
+    } catch (e) {
+      if (e instanceof AuthError) {
+        handleAuthError(e);
+      } else {
+        Alert.alert('Lỗi', e.message);
+      }
+    } finally {
+      setCatalogVersion((v) => v + 1);
+      setIsSyncingCatalog(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    await OfflineStorage.clearScanHistory();
+    refreshData();
+  };
+
+  const fontsReady = fontsLoaded || !!fontError;
+
+  if (!isSessionLoaded || !fontsReady) {
+    return <View style={[styles.root, { paddingTop: insets.top }]} />;
   }
 
   if (!session) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+      <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+        <StatusBar style="dark" />
         <LoginScreen
           notice={authNotice}
           onLoggedIn={(s) => {
             setAuthNotice(null);
             setSession(s);
+            setActiveTab('scan');
             checkConnectivity();
           }}
         />
-      </SafeAreaView>
+      </View>
     );
   }
 
+  const renderScreen = () => {
+    switch (activeTab) {
+      case 'lookup':
+        return (
+          <LookupScreen
+            isOnline={isOnline}
+            catalogVersion={catalogVersion}
+            onSelectProduct={(p) => handleLookup(p.barcode)}
+            onScanToLookup={() => {
+              handleToggleMode('PRICE_CHECK');
+              setActiveTab('scan');
+            }}
+            onSyncCatalog={handleSyncCatalog}
+            isSyncingCatalog={isSyncingCatalog}
+          />
+        );
+      case 'history':
+        return (
+          <HistoryScreen
+            isOnline={isOnline}
+            history={history}
+            queueCount={queue.length}
+            onOpenQueue={() => setIsQueueOpen(true)}
+            onSelectHistory={(item) => handleLookup(item.barcode)}
+            onClearHistory={handleClearHistory}
+            onGoScan={() => setActiveTab('scan')}
+          />
+        );
+      case 'settings':
+        return (
+          <SettingsScreen
+            isOnline={isOnline}
+            session={session}
+            pairing={pairing}
+            queueCount={queue.length}
+            catalogVersion={catalogVersion}
+            isSyncingCatalog={isSyncingCatalog}
+            onSyncCatalog={handleSyncCatalog}
+            onOpenQueue={() => setIsQueueOpen(true)}
+            onPairCode={handlePairCode}
+            onUnpair={handleUnpair}
+            onLogout={handleLogout}
+            onServerSaved={() => {
+              checkConnectivity();
+              refreshData();
+            }}
+          />
+        );
+      default:
+        // Chỉ gắn camera khi đang ở tab Quét, rời tab là camera tắt
+        return (
+          <ScanScreen
+            isOnline={isOnline}
+            scanMode={scanMode}
+            onToggleMode={handleToggleMode}
+            pairing={pairing}
+            queueCount={queue.length}
+            onOpenQueue={() => setIsQueueOpen(true)}
+            onOpenPairing={() => setActiveTab('settings')}
+            history={history}
+            onSeeAllHistory={() => setActiveTab('history')}
+            onSelectHistory={(item) => handleLookup(item.barcode)}
+            onBarcodeDetected={handleBarcodeDetected}
+            isScanningActive={!isResultOpen && !isQueueOpen}
+            isProcessing={isProcessing}
+          />
+        );
+    }
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
-      <View style={styles.container}>
-        {/* Top App Header with Status & Mode Switch */}
-        <HeaderBar
-          isOnline={isOnline}
-          scanMode={scanMode}
-          pairing={pairing}
-          onOpenPairing={() => setIsSettingsOpen(true)}
-          onToggleMode={handleToggleMode}
-          queueCount={queue.length}
-          onOpenQueue={() => setIsQueueOpen(true)}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-          onOpenHistory={() => setIsHistoryOpen(true)}
-        />
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <StatusBar style="dark" />
+      <View style={{ flex: 1 }}>{renderScreen()}</View>
+      <TabBar
+        active={activeTab}
+        onChange={setActiveTab}
+        badges={{ history: queue.length }}
+      />
 
-        {/* Live Camera Scanner Viewport & Manual Mock bar */}
-        <ScannerView
-          onBarcodeDetected={handleBarcodeDetected}
-          isScanningActive={!isResultOpen && !isQueueOpen && !isSettingsOpen && !isHistoryOpen}
-          isProcessing={isProcessing}
-        />
+      <ProductResultSheet
+        visible={isResultOpen}
+        result={scanResult}
+        canSendToPos={!!pairing}
+        closeLabel={activeTab === 'scan' ? 'Tiếp tục quét' : 'Đóng'}
+        onClose={() => setIsResultOpen(false)}
+        onSendToPos={handleSendToPos}
+      />
 
-        {/* Product Scanned Bottom Sheet Result */}
-        <ProductResultSheet
-          visible={isResultOpen}
-          result={scanResult}
-          scanMode={scanMode}
-          onClose={() => setIsResultOpen(false)}
-          onResendToPos={handleResendToPos}
-        />
-
-        {/* Offline Queue Modal */}
-        <OfflineQueueModal
-          visible={isQueueOpen}
-          queue={queue}
-          onClose={() => setIsQueueOpen(false)}
-          onQueueUpdated={refreshData}
-          onAuthError={handleAuthError}
-        />
-
-        {/* Settings & Configuration Modal */}
-        <SettingsModal
-          visible={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          session={session}
-          pairing={pairing}
-          onPairCode={handlePairCode}
-          onUnpair={handleUnpair}
-          onLogout={handleLogout}
-          onAuthError={handleAuthError}
-          onSettingsSaved={() => {
-            checkConnectivity();
-            refreshData();
-          }}
-        />
-
-        {/* History Modal */}
-        <HistoryModal
-          visible={isHistoryOpen}
-          history={history}
-          onClose={() => setIsHistoryOpen(false)}
-          onHistoryUpdated={refreshData}
-          onSelectBarcode={(barcode) => handleBarcodeDetected(barcode)}
-        />
-      </View>
-    </SafeAreaView>
+      <OfflineQueueModal
+        visible={isQueueOpen}
+        queue={queue}
+        onClose={() => setIsQueueOpen(false)}
+        onQueueUpdated={refreshData}
+        onAuthError={handleAuthError}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
-    backgroundColor: '#0f172a',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#000'
+    backgroundColor: colors.canvas
   }
 });

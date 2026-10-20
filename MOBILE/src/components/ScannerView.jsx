@@ -7,532 +7,442 @@ import {
   StyleSheet,
   ActivityIndicator,
   Animated,
-  Platform,
+  AppState,
   ScrollView
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Icon, Button } from './ui';
+import { colors, fonts, radius, type } from '../theme';
 
-// Sample mock barcodes for rapid testing without physical scanner
+// Mã mẫu để thử nhanh khi không có hàng thật trong tay
 const MOCK_BARCODES = [
   { barcode: '1053044001004', name: 'Snack mực Talaethong' },
   { barcode: '1053820000425', name: 'Ô mai cầu vồng Plum' },
-  { barcode: '1053086000170', name: 'Bánh gạo Poca Làng gạo' },
+  { barcode: '1053086000170', name: 'Bánh gạo Poca' },
   { barcode: '1052850001654', name: 'Kẹo Golia C' },
-  { barcode: '8934563148268', name: 'Mì tôm Hảo Hảo' },
+  { barcode: '8934563148268', name: 'Mì Hảo Hảo' },
   { barcode: '8934588012117', name: 'Coca-Cola 320ml' }
 ];
 
-export default function ScannerView({
-  onBarcodeDetected,
-  isScanningActive,
-  isProcessing
-}) {
+const BARCODE_TYPES = ['ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e', 'qr'];
+// Quá thời gian này mà camera chưa báo sẵn sàng thì cho người dùng mở lại camera
+const CAMERA_READY_TIMEOUT_MS = 6000;
+
+export default function ScannerView({ onBarcodeDetected, isScanningActive, isProcessing, height = 280 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState('back');
   const [enableTorch, setEnableTorch] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
+  // Đổi key để gắn lại camera: khi quay lại app, hoặc người dùng bấm "Mở lại camera"
+  const [cameraKey, setCameraKey] = useState(0);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [isSlowToStart, setIsSlowToStart] = useState(false);
+  const [mountError, setMountError] = useState(null);
 
-  // Laser scan line animation
+  const frameHeight = Math.round(height * 0.52);
   const animLine = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(animLine, {
-          toValue: 200,
-          duration: 1800,
-          useNativeDriver: true
-        }),
-        Animated.timing(animLine, {
-          toValue: 0,
-          duration: 1800,
-          useNativeDriver: true
-        })
+        Animated.timing(animLine, { toValue: 1, duration: 1600, useNativeDriver: true }),
+        Animated.timing(animLine, { toValue: 0, duration: 1600, useNativeDriver: true })
       ])
     );
     loop.start();
     return () => loop.stop();
   }, [animLine]);
 
-  // Handle barcode scanned from camera
-  const handleBarcodeScanned = (event) => {
-    if (!isScanningActive || isProcessing) return;
-    const barcodeData = event.data || event.rawValue;
-    if (barcodeData) {
-      onBarcodeDetected(String(barcodeData).trim());
-    }
+  // Android hay để lại khung hình đen sau khi app chạy nền: gắn lại camera khi app trở lại
+  useEffect(() => {
+    let prev = AppState.currentState;
+    const sub = AppState.addEventListener('change', (next) => {
+      if (prev.match(/inactive|background/) && next === 'active') {
+        restartCamera();
+      }
+      prev = next;
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (isCameraReady) return undefined;
+    setIsSlowToStart(false);
+    const t = setTimeout(() => setIsSlowToStart(true), CAMERA_READY_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [cameraKey, isCameraReady, facing]);
+
+  const restartCamera = () => {
+    setIsCameraReady(false);
+    setMountError(null);
+    setCameraKey((k) => k + 1);
   };
 
-  // Submit manual barcode
+  const handleBarcodeScanned = (event) => {
+    if (!isScanningActive || isProcessing) return;
+    const data = event.data || event.rawValue;
+    if (data) onBarcodeDetected(String(data).trim());
+  };
+
   const handleSubmitManual = () => {
     if (!manualCode.trim() || isProcessing) return;
     onBarcodeDetected(manualCode.trim());
     setManualCode('');
   };
 
-  // Permission not determined or requested yet
+  const manualPanel = (
+    <View style={styles.manualPanel}>
+      <View style={styles.manualRow}>
+        <TextInput
+          style={styles.manualInput}
+          placeholder="Nhập mã vạch"
+          placeholderTextColor={colors.textLight}
+          value={manualCode}
+          onChangeText={setManualCode}
+          onSubmitEditing={handleSubmitManual}
+          keyboardType="numeric"
+          returnKeyType="done"
+        />
+        <Button label="Gửi" icon="corner-down-left" onPress={handleSubmitManual} compact style={{ minHeight: 44 }} />
+      </View>
+      <Text style={[type.small, { marginBottom: 6 }]}>Mã mẫu để thử nhanh</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+        {MOCK_BARCODES.map((item) => (
+          <TouchableOpacity
+            key={item.barcode}
+            style={styles.chip}
+            onPress={() => onBarcodeDetected(item.barcode)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.chipName}>{item.name}</Text>
+            <Text style={styles.chipCode}>{item.barcode}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+
   if (!permission) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#38bdf8" />
-        <Text style={styles.loadingText}>Đang khởi tạo máy quét Camera...</Text>
+      <View style={[styles.placeholderCard, { height }]}>
+        <ActivityIndicator color={colors.primary} />
+        <Text style={[type.small, { marginTop: 10 }]}>Đang kiểm tra quyền camera...</Text>
       </View>
     );
   }
 
-  // Permission denied
   if (!permission.granted) {
     return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.permissionIcon}>📷</Text>
-        <Text style={styles.permissionTitle}>Cần quyền truy cập Camera</Text>
-        <Text style={styles.permissionDesc}>
-          Ứng dụng cần quyền Camera để quét các loại mã vạch sản phẩm (EAN-13, Code 128, QR Code) cho cửa hàng POS.
-        </Text>
-        <TouchableOpacity
-          style={styles.permissionBtn}
-          onPress={requestPermission}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.permissionBtnText}>Cấp quyền Camera ngay</Text>
-        </TouchableOpacity>
-
-        {/* Fallback mock mode */}
-        <View style={styles.fallbackBox}>
-          <Text style={styles.fallbackTitle}>Hoặc dùng chế độ Nhập tay / Mock:</Text>
-          <View style={styles.manualRow}>
-            <TextInput
-              style={styles.manualInput}
-              placeholder="Nhập mã barcode..."
-              placeholderTextColor="#64748b"
-              value={manualCode}
-              onChangeText={setManualCode}
-              onSubmitEditing={handleSubmitManual}
-              keyboardType="numeric"
-            />
-            <TouchableOpacity style={styles.manualBtn} onPress={handleSubmitManual}>
-              <Text style={styles.manualBtnText}>Quét</Text>
-            </TouchableOpacity>
+      <View>
+        <View style={[styles.placeholderCard, { minHeight: height }]}>
+          <View style={styles.placeholderIcon}>
+            <Icon name="camera-off" size={26} color={colors.textMuted} />
           </View>
+          <Text style={[type.heading, { textAlign: 'center' }]}>Chưa có quyền dùng camera</Text>
+          <Text style={[type.small, styles.placeholderDesc]}>
+            Cho phép camera để quét mã vạch sản phẩm và mã QR ghép quầy. Bạn vẫn có thể nhập mã bằng tay ở dưới.
+          </Text>
+          <Button
+            label={permission.canAskAgain === false ? 'Mở lại sau khi bật trong Cài đặt máy' : 'Cho phép camera'}
+            icon="camera"
+            onPress={requestPermission}
+          />
         </View>
+        {manualPanel}
       </View>
     );
   }
 
+  const laserY = animLine.interpolate({ inputRange: [0, 1], outputRange: [8, frameHeight - 10] });
+
   return (
-    <View style={styles.container}>
-      {/* Live Camera View */}
-      <CameraView
-        style={StyleSheet.absoluteFillObject}
-        facing={facing}
-        enableTorch={enableTorch}
-        barcodeScannerSettings={{
-          barcodeTypes: [
-            'ean13',
-            'ean8',
-            'code128',
-            'code39',
-            'upc_a',
-            'upc_e',
-            'qr'
-          ]
-        }}
-        onBarcodeScanned={isScanningActive ? handleBarcodeScanned : undefined}
-      />
+    <View>
+      <View style={[styles.cameraCard, { height }]}>
+        {/* Camera nằm gọn trong thẻ có kích thước cố định; tắt hẳn khi rời tab Quét */}
+        <CameraView
+          key={cameraKey}
+          style={StyleSheet.absoluteFill}
+          facing={facing}
+          enableTorch={enableTorch}
+          barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
+          onBarcodeScanned={isScanningActive ? handleBarcodeScanned : undefined}
+          onCameraReady={() => setIsCameraReady(true)}
+          onMountError={(e) => setMountError(e?.message || 'Không mở được camera')}
+        />
 
-      {/* Viewfinder Overlay with Dark Masks */}
-      <View style={styles.overlayContainer}>
-        <View style={styles.maskTop} />
-
-        <View style={styles.middleRow}>
-          <View style={styles.maskSide} />
-
-          {/* Viewfinder Target Frame */}
-          <View style={styles.targetFrame}>
-            {/* 4 Corner Brackets */}
-            <View style={[styles.corner, styles.cornerTopLeft]} />
-            <View style={[styles.corner, styles.cornerTopRight]} />
-            <View style={[styles.corner, styles.cornerBottomLeft]} />
-            <View style={[styles.corner, styles.cornerBottomRight]} />
-
-            {/* Red Laser Scan Line */}
-            {isScanningActive && (
-              <Animated.View
-                style={[
-                  styles.laserLine,
-                  { transform: [{ translateY: animLine }] }
-                ]}
-              />
-            )}
-
-            {isProcessing && (
-              <View style={styles.processingBadge}>
-                <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.processingText}>Đang nhận diện...</Text>
-              </View>
+        {/* Khung ngắm: chỉ vẽ viền, không phủ đen cả màn hình */}
+        <View style={styles.overlay} pointerEvents="none">
+          <View style={[styles.frame, { height: frameHeight }]}>
+            <View style={[styles.corner, styles.cTL]} />
+            <View style={[styles.corner, styles.cTR]} />
+            <View style={[styles.corner, styles.cBL]} />
+            <View style={[styles.corner, styles.cBR]} />
+            {isCameraReady && (
+              <Animated.View style={[styles.laser, { transform: [{ translateY: laserY }] }]} />
             )}
           </View>
-
-          <View style={styles.maskSide} />
         </View>
 
-        <View style={styles.maskBottom}>
-          <Text style={styles.hintText}>
-            Căn chỉnh mã vạch sản phẩm nằm trong khung quét
-          </Text>
-
-          {/* Controls Bar */}
-          <View style={styles.controlsBar}>
-            {/* Flashlight toggle */}
-            <TouchableOpacity
-              style={[styles.controlBtn, enableTorch && styles.controlBtnActive]}
-              onPress={() => setEnableTorch(!enableTorch)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.controlIcon}>{enableTorch ? '🔦' : '💡'}</Text>
-              <Text style={styles.controlLabel}>{enableTorch ? 'Tắt đèn' : 'Bật đèn'}</Text>
-            </TouchableOpacity>
-
-            {/* Camera flip */}
-            <TouchableOpacity
-              style={styles.controlBtn}
-              onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.controlIcon}>🔄</Text>
-              <Text style={styles.controlLabel}>Đổi cam</Text>
-            </TouchableOpacity>
-
-            {/* Toggle Manual input */}
-            <TouchableOpacity
-              style={[styles.controlBtn, showManualInput && styles.controlBtnActive]}
-              onPress={() => setShowManualInput(!showManualInput)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.controlIcon}>⌨️</Text>
-              <Text style={styles.controlLabel}>Nhập tay</Text>
-            </TouchableOpacity>
+        {/* Trạng thái camera khi chưa có hình */}
+        {(!isCameraReady || mountError) && (
+          <View
+            style={[styles.cameraState, isSlowToStart && !mountError && styles.cameraStateSoft]}
+          >
+            {mountError ? (
+              <>
+                <Icon name="alert-triangle" size={22} color="#F6E9CC" />
+                <Text style={styles.cameraStateText}>{mountError}</Text>
+                <CameraRetry onPress={restartCamera} />
+              </>
+            ) : isSlowToStart ? (
+              <>
+                <Text style={styles.cameraStateText}>Camera chưa hiện hình?</Text>
+                <CameraRetry onPress={restartCamera} />
+              </>
+            ) : (
+              <>
+                <ActivityIndicator color="#E2DCCE" />
+                <Text style={styles.cameraStateText}>Đang mở camera...</Text>
+              </>
+            )}
           </View>
+        )}
 
-          {/* Mock Barcodes & Manual Input Drawer */}
-          {showManualInput && (
-            <View style={styles.manualDrawer}>
-              <View style={styles.manualInputRow}>
-                <TextInput
-                  style={styles.manualDrawerInput}
-                  placeholder="Gõ mã barcode (VD: 893456...)"
-                  placeholderTextColor="#64748b"
-                  value={manualCode}
-                  onChangeText={setManualCode}
-                  onSubmitEditing={handleSubmitManual}
-                  keyboardType="numeric"
-                  returnKeyType="done"
-                />
-                <TouchableOpacity
-                  style={styles.manualSubmitBtn}
-                  onPress={handleSubmitManual}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.manualSubmitText}>Quét</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Quick sample barcode chips */}
-              <Text style={styles.quickLabel}>Mã mẫu kiểm tra nhanh (Mock):</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.chipsScroll}
-              >
-                {MOCK_BARCODES.map((item) => (
-                  <TouchableOpacity
-                    key={item.barcode}
-                    style={styles.chip}
-                    onPress={() => onBarcodeDetected(item.barcode)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.chipName}>{item.name}</Text>
-                    <Text style={styles.chipCode}>{item.barcode}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-        </View>
+        {isProcessing && (
+          <View style={styles.processing}>
+            <ActivityIndicator size="small" color={colors.white} />
+            <Text style={styles.processingText}>Đang xử lý mã...</Text>
+          </View>
+        )}
       </View>
+
+      <View style={styles.controls}>
+        <ControlButton
+          icon={enableTorch ? 'zap-off' : 'zap'}
+          label={enableTorch ? 'Tắt đèn' : 'Đèn pin'}
+          active={enableTorch}
+          onPress={() => setEnableTorch(!enableTorch)}
+        />
+        <ControlButton
+          icon="refresh-cw"
+          label={facing === 'back' ? 'Cam trước' : 'Cam sau'}
+          onPress={() => {
+            setIsCameraReady(false);
+            setFacing(facing === 'back' ? 'front' : 'back');
+          }}
+        />
+        <ControlButton
+          icon="edit-3"
+          label="Nhập mã"
+          active={showManualInput}
+          onPress={() => setShowManualInput(!showManualInput)}
+        />
+      </View>
+
+      {showManualInput && manualPanel}
     </View>
   );
 }
 
+function CameraRetry({ onPress }) {
+  return (
+    <TouchableOpacity style={styles.retryBtn} onPress={onPress} activeOpacity={0.8}>
+      <Icon name="rotate-ccw" size={14} color={colors.text} />
+      <Text style={styles.retryText}>Mở lại camera</Text>
+    </TouchableOpacity>
+  );
+}
+
+function ControlButton({ icon, label, active, onPress }) {
+  return (
+    <TouchableOpacity
+      style={[styles.controlBtn, active && styles.controlBtnActive]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <Icon name={icon} size={16} color={active ? colors.white : colors.text} />
+      <Text style={[styles.controlLabel, active && { color: colors.white }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000'
+  cameraCard: {
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+    backgroundColor: colors.ink,
+    borderWidth: 1,
+    borderColor: colors.borderStrong
   },
-  centerContainer: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24
-  },
-  loadingText: {
-    color: '#94a3b8',
-    marginTop: 12,
-    fontSize: 14
-  },
-  permissionIcon: {
-    fontSize: 54,
-    marginBottom: 16
-  },
-  permissionTitle: {
-    color: '#f8fafc',
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 8,
-    textAlign: 'center'
-  },
-  permissionDesc: {
-    color: '#94a3b8',
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20
-  },
-  permissionBtn: {
-    backgroundColor: '#059669',
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 12
-  },
-  permissionBtnText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700'
-  },
-  fallbackBox: {
-    marginTop: 32,
-    width: '100%',
-    backgroundColor: '#1e293b',
-    padding: 16,
-    borderRadius: 14
-  },
-  fallbackTitle: {
-    color: '#cbd5e1',
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 10
-  },
-  manualRow: {
-    flexDirection: 'row',
-    gap: 8
-  },
-  manualInput: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    color: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    fontSize: 14
-  },
-  manualBtn: {
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 18,
-    justifyContent: 'center',
-    borderRadius: 8
-  },
-  manualBtnText: {
-    color: '#fff',
-    fontWeight: '700'
-  },
-  overlayContainer: {
+  overlay: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'space-between'
+    alignItems: 'center',
+    justifyContent: 'center'
   },
-  maskTop: {
-    height: 120,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)'
-  },
-  middleRow: {
-    flexDirection: 'row',
-    height: 220
-  },
-  maskSide: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)'
-  },
-  targetFrame: {
-    width: 280,
-    height: 220,
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center'
+  frame: {
+    width: '78%'
   },
   corner: {
     position: 'absolute',
-    width: 28,
-    height: 28,
-    borderColor: '#10b981'
+    width: 26,
+    height: 26,
+    borderColor: colors.white
   },
-  cornerTopLeft: {
-    top: 0,
-    left: 0,
-    borderTopWidth: 4,
-    borderLeftWidth: 4,
-    borderTopLeftRadius: 6
-  },
-  cornerTopRight: {
-    top: 0,
-    right: 0,
-    borderTopWidth: 4,
-    borderRightWidth: 4,
-    borderTopRightRadius: 6
-  },
-  cornerBottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderBottomWidth: 4,
-    borderLeftWidth: 4,
-    borderBottomLeftRadius: 6
-  },
-  cornerBottomRight: {
-    bottom: 0,
-    right: 0,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderBottomRightRadius: 6
-  },
-  laserLine: {
-    width: '92%',
-    height: 2,
-    backgroundColor: '#ef4444',
-    shadowColor: '#ef4444',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 6,
-    elevation: 4
-  },
-  processingBadge: {
+  cTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 8 },
+  cTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 8 },
+  cBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 8 },
+  cBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 8 },
+  laser: {
     position: 'absolute',
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    flexDirection: 'row',
+    left: 12,
+    right: 12,
+    top: 0,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: '#7FC8A0'
+  },
+  cameraState: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.ink,
     alignItems: 'center',
-    gap: 8
+    justifyContent: 'center',
+    gap: 10,
+    padding: 16
   },
-  processingText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600'
+  cameraStateSoft: {
+    backgroundColor: 'rgba(38, 35, 30, 0.55)'
   },
-  maskBottom: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    alignItems: 'center',
-    paddingTop: 16,
-    paddingBottom: 20
-  },
-  hintText: {
-    color: '#e2e8f0',
+  cameraStateText: {
+    fontFamily: fonts.medium,
     fontSize: 13,
-    fontWeight: '500',
-    marginBottom: 16,
+    color: '#F3F0E8',
     textAlign: 'center'
   },
-  controlsBar: {
+  retryBtn: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 20,
-    marginBottom: 10
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999
+  },
+  retryText: {
+    fontFamily: fonts.semibold,
+    fontSize: 13,
+    color: colors.text
+  },
+  processing: {
+    position: 'absolute',
+    bottom: 12,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(38, 35, 30, 0.85)',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999
+  },
+  processingText: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: colors.white
+  },
+  controls: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10
   },
   controlBtn: {
-    backgroundColor: 'rgba(30, 41, 59, 0.85)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    minHeight: 42,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#475569'
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface
   },
   controlBtnActive: {
-    backgroundColor: '#059669',
-    borderColor: '#10b981'
-  },
-  controlIcon: {
-    fontSize: 18,
-    marginBottom: 2
+    backgroundColor: colors.primary,
+    borderColor: colors.primary
   },
   controlLabel: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600'
+    fontFamily: fonts.semibold,
+    fontSize: 13,
+    color: colors.text
   },
-  manualDrawer: {
-    width: '92%',
-    backgroundColor: '#1e293b',
-    borderRadius: 14,
-    padding: 12,
-    marginTop: 8,
+  placeholderCard: {
+    borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: '#334155'
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20
   },
-  manualInputRow: {
+  placeholderIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.subtle,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12
+  },
+  placeholderDesc: {
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: 6,
+    marginBottom: 16
+  },
+  manualPanel: {
+    marginTop: 10,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12
+  },
+  manualRow: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 10
   },
-  manualDrawerInput: {
+  manualInput: {
     flex: 1,
-    backgroundColor: '#0f172a',
-    color: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    fontSize: 13,
+    minHeight: 44,
+    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: '#334155'
-  },
-  manualSubmitBtn: {
-    backgroundColor: '#059669',
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-    borderRadius: 8
-  },
-  manualSubmitText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700'
-  },
-  quickLabel: {
-    color: '#94a3b8',
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: 6
-  },
-  chipsScroll: {
-    flexDirection: 'row',
-    gap: 8
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    fontFamily: fonts.mono,
+    fontSize: 15,
+    color: colors.text
   },
   chip: {
-    backgroundColor: '#0f172a',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    backgroundColor: colors.subtle,
     borderWidth: 1,
-    borderColor: '#334155'
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6
   },
   chipName: {
-    color: '#f8fafc',
-    fontSize: 11,
-    fontWeight: '600'
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: colors.text
   },
   chipCode: {
-    color: '#38bdf8',
-    fontSize: 10,
-    fontFamily: 'monospace'
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    color: colors.textMuted
   }
 });

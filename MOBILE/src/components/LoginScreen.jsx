@@ -3,14 +3,15 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
+  ScrollView,
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
 import { AppConfig } from '../api/config';
 import { ScannerApi } from '../api/scannerApi';
+import { Icon, Button } from './ui';
+import { colors, fonts, radius, type } from '../theme';
 
 // Điện thoại đăng nhập cùng tài khoản với máy POS; mã quét chỉ đi tới POS của tài khoản đó
 export default function LoginScreen({ onLoggedIn, notice }) {
@@ -43,119 +44,149 @@ export default function LoginScreen({ onLoggedIn, notice }) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <Text style={styles.title}>Đăng nhập máy quét</Text>
-      <Text style={styles.subtitle}>
-        Dùng cùng tài khoản đang đăng nhập trên máy POS. Mã quét sẽ chỉ được gửi tới quầy đó.
-      </Text>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <View style={styles.logo}>
+          <Icon name="maximize" size={26} color={colors.white} />
+        </View>
+        <Text style={styles.title}>Máy quét POS</Text>
+        <Text style={styles.subtitle}>
+          Đăng nhập bằng tài khoản nhân viên của cửa hàng. Mã quét chỉ được gửi tới quầy POS bạn đã ghép.
+        </Text>
 
-      <Text style={styles.label}>Địa chỉ máy chủ POS</Text>
-      <TextInput
-        style={styles.input}
-        value={serverUrl}
-        onChangeText={setServerUrl}
-        placeholder="http://192.168.1.15:8080"
-        placeholderTextColor="#64748b"
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-      />
+        <View style={styles.card}>
+          <Field label="Địa chỉ máy chủ POS" icon="server">
+            <TextInput
+              style={styles.input}
+              value={serverUrl}
+              onChangeText={setServerUrl}
+              placeholder="http://192.168.1.15:8080"
+              placeholderTextColor={colors.textLight}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
+          </Field>
 
-      <Text style={styles.label}>Tên đăng nhập</Text>
-      <TextInput
-        style={styles.input}
-        value={username}
-        onChangeText={setUsername}
-        placeholder="cashier"
-        placeholderTextColor="#64748b"
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
+          <Field label="Tên đăng nhập" icon="user">
+            <TextInput
+              style={styles.input}
+              value={username}
+              onChangeText={setUsername}
+              placeholder="cashier"
+              placeholderTextColor={colors.textLight}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </Field>
 
-      <Text style={styles.label}>Mật khẩu</Text>
-      <TextInput
-        style={styles.input}
-        value={password}
-        onChangeText={setPassword}
-        placeholder="••••••"
-        placeholderTextColor="#64748b"
-        secureTextEntry
-        onSubmitEditing={handleLogin}
-      />
+          <Field label="Mật khẩu" icon="lock">
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Mật khẩu"
+              placeholderTextColor={colors.textLight}
+              secureTextEntry
+              onSubmitEditing={handleLogin}
+            />
+          </Field>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? (
+            <View style={styles.error}>
+              <Icon name="alert-circle" size={15} color={colors.danger} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
 
-      <TouchableOpacity
-        style={styles.loginBtn}
-        onPress={handleLogin}
-        disabled={isLoading}
-        activeOpacity={0.8}
-      >
-        {isLoading ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <Text style={styles.loginBtnText}>Đăng nhập</Text>
-        )}
-      </TouchableOpacity>
+          <Button label="Đăng nhập" onPress={handleLogin} loading={isLoading} style={{ marginTop: 4 }} />
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+function Field({ label, icon, children }) {
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={[type.label, { marginBottom: 6 }]}>{label}</Text>
+      <View style={styles.inputWrap}>
+        <Icon name={icon} size={16} color={colors.textLight} />
+        {children}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    paddingHorizontal: 24,
-    justifyContent: 'center'
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 32
+  },
+  logo: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16
   },
   title: {
-    color: '#f8fafc',
+    fontFamily: fonts.bold,
     fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 8
+    color: colors.text
   },
   subtitle: {
-    color: '#94a3b8',
+    fontFamily: fonts.regular,
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 24
+    color: colors.textMuted,
+    marginTop: 6,
+    marginBottom: 20
   },
-  label: {
-    color: '#cbd5e1',
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 6
+  card: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.xl,
+    padding: 16
+  },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 46,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    paddingHorizontal: 12
   },
   input: {
-    backgroundColor: '#1e293b',
-    color: '#f8fafc',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    flex: 1,
+    fontFamily: fonts.regular,
     fontSize: 15,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#334155'
+    color: colors.text,
+    paddingVertical: 10
   },
   error: {
-    color: '#fca5a5',
-    fontSize: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.dangerSoft,
+    borderWidth: 1,
+    borderColor: colors.dangerBorder,
+    borderRadius: radius.md,
+    padding: 10,
     marginBottom: 12
   },
-  loginBtn: {
-    backgroundColor: '#0284c7',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    minHeight: 48,
-    justifyContent: 'center'
-  },
-  loginBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700'
+  errorText: {
+    flex: 1,
+    fontFamily: fonts.medium,
+    fontSize: 13,
+    color: colors.danger
   }
 });
