@@ -4,6 +4,7 @@ import { formatCurrency, formatNumber, formatDateTime } from '../../utils/format
 import { reportService } from '../../services/reportService';
 import { saleService } from '../../services/saleService';
 import { exportToCsv } from '../../utils/exportCsv';
+import ShiftHistory from './ShiftHistory';
 import './ReportPage.css';
 
 export default function ReportPage({
@@ -13,7 +14,7 @@ export default function ReportPage({
   const [selectedBranchId, setSelectedBranchId] = useState(branchId || 1);
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState('charts'); // 'charts' | 'invoices'
+  const [viewMode, setViewMode] = useState('charts'); // 'charts' | 'invoices' | 'shifts'
   const [invoices, setInvoices] = useState([]);
   const [refundTarget, setRefundTarget] = useState(null);
   const [refundReason, setRefundReason] = useState('');
@@ -358,9 +359,18 @@ export default function ReportPage({
           >
             Lịch Sử Hóa Đơn & Trả Hàng ({invoices.length})
           </button>
+          <button
+            type="button"
+            className={`report-period-btn ${viewMode === 'shifts' ? 'active' : ''}`}
+            onClick={() => setViewMode('shifts')}
+          >
+            Ca Làm Việc & Bàn Giao
+          </button>
         </div>
 
-        {viewMode === 'invoices' ? (
+        {viewMode === 'shifts' ? (
+          <ShiftHistory branchId={selectedBranchId} days={days} isOnline={isOnline} />
+        ) : viewMode === 'invoices' ? (
           /* Invoices List Table */
           <div className="report-card">
             <div className="report-card-title">

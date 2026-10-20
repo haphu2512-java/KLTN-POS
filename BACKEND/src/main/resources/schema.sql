@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS invoice (
     change_amount DECIMAL(14,2),
     note VARCHAR(255),
     client_request_id VARCHAR(64) UNIQUE,
+    shift_session_id BIGINT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (branch_id) REFERENCES branch(id) ON DELETE CASCADE,
     FOREIGN KEY (customer_id) REFERENCES customer(id) ON DELETE SET NULL,
@@ -146,4 +147,41 @@ CREATE TABLE IF NOT EXISTS scanner_pairing (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_used_at DATETIME,
     FOREIGN KEY (terminal_id) REFERENCES pos_terminal(id) ON DELETE CASCADE
+);
+
+-- 13. Bảng Ca Làm Việc Cố Định (mặc định 5 ca trong ngày; end_time < start_time là ca qua đêm)
+CREATE TABLE IF NOT EXISTS work_shift (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    sort_order INT NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- 14. Bảng Ca Trực (mỗi lần nhân viên mở ca: tiền đầu ca, chốt tiền cuối ca, ghi chú bàn giao)
+CREATE TABLE IF NOT EXISTS shift_session (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    branch_id BIGINT NOT NULL,
+    work_shift_id BIGINT NOT NULL,
+    employee_id BIGINT NOT NULL,
+    employee_name VARCHAR(100),
+    shift_date DATE NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    open_key BIGINT UNIQUE,              -- = employee_id khi ca đang mở: mỗi nhân viên tối đa 1 ca mở
+    opened_at DATETIME NOT NULL,
+    opening_cash DECIMAL(14,2) NOT NULL,
+    opening_note VARCHAR(500),
+    closed_at DATETIME,
+    closed_by BIGINT,
+    closing_cash DECIMAL(14,2),          -- tiền mặt đếm được cuối ca
+    expected_cash DECIMAL(14,2),         -- tiền đầu ca + doanh số tiền mặt
+    cash_difference DECIMAL(14,2),       -- closing_cash - expected_cash
+    cash_sales DECIMAL(14,2),
+    non_cash_sales DECIMAL(14,2),
+    invoice_count INT,
+    handover_note VARCHAR(500),
+    FOREIGN KEY (branch_id) REFERENCES branch(id) ON DELETE CASCADE,
+    FOREIGN KEY (work_shift_id) REFERENCES work_shift(id),
+    FOREIGN KEY (employee_id) REFERENCES users(id)
 );

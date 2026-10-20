@@ -6,6 +6,7 @@ import ProductSearchModal from './ProductSearchModal';
 import CustomerModal from './CustomerModal';
 import VietQRModal from './VietQRModal';
 import ScannerPairingModal from './ScannerPairingModal';
+import ShiftModal from './ShiftModal';
 import { Modal, Button } from '../../components/common';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { useHotkeys } from '../../hooks/useHotkeys';
@@ -18,6 +19,7 @@ import { customerService } from '../../services/customerService';
 import { saleService } from '../../services/saleService';
 import { websocketService } from '../../services/websocketService';
 import { scannerPairingService } from '../../services/scannerPairingService';
+import { shiftService } from '../../services/shiftService';
 import './PosPage.css';
 
 // Mã chống trùng cho mỗi đơn: bấm thanh toán lại sau khi mất phản hồi sẽ không tạo hóa đơn thứ hai
@@ -128,6 +130,9 @@ export default function PosPage({
   const [isVietQROpen, setIsVietQROpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isPairingOpen, setIsPairingOpen] = useState(false);
+  const [isShiftOpen, setIsShiftOpen] = useState(false);
+  // Ca đang trực của tài khoản: { session, shiftRequired, suggested..., previousShift }
+  const [shiftInfo, setShiftInfo] = useState(null);
   // Quầy (máy POS) này; điện thoại ghép cặp với quầy để bắn mã vào giỏ
   const [terminal, setTerminal] = useState(null);
   const [pairedCount, setPairedCount] = useState(0);
@@ -264,7 +269,7 @@ export default function PosPage({
 
   // Hook Barcode scanner
   useBarcodeScanner(handleBarcodeScanned, {
-    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !isPairingOpen && !remoteBatch
+    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !isPairingOpen && !isShiftOpen && !remoteBatch
   });
 
   // Listen to simulated scan events (e.g. from BarcodePrintModal or mock tester)
@@ -277,6 +282,42 @@ export default function PosPage({
     window.addEventListener('pos:barcode_scanned', handleCustomScan);
     return () => window.removeEventListener('pos:barcode_scanned', handleCustomScan);
   }, [handleBarcodeScanned]);
+
+  // Tải ca đang trực; thu ngân chưa mở ca thì hiện ngay hộp mở ca
+  const userId = currentUser?.userId; // chế độ demo ngoại tuyến không có userId nên không gọi API ca
+  const loadShift = useCallback(async () => {
+    if (!isOnline || !userId) return null;
+    try {
+      const info = await shiftService.getCurrent();
+      setShiftInfo(info);
+      return info;
+    } catch (err) {
+      console.warn('Không tải được ca làm việc:', err.message);
+      return null;
+    }
+  }, [isOnline, userId]);
+
+  useEffect(() => {
+    if (!isOnline || !userId) return;
+    let cancelled = false;
+    shiftService
+      .getCurrent()
+      .then((info) => {
+        if (cancelled) return;
+        setShiftInfo(info);
+        if (info?.shiftRequired && !info.session) setIsShiftOpen(true);
+      })
+      .catch((err) => console.warn('Không tải được ca làm việc:', err.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnline, userId]);
+
+  const openShiftModal = async () => {
+    // Lấy số liệu mới nhất của ca trước khi chốt tiền
+    await loadShift();
+    setIsShiftOpen(true);
+  };
 
   // Đăng ký máy này là một quầy (một lần, id lưu trên máy) và nghe mã quét của điện thoại đã ghép
   useEffect(() => {
@@ -403,6 +444,11 @@ export default function PosPage({
   // Process Payment (F4)
   const handleProcessPayment = () => {
     if (isProcessing) return;
+    if (isOnline && shiftInfo?.shiftRequired && !shiftInfo.session) {
+      playBeepWarning();
+      setIsShiftOpen(true);
+      return;
+    }
     if (finalAmount <= 0) {
       alert('Đơn hàng chưa có sản phẩm để thanh toán!');
       return;
@@ -589,7 +635,9 @@ export default function PosPage({
         branchName={`Chi nhánh ${branchId || 1}`}
         cashierName={currentUser?.fullName || currentUser?.username || 'Thu ngân'}
         role={currentUser?.role || 'CASHIER'}
-        shiftName="Ca sáng"
+        shiftName={shiftInfo?.session ? shiftInfo.session.workShiftName : 'Chưa mở ca'}
+        shiftOpen={!!shiftInfo?.session}
+        onOpenShift={isOnline && userId ? openShiftModal : undefined}
         isOnline={isOnline}
         isWsConnected={isWsConnected}
         terminalName={terminal?.name}
@@ -672,6 +720,10 @@ export default function PosPage({
         onSelectCustomer={(cust) => updateCurrentOrder({ customer: cust })}
         onAddNewCustomer={(newCust) => setCustomers([...customers, newCust])}
       />
+
+      {isShiftOpen && (
+        <ShiftModal isOpen onClose={() => setIsShiftOpen(false)} current={shiftInfo} onChanged={loadShift} />
+      )}
 
       {isPairingOpen && (
         <ScannerPairingModal

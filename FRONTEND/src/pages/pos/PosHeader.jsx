@@ -6,7 +6,9 @@ export default function PosHeader({
   branchName = 'Chi nhánh 1',
   cashierName = 'Thu ngân',
   role = 'CASHIER',
-  shiftName = 'Ca sáng',
+  shiftName = 'Chưa mở ca',
+  shiftOpen = false,
+  onOpenShift,
   isOnline = true,
   isWsConnected = false,
   terminalName,
@@ -23,7 +25,7 @@ export default function PosHeader({
     return () => clearInterval(timer);
   }, []);
 
-  const roleLabel = role === 'ADMIN' ? 'Quản lý' : 'Thu ngân';
+  const roleLabel = { ADMIN: 'Quản trị', MANAGER: 'Quản lý', WAREHOUSE: 'Thủ kho' }[role] || 'Thu ngân';
   const status = !isOnline ? 'offline' : isWsConnected ? 'live' : 'online';
   const statusText = {
     offline: 'Ngoại tuyến',
@@ -49,6 +51,16 @@ export default function PosHeader({
           {statusText}
         </span>
         <span className="pos-time">{timeStr}</span>
+        {onOpenShift && (
+          <Button
+            variant={shiftOpen ? 'secondary' : 'primary'}
+            size="sm"
+            onClick={onOpenShift}
+            title={shiftOpen ? 'Chốt tiền mặt và bàn giao ca' : 'Nhập tiền đầu ca để bắt đầu bán hàng'}
+          >
+            {shiftOpen ? 'Đóng ca' : 'Mở ca'}
+          </Button>
+        )}
         <Button
           variant="secondary"
           size="sm"

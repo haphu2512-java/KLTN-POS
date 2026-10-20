@@ -8,6 +8,7 @@ import com.pos.customer.CustomerRepository;
 import com.pos.inventory.InventoryService;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
+import com.pos.shift.ShiftService;
 import com.pos.user.Role;
 import com.pos.user.User;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ public class InvoiceService {
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final InventoryService inventoryService;
+    private final ShiftService shiftService;
 
     public Page<Invoice> getInvoices(Long branchId, Pageable pageable) {
         if (branchId != null) {
@@ -77,6 +79,9 @@ public class InvoiceService {
         Branch branch = branchRepository.findById(branchId)
                 .orElseThrow(() -> new BusinessException("BRANCH_NOT_FOUND", "Chi nhánh không tồn tại"));
 
+        // Thu ngân phải đang trực ca tại chi nhánh này; hóa đơn được gắn vào ca để chốt tiền cuối ca
+        Long shiftSessionId = shiftService.resolveShiftForSale(actor, branchId);
+
         BigDecimal discount = req.getDiscount() != null ? req.getDiscount() : BigDecimal.ZERO;
         if (discount.compareTo(BigDecimal.ZERO) < 0) {
             throw new BusinessException("INVALID_DISCOUNT", "Giảm giá không được âm");
@@ -95,6 +100,7 @@ public class InvoiceService {
                 .discount(discount)
                 .note(req.getNote())
                 .clientRequestId(clientRequestId)
+                .shiftSessionId(shiftSessionId)
                 .details(new ArrayList<>())
                 .build();
 
