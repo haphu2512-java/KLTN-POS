@@ -1,17 +1,11 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  Modal,
-  TouchableOpacity,
-  FlatList,
-  StyleSheet,
-  ActivityIndicator,
-  Alert
-} from 'react-native';
+import { View, Text, Modal, TouchableOpacity, FlatList, StyleSheet, Alert } from 'react-native';
 import { ScannerApi, AuthError } from '../api/scannerApi';
 import { OfflineStorage } from '../storage/offlineStorage';
 import { formatDate } from '../utils/formatters';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Icon, Button, EmptyState } from './ui';
+import { colors, fonts, radius, type } from '../theme';
 
 export default function OfflineQueueModal({
   visible,
@@ -21,6 +15,7 @@ export default function OfflineQueueModal({
   onAuthError
 }) {
   const [isSyncing, setIsSyncing] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const handleSyncAll = async () => {
     if (queue.length === 0) return;
@@ -72,88 +67,75 @@ export default function OfflineQueueModal({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.container}>
-          {/* Header */}
+        <View style={[styles.container, { paddingBottom: 16 + insets.bottom }]}>
           <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>Hàng đợi quét Offline</Text>
-              <Text style={styles.subtitle}>
-                {queue.length} mã chờ gửi. Sau khi đồng bộ, xác nhận trên màn hình POS để thêm vào giỏ.
+            <View style={{ flex: 1 }}>
+              <Text style={type.title}>Chờ đồng bộ</Text>
+              <Text style={[type.small, { marginTop: 4, lineHeight: 18 }]}>
+                Mã quét lúc mất mạng. Sau khi đồng bộ, thu ngân xác nhận trên máy POS để thêm vào giỏ.
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Text style={styles.closeText}>✕</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={8}>
+              <Icon name="x" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
 
-          {/* List */}
           {queue.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>📦</Text>
-              <Text style={styles.emptyText}>Hàng đợi Offline đang trống</Text>
-              <Text style={styles.emptySubtext}>
-                Khi mất kết nối Wi-Fi, mọi mã vạch quét được sẽ tự động lưu vào đây.
-              </Text>
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+              <EmptyState
+                icon="check-circle"
+                title="Không có mã nào chờ gửi"
+                description="Khi mất mạng, mã bạn quét ở chế độ Gửi vào giỏ POS sẽ được giữ ở đây cho tới khi đồng bộ."
+              />
             </View>
           ) : (
             <FlatList
               data={queue}
               keyExtractor={(item) => item.clientScanId}
-              contentContainerStyle={styles.listContent}
-              renderItem={({ item, index }) => (
-                <View style={styles.queueItem}>
-                  <View style={styles.itemIndex}>
-                    <Text style={styles.itemIndexText}>#{index + 1}</Text>
-                  </View>
-                  <View style={styles.itemDetails}>
-                    <Text style={styles.itemBarcode}>{item.barcode}</Text>
-                    <Text style={styles.itemName} numberOfLines={1}>
-                      {item.productName || 'Chưa định danh'}
+              contentContainerStyle={{ paddingBottom: 12 }}
+              renderItem={({ item }) => (
+                <View style={styles.item}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={type.bodyMedium} numberOfLines={1}>
+                      {item.productName || 'Chưa rõ sản phẩm'}
                     </Text>
-                    <Text style={styles.itemTime}>{formatDate(item.timestamp)}</Text>
+                    <Text style={styles.meta}>
+                      {item.barcode}  ·  {formatDate(item.timestamp)}
+                    </Text>
                   </View>
                   <TouchableOpacity
                     style={styles.deleteBtn}
                     onPress={() => handleRemoveItem(item.clientScanId)}
+                    hitSlop={6}
                   >
-                    <Text style={styles.deleteBtnText}>✕</Text>
+                    <Icon name="trash-2" size={16} color={colors.danger} />
                   </TouchableOpacity>
                 </View>
               )}
             />
           )}
 
-          {/* Footer Actions */}
           <View style={styles.footer}>
             {queue.length > 0 && (
-              <TouchableOpacity
-                style={styles.syncBtn}
+              <Button
+                label={`Đồng bộ ${queue.length} mã`}
+                icon="upload-cloud"
                 onPress={handleSyncAll}
-                disabled={isSyncing}
-                activeOpacity={0.8}
-              >
-                {isSyncing ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.syncBtnText}>⚡ Đồng bộ toàn bộ ({queue.length})</Text>
-                )}
-              </TouchableOpacity>
+                loading={isSyncing}
+              />
             )}
-
-            {queue.length > 0 && (
-              <TouchableOpacity
-                style={styles.clearBtn}
-                onPress={handleClear}
-                disabled={isSyncing}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.clearBtnText}>Xóa hàng đợi</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity style={styles.backBtn} onPress={onClose} activeOpacity={0.8}>
-              <Text style={styles.backBtnText}>Đóng</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {queue.length > 0 && (
+                <Button
+                  label="Xóa hết"
+                  variant="danger"
+                  onPress={handleClear}
+                  disabled={isSyncing}
+                  style={{ flex: 1 }}
+                />
+              )}
+              <Button label="Đóng" variant="secondary" onPress={onClose} style={{ flex: 1 }} />
+            </View>
           </View>
         </View>
       </View>
@@ -164,165 +146,63 @@ export default function OfflineQueueModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(35, 33, 28, 0.45)',
     justifyContent: 'flex-end'
   },
   container: {
-    backgroundColor: '#0f172a',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: colors.canvas,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     height: '75%',
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#334155'
+    paddingHorizontal: 16,
+    paddingTop: 18
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16
-  },
-  title: {
-    color: '#f8fafc',
-    fontSize: 18,
-    fontWeight: '800'
-  },
-  subtitle: {
-    color: '#94a3b8',
-    fontSize: 12,
-    marginTop: 2
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 14
   },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#1e293b',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  closeText: {
-    color: '#94a3b8',
-    fontSize: 16,
-    fontWeight: '700'
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 30
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 12
-  },
-  emptyText: {
-    color: '#cbd5e1',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 6
-  },
-  emptySubtext: {
-    color: '#64748b',
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18
-  },
-  listContent: {
-    paddingBottom: 20
-  },
-  queueItem: {
+  item: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
+    gap: 10,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#334155'
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: 12,
+    marginBottom: 8
   },
-  itemIndex: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#334155',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12
-  },
-  itemIndexText: {
-    color: '#94a3b8',
-    fontSize: 11,
-    fontWeight: '700'
-  },
-  itemDetails: {
-    flex: 1
-  },
-  itemBarcode: {
-    color: '#38bdf8',
-    fontFamily: 'monospace',
-    fontSize: 13,
-    fontWeight: '700'
-  },
-  itemName: {
-    color: '#f8fafc',
+  meta: {
+    fontFamily: fonts.regular,
+    fontVariant: ['tabular-nums'],
     fontSize: 12,
-    fontWeight: '600',
-    marginTop: 2
-  },
-  itemTime: {
-    color: '#64748b',
-    fontSize: 10,
-    marginTop: 2
+    color: colors.textMuted,
+    marginTop: 3
   },
   deleteBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#334155',
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8
-  },
-  deleteBtnText: {
-    color: '#ef4444',
-    fontSize: 12,
-    fontWeight: '700'
+    backgroundColor: colors.dangerSoft
   },
   footer: {
-    gap: 8,
+    gap: 10,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#1e293b',
-    paddingTop: 12
-  },
-  syncBtn: {
-    backgroundColor: '#059669',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  syncBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700'
-  },
-  clearBtn: {
-    backgroundColor: '#334155',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center'
-  },
-  clearBtnText: {
-    color: '#ef4444',
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  backBtn: {
-    paddingVertical: 8,
-    alignItems: 'center'
-  },
-  backBtnText: {
-    color: '#94a3b8',
-    fontSize: 13
+    borderTopColor: colors.border
   }
 });

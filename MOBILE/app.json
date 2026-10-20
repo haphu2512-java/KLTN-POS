@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -17,7 +17,7 @@
         "CAMERA"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#0f172a",
+        "backgroundColor": "#F3F0E8",
         "foregroundImage": "./assets/android-icon-foreground.png"
       }
     },
@@ -26,6 +26,7 @@
     },
     "plugins": [
       "expo-asset"
-    ]
+    ],
+    "backgroundColor": "#F3F0E8"
   }
 }
