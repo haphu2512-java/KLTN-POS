@@ -6,8 +6,6 @@ import com.pos.product.Product;
 import com.pos.product.ProductRepository;
 import com.pos.user.User;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,20 +13,18 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Điện thoại đăng nhập cùng tài khoản với máy POS; mã quét chỉ được gửi tới các phiên WebSocket
- * của đúng tài khoản đó (/user/queue/barcode-scans), không phát cho mọi quầy.
+ * Mã quét từ điện thoại được gửi tới quầy POS mà điện thoại đã ghép cặp (/topic/terminals/{id}/scans),
+ * không phụ thuộc tài khoản đang đăng nhập trên máy POS.
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class ScannerService {
 
-    public static final String USER_QUEUE = "/queue/barcode-scans";
     private static final int RECENT_SCAN_IDS_LIMIT = 5000;
 
     private final ProductRepository productRepository;
     private final InventoryRepository inventoryRepository;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final TerminalService terminalService;
 
     /** clientScanId đã xử lý gần đây (theo tài khoản), để bỏ qua khi điện thoại gửi lại do timeout */
     private final Set<String> recentScanIds = Collections.newSetFromMap(new LinkedHashMap<>() {
@@ -54,14 +50,16 @@ public class ScannerService {
                 .toList();
     }
 
-    /** Bắn một mã vào giỏ hàng POS của chính tài khoản đang quét */
-    @Transactional(readOnly = true)
+    /** Bắn một mã vào giỏ hàng của quầy POS mà điện thoại đã ghép cặp */
+    @Transactional
     public Map<String, Object> sendToPos(BarcodeScanRequest req, User user) {
+        PosTerminal terminal = terminalService.resolvePairing(req.getPairingId(), user);
         Map<String, Object> item = toScanItem(req, user);
+        item.put("terminalName", terminal.getName());
         if (markSeen(user, (String) item.get("clientScanId"))) {
             Map<String, Object> payload = new HashMap<>(item);
             payload.put("type", "SCAN");
-            send(user, payload);
+            terminalService.send(terminal.getId(), payload);
         } else {
             item.put("duplicate", true);
         }
@@ -72,8 +70,9 @@ public class ScannerService {
      * Gửi các mã quét lúc offline thành MỘT tin dạng BATCH, theo thứ tự thời gian quét.
      * POS sẽ hỏi thu ngân trước khi thêm vào giỏ, thay vì tự thêm hàng loạt.
      */
-    @Transactional(readOnly = true)
-    public Map<String, Object> syncBatch(List<BarcodeScanRequest> scans, User user) {
+    @Transactional
+    public Map<String, Object> syncBatch(String pairingId, List<BarcodeScanRequest> scans, User user) {
+        PosTerminal terminal = terminalService.resolvePairing(pairingId, user);
         List<BarcodeScanRequest> ordered = new ArrayList<>(scans);
         ordered.sort(Comparator.comparing(s -> Objects.toString(s.getTimestamp(), "")));
 
@@ -94,10 +93,11 @@ public class ScannerService {
             payload.put("type", "BATCH");
             payload.put("action", "ADD_TO_CART");
             payload.put("scans", fresh);
-            send(user, payload);
+            terminalService.send(terminal.getId(), payload);
         }
 
         Map<String, Object> resp = new HashMap<>();
+        resp.put("terminalName", terminal.getName());
         resp.put("totalSynced", results.size());
         resp.put("totalSent", fresh.size());
         resp.put("results", results);
@@ -137,11 +137,4 @@ public class ScannerService {
         }
     }
 
-    private void send(User user, Map<String, Object> payload) {
-        try {
-            messagingTemplate.convertAndSendToUser(user.getUsername(), USER_QUEUE, payload);
-        } catch (Exception e) {
-            log.warn("Không gửi được mã quét tới POS của '{}': {}", user.getUsername(), e.getMessage());
-        }
-    }
 }

@@ -11,6 +11,21 @@ export class AuthError extends Error {
   }
 }
 
+// Điện thoại chưa ghép cặp với quầy POS nào (hoặc quầy đã gỡ điện thoại): phải quét QR trên máy POS
+export class NotPairedError extends Error {
+  constructor(message = 'Điện thoại chưa ghép với quầy POS. Hãy quét mã QR ở nút "Ghép điện thoại" trên máy POS.') {
+    super(message);
+    this.name = 'NotPairedError';
+  }
+}
+
+// Nội dung QR trên máy POS: "POS-PAIR:123456"
+export const PAIRING_QR_PREFIX = 'POS-PAIR:';
+export const parsePairingQr = (data) => {
+  const text = String(data || '').trim();
+  return text.startsWith(PAIRING_QR_PREFIX) ? text.substring(PAIRING_QR_PREFIX.length).trim() : null;
+};
+
 // Fetch helper with timeout
 const fetchWithTimeout = async (url, options = {}, timeoutMs = 3000) => {
   const controller = new AbortController();
@@ -53,6 +68,13 @@ const authFetch = async (path, options = {}, timeoutMs = 3000) => {
   if (response.status === 403) {
     throw new AuthError('Tài khoản này không có quyền dùng chức năng quét mã.');
   }
+  if (response.status === 409) {
+    const json = await response.clone().json().catch(() => null);
+    if (json?.code === 'NOT_PAIRED') {
+      await AppConfig.clearPairing();
+      throw new NotPairedError(json.message || undefined);
+    }
+  }
   return response;
 };
 
@@ -82,13 +104,73 @@ export const ScannerApi = {
   },
 
   async logout() {
+    // Ghép cặp gắn với tài khoản: đăng nhập tài khoản khác phải ghép lại
+    await AppConfig.clearPairing();
     await AppConfig.clearSession();
   },
 
-  // Bắn mã vào giỏ hàng POS. Chỉ dùng cho chế độ POS_REMOTE.
+  // Gửi mã 6 số đọc từ QR trên máy POS để ghép điện thoại với quầy đó
+  async pair(code) {
+    const response = await authFetch(
+      '/api/scanner/pair',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: String(code || '').trim(), deviceName: 'Expo Mobile App' })
+      },
+      8000
+    );
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !json?.data?.pairingId) {
+      throw new Error(json?.message || `Ghép cặp thất bại (HTTP ${response.status})`);
+    }
+    const pairing = { pairingId: json.data.pairingId, terminalName: json.data.terminalName };
+    await AppConfig.setPairing(pairing);
+    return pairing;
+  },
+
+  // Hủy ghép cặp (báo server nếu được, luôn xóa trên máy)
+  async unpair() {
+    const pairing = await AppConfig.getPairing();
+    await AppConfig.clearPairing();
+    if (!pairing) return;
+    try {
+      await authFetch(`/api/scanner/pairings/${pairing.pairingId}`, { method: 'DELETE' }, 5000);
+    } catch (err) {
+      if (err instanceof AuthError) throw err;
+    }
+  },
+
+  // Kiểm tra máy POS có gỡ điện thoại này chưa; mất mạng thì giữ nguyên
+  async checkPairing() {
+    const pairing = await AppConfig.getPairing();
+    if (!pairing) return null;
+    try {
+      const response = await authFetch(`/api/scanner/pairings/${pairing.pairingId}`, {}, 5000);
+      if (response.status === 404) {
+        await AppConfig.clearPairing();
+        return null;
+      }
+      if (response.ok) {
+        const json = await response.json().catch(() => null);
+        const fresh = { ...pairing, terminalName: json?.data?.terminalName || pairing.terminalName };
+        await AppConfig.setPairing(fresh);
+        return fresh;
+      }
+    } catch (err) {
+      if (err instanceof AuthError) throw err;
+    }
+    return pairing;
+  },
+
+  // Bắn mã vào giỏ hàng của quầy POS đã ghép cặp. Chỉ dùng cho chế độ POS_REMOTE.
   async broadcastBarcode(barcode) {
     const cleanBarcode = String(barcode || '').trim();
     const clientScanId = newScanId();
+    const pairing = await AppConfig.getPairing();
+    if (!pairing) {
+      throw new NotPairedError();
+    }
 
     try {
       const response = await authFetch(
@@ -97,6 +179,7 @@ export const ScannerApi = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            pairingId: pairing.pairingId,
             barcode: cleanBarcode,
             deviceName: 'Expo Mobile App',
             clientScanId,
@@ -127,11 +210,11 @@ export const ScannerApi = {
         product,
         found: !!product,
         message: product
-          ? `Đã gửi "${product.name}" tới quầy POS!`
-          : `Đã gửi mã ${cleanBarcode} (chưa có trong kho)`
+          ? `Đã gửi "${product.name}" tới ${pairing.terminalName || 'quầy POS'}!`
+          : `Đã gửi mã ${cleanBarcode} tới ${pairing.terminalName || 'quầy POS'} (chưa có trong kho)`
       };
     } catch (err) {
-      if (err instanceof AuthError) throw err;
+      if (err instanceof AuthError || err instanceof NotPairedError) throw err;
       console.log('Không thể kết nối máy chủ, kích hoạt Offline-First:', err.message);
 
       const localProduct = await OfflineStorage.lookupProductOffline(cleanBarcode);
@@ -236,6 +319,11 @@ export const ScannerApi = {
       return { success: true, count: 0, message: 'Hàng đợi Offline đang trống.' };
     }
 
+    const pairing = await AppConfig.getPairing();
+    if (!pairing) {
+      return { success: false, count: 0, message: new NotPairedError().message };
+    }
+
     // Hàng đợi lưu mới nhất ở đầu; gửi theo thứ tự quét
     const ordered = [...queue].reverse();
     let sent = 0;
@@ -248,6 +336,7 @@ export const ScannerApi = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              pairingId: pairing.pairingId,
               scans: chunk.map(({ barcode, clientScanId, deviceName, timestamp }) => ({
                 barcode,
                 clientScanId,
@@ -271,7 +360,7 @@ export const ScannerApi = {
       return {
         success: true,
         count: sent,
-        message: `Đã gửi ${sent} mã quét. Hãy xác nhận trên màn hình POS để thêm vào giỏ.`
+        message: `Đã gửi ${sent} mã quét tới ${pairing.terminalName || 'quầy POS'}. Hãy xác nhận trên màn hình POS để thêm vào giỏ.`
       };
     } catch (err) {
       if (err instanceof AuthError) throw err;

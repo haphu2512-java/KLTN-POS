@@ -18,7 +18,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/scanner")
 @RequiredArgsConstructor
-@Tag(name = "Mobile Scanner", description = "Điện thoại quét mã vạch và bắn vào POS của cùng tài khoản")
+@Tag(name = "Mobile Scanner", description = "Điện thoại quét mã vạch và bắn vào quầy POS đã ghép cặp")
 public class ScannerController {
 
     private final ScannerService scannerService;
@@ -42,7 +42,7 @@ public class ScannerController {
 
     @PostMapping("/broadcast")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
-    @Operation(summary = "Bắn mã vạch vào giỏ hàng POS đang đăng nhập cùng tài khoản")
+    @Operation(summary = "Bắn mã vạch vào giỏ hàng của quầy POS đã ghép cặp (409 NOT_PAIRED nếu chưa ghép)")
     public ResponseEntity<ApiResponse<Map<String, Object>>> broadcastBarcode(
             @Valid @RequestBody BarcodeScanRequest req) {
         Map<String, Object> result = scannerService.sendToPos(req, currentUserService.getCurrentUser());
@@ -62,7 +62,7 @@ public class ScannerController {
     @Operation(summary = "Đồng bộ các mã quét lúc offline; POS sẽ hỏi xác nhận trước khi thêm vào giỏ")
     public ResponseEntity<ApiResponse<Map<String, Object>>> syncBatch(
             @Valid @RequestBody SyncBatchRequest req) {
-        Map<String, Object> result = scannerService.syncBatch(req.getScans(), currentUserService.getCurrentUser());
+        Map<String, Object> result = scannerService.syncBatch(req.getPairingId(), req.getScans(), currentUserService.getCurrentUser());
         return ResponseEntity.ok(ApiResponse.ok("Đồng bộ hàng đợi Offline thành công", result));
     }
 }

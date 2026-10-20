@@ -2,6 +2,10 @@ package com.pos.scanner;
 
 import com.pos.security.CustomUserDetailsService;
 import com.pos.security.JwtTokenProvider;
+import com.jayway.jsonpath.JsonPath;
+import com.pos.branch.Branch;
+import com.pos.branch.BranchRepository;
+import com.pos.user.Role;
 import com.pos.user.User;
 import com.pos.user.UserRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -12,6 +16,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.messaging.converter.MappingJackson2MessageConverter;
 import org.springframework.messaging.simp.stomp.*;
 import org.springframework.web.client.RestTemplate;
@@ -28,7 +33,7 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Kết nối STOMP thật: mã quét từ điện thoại của "cashier" chỉ tới POS của "cashier", không tới tài khoản khác.
+ * Kết nối STOMP thật: mã quét từ điện thoại chỉ tới quầy POS đã ghép cặp, không tới quầy khác.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "spring.datasource.url=jdbc:h2:mem:scannerwsdb;MODE=MySQL;DB_CLOSE_DELAY=-1",
@@ -53,6 +58,12 @@ class ScannerWebSocketDeliveryTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private BranchRepository branchRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     private String tokenFor(String username) {
         User user = userRepository.findByUsername(username).orElseThrow();
         return "Bearer " + tokenProvider.generateToken(userDetailsService.loadUserByUsername(username),
@@ -68,8 +79,21 @@ class ScannerWebSocketDeliveryTest {
                 connectHeaders, new StompSessionHandlerAdapter() {}).get(5, TimeUnit.SECONDS);
     }
 
-    private BlockingQueue<Map<String, Object>> subscribe(String username) throws Exception {
-        return subscribe(username, "/user/queue/barcode-scans");
+    private String postJson(String path, String username, String json) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", tokenFor(username));
+        return new RestTemplate().postForEntity("http://localhost:" + port + path,
+                new HttpEntity<>(json, headers), String.class).getBody();
+    }
+
+    private String registerTerminal(String posUser, String name) {
+        return JsonPath.read(postJson("/api/scanner/terminals", posUser, "{\"name\":\"" + name + "\"}"), "$.data.id");
+    }
+
+    private String pair(String terminalId, String posUser, String phoneUser) {
+        String code = JsonPath.read(postJson("/api/scanner/terminals/" + terminalId + "/pairing-code", posUser, "{}"), "$.data.code");
+        return JsonPath.read(postJson("/api/scanner/pair", phoneUser, "{\"code\":\"" + code + "\"}"), "$.data.pairingId");
     }
 
     private BlockingQueue<Map<String, Object>> subscribe(String username, String destination) throws Exception {
@@ -92,34 +116,58 @@ class ScannerWebSocketDeliveryTest {
     }
 
     @Test
-    @DisplayName("POS của đúng tài khoản nhận mã, tài khoản khác không nhận")
-    void scanReachesOnlySameAccount() throws Exception {
-        BlockingQueue<Map<String, Object>> cashierPos = subscribe("cashier");
-        BlockingQueue<Map<String, Object>> adminPos = subscribe("admin");
+    @DisplayName("Mã quét chỉ tới quầy đã ghép cặp, quầy khác không nhận")
+    void scanReachesOnlyPairedTerminal() throws Exception {
+        String quay1 = registerTerminal("admin", "Quầy 1");
+        String quay2 = registerTerminal("admin", "Quầy 2");
+        // Máy POS quầy 1 đăng nhập "admin", quầy 2 đăng nhập "cashier"
+        BlockingQueue<Map<String, Object>> pos1 = subscribe("admin", TerminalAccess.topicOf(quay1));
+        BlockingQueue<Map<String, Object>> pos2 = subscribe("cashier", TerminalAccess.topicOf(quay2));
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("Authorization", tokenFor("cashier"));
-        new RestTemplate().postForEntity("http://localhost:" + port + "/api/scanner/broadcast",
-                new HttpEntity<>("{\"barcode\":\"ws-test-123\",\"clientScanId\":\"ws-1\"}", headers), String.class);
+        // Điện thoại đăng nhập "cashier" ghép với quầy 1
+        String pairingId = pair(quay1, "admin", "cashier");
+        Map<String, Object> paired = pos1.poll(5, TimeUnit.SECONDS);
+        assertThat(paired).isNotNull();
+        assertThat(paired.get("type")).isEqualTo("PAIRED");
 
-        Map<String, Object> msg = cashierPos.poll(5, TimeUnit.SECONDS);
+        postJson("/api/scanner/broadcast", "cashier",
+                "{\"barcode\":\"ws-test-123\",\"clientScanId\":\"ws-1\",\"pairingId\":\"" + pairingId + "\"}");
+
+        Map<String, Object> msg = pos1.poll(5, TimeUnit.SECONDS);
         assertThat(msg).isNotNull();
         assertThat(msg.get("type")).isEqualTo("SCAN");
         assertThat(msg.get("barcode")).isEqualTo("ws-test-123");
-        assertThat(adminPos.poll(1, TimeUnit.SECONDS)).isNull();
+        assertThat(pos2.poll(1, TimeUnit.SECONDS)).isNull();
     }
 
     @Test
-    @DisplayName("Client không gửi thẳng được vào hàng đợi của tài khoản khác hay vào /topic")
-    void clientCannotInjectMessages() throws Exception {
-        BlockingQueue<Map<String, Object>> cashierPos = subscribe("cashier");
+    @DisplayName("Không nghe trộm được quầy khác chi nhánh hay bằng ký tự đại diện, không gửi thẳng được vào kênh quầy")
+    void clientCannotSnoopOrInject() throws Exception {
+        Long otherBranch = branchRepository.findAll().stream()
+                .map(Branch::getId)
+                .filter(id -> !id.equals(userRepository.findByUsername("cashier").orElseThrow().getBranchId()))
+                .findFirst().orElseThrow();
+        if (userRepository.findByUsername("cashier2").isEmpty()) {
+            userRepository.save(User.builder().username("cashier2").password(passwordEncoder.encode("123456"))
+                    .fullName("Thu ngân chi nhánh 2").role(Role.CASHIER).branchId(otherBranch).build());
+        }
+
+        String quay = registerTerminal("cashier", "Quầy 1");
+        BlockingQueue<Map<String, Object>> pos = subscribe("cashier", TerminalAccess.topicOf(quay));
+        BlockingQueue<Map<String, Object>> otherBranchSnoop = subscribe("cashier2", TerminalAccess.topicOf(quay));
+        BlockingQueue<Map<String, Object>> wildcardSnoop = subscribe("admin", "/topic/terminals/**");
         BlockingQueue<Map<String, Object>> inventoryFeed = subscribe("cashier", "/topic/inventory-updates");
 
-        connect("admin").send("/user/cashier/queue/barcode-scans", Map.of("type", "SCAN", "barcode", "INJECTED"));
+        connect("admin").send(TerminalAccess.topicOf(quay), Map.of("type", "SCAN", "barcode", "INJECTED"));
         connect("admin").send("/topic/inventory-updates", Map.of("branchId", 1, "productId", 1));
-
-        assertThat(cashierPos.poll(2, TimeUnit.SECONDS)).isNull();
+        assertThat(pos.poll(2, TimeUnit.SECONDS)).isNull();
         assertThat(inventoryFeed.poll(1, TimeUnit.SECONDS)).isNull();
+
+        String pairingId = pair(quay, "cashier", "cashier");
+        postJson("/api/scanner/broadcast", "cashier",
+                "{\"barcode\":\"ws-test-456\",\"clientScanId\":\"ws-2\",\"pairingId\":\"" + pairingId + "\"}");
+        assertThat(pos.poll(5, TimeUnit.SECONDS)).isNotNull();
+        assertThat(otherBranchSnoop.poll(1, TimeUnit.SECONDS)).isNull();
+        assertThat(wildcardSnoop.poll(1, TimeUnit.SECONDS)).isNull();
     }
 }

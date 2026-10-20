@@ -5,6 +5,8 @@ class WebSocketService {
     this.client = null;
     this.isConnected = false;
     this.listeners = new Map();
+    this.terminalId = null;
+    this.terminalSub = null;
   }
 
   connect(wsUrl) {
@@ -54,17 +56,10 @@ class WebSocketService {
             }
           });
 
-          // Mã quét từ điện thoại đăng nhập cùng tài khoản (hàng đợi riêng của user, không phát cho mọi quầy)
-          this.client.subscribe('/user/queue/barcode-scans', (message) => {
-            try {
-              const data = JSON.parse(message.body);
-              this.emit('barcode-scanned-remote', data);
-            } catch {
-              console.warn('Invalid barcode-scans payload:', message.body);
-            }
-          });
+          this.subscribeTerminal();
         },
         onDisconnect: () => {
+          this.terminalSub = null;
           this.isConnected = false;
           this.notifyConnectionChange(false);
         },
@@ -85,6 +80,38 @@ class WebSocketService {
       this.isConnected = false;
       this.notifyConnectionChange(false);
     }
+  }
+
+  // Nghe mã quét từ điện thoại đã ghép cặp với quầy (máy POS) này
+  setTerminal(terminalId) {
+    if (this.terminalId === terminalId) return;
+    this.terminalId = terminalId;
+    this.subscribeTerminal();
+  }
+
+  subscribeTerminal() {
+    if (this.terminalSub) {
+      try {
+        this.terminalSub.unsubscribe();
+      } catch {
+        // kết nối cũ đã đóng
+      }
+      this.terminalSub = null;
+    }
+    if (!this.terminalId || !this.client?.connected) return;
+
+    this.terminalSub = this.client.subscribe(`/topic/terminals/${this.terminalId}/scans`, (message) => {
+      try {
+        const data = JSON.parse(message.body);
+        if (data.type === 'PAIRED' || data.type === 'UNPAIRED') {
+          this.emit('scanner-pairing', data);
+        } else {
+          this.emit('barcode-scanned-remote', data);
+        }
+      } catch {
+        console.warn('Invalid terminal scans payload:', message.body);
+      }
+    });
   }
 
   disconnect() {

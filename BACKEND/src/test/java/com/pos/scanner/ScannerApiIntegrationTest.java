@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -103,21 +104,96 @@ class ScannerApiIntegrationTest {
         verifyNoInteractions(messagingTemplate);
     }
 
+    /** Máy POS (đăng nhập "posUser") đăng ký quầy; trả id quầy */
+    private String registerTerminal(String posUser) throws Exception {
+        String body = mvc.perform(post("/api/scanner/terminals").header("Authorization", tokenFor(posUser))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Quầy 1\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return com.jayway.jsonpath.JsonPath.read(body, "$.data.id");
+    }
+
+    /** Máy POS tạo mã QR, điện thoại (đăng nhập "phoneUser") quét để ghép cặp; trả pairingId */
+    private String pair(String terminalId, String posUser, String phoneUser) throws Exception {
+        String codeBody = mvc.perform(post("/api/scanner/terminals/" + terminalId + "/pairing-code")
+                        .header("Authorization", tokenFor(posUser)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String code = com.jayway.jsonpath.JsonPath.read(codeBody, "$.data.code");
+        String pairBody = mvc.perform(post("/api/scanner/pair").header("Authorization", tokenFor(phoneUser))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + code + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.terminalName").value("Quầy 1"))
+                .andReturn().getResponse().getContentAsString();
+        return com.jayway.jsonpath.JsonPath.read(pairBody, "$.data.pairingId");
+    }
+
     @Test
-    @DisplayName("Mã quét chỉ gửi tới POS của đúng tài khoản, gửi trùng clientScanId bị bỏ qua")
-    void broadcastGoesOnlyToSameUser() throws Exception {
-        String body = "{\"barcode\":\"" + firstBarcode() + "\",\"clientScanId\":\"dup-1\"}";
+    @DisplayName("Chưa ghép cặp: bắn mã trả 409 NOT_PAIRED và không gửi gì")
+    void broadcastRequiresPairing() throws Exception {
+        mvc.perform(post("/api/scanner/broadcast").header("Authorization", tokenFor("cashier"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"barcode\":\"123\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("NOT_PAIRED"));
+        mvc.perform(post("/api/scanner/broadcast").header("Authorization", tokenFor("cashier"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"barcode\":\"123\",\"pairingId\":\"bogus\"}"))
+                .andExpect(status().isConflict());
+        verifyNoInteractions(messagingTemplate);
+    }
+
+    @Test
+    @DisplayName("Mã ghép cặp chỉ dùng một lần; ghép cặp gắn với tài khoản đã quét QR")
+    void pairingCodeSingleUseAndBoundToAccount() throws Exception {
+        String terminalId = registerTerminal("admin");
+        String codeBody = mvc.perform(post("/api/scanner/terminals/" + terminalId + "/pairing-code")
+                        .header("Authorization", tokenFor("admin")))
+                .andReturn().getResponse().getContentAsString();
+        String code = com.jayway.jsonpath.JsonPath.read(codeBody, "$.data.code");
+        String pairBody = mvc.perform(post("/api/scanner/pair").header("Authorization", tokenFor("cashier"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + code + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        mvc.perform(post("/api/scanner/pair").header("Authorization", tokenFor("cashier"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + code + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PAIRING_CODE_INVALID"));
+
+        // Tài khoản khác dùng lại pairingId của "cashier" thì không được
+        String pairingId = com.jayway.jsonpath.JsonPath.read(pairBody, "$.data.pairingId");
+        mvc.perform(post("/api/scanner/broadcast").header("Authorization", tokenFor("admin"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"barcode\":\"123\",\"pairingId\":\"" + pairingId + "\"}"))
+                .andExpect(status().isConflict());
+
+        // Máy POS gỡ điện thoại: ghép cặp hết hiệu lực
+        mvc.perform(delete("/api/scanner/terminals/" + terminalId + "/pairings/" + pairingId)
+                        .header("Authorization", tokenFor("admin")))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/scanner/pairings/" + pairingId).header("Authorization", tokenFor("cashier")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Mã quét đi tới quầy đã ghép cặp (không theo tài khoản), gửi trùng clientScanId bị bỏ qua")
+    void broadcastGoesToPairedTerminal() throws Exception {
+        // Máy POS đăng nhập "admin", điện thoại đăng nhập "cashier": khác tài khoản vẫn nhận được
+        String terminalId = registerTerminal("admin");
+        String pairingId = pair(terminalId, "admin", "cashier");
+        String body = "{\"barcode\":\"" + firstBarcode() + "\",\"clientScanId\":\"dup-1\",\"pairingId\":\"" + pairingId + "\"}";
         mvc.perform(post("/api/scanner/broadcast").header("Authorization", tokenFor("cashier"))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.found").value(true));
+                .andExpect(jsonPath("$.data.found").value(true))
+                .andExpect(jsonPath("$.data.terminalName").value("Quầy 1"));
         mvc.perform(post("/api/scanner/broadcast").header("Authorization", tokenFor("cashier"))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.duplicate").value(true));
 
-        verify(messagingTemplate, times(1)).convertAndSendToUser(eq("cashier"), eq(ScannerService.USER_QUEUE), any(Object.class));
-        verify(messagingTemplate, never()).convertAndSend(anyString(), any(Object.class));
+        var captor = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(messagingTemplate, times(2)).convertAndSend(eq(TerminalAccess.topicOf(terminalId)), captor.capture());
+        assertThat(captor.getAllValues()).extracting(p -> (Object) ((Map<?, ?>) p).get("type")).containsExactly("PAIRED", "SCAN");
+        verify(messagingTemplate, never()).convertAndSendToUser(anyString(), anyString(), any(Object.class));
     }
 
     @Test
@@ -134,8 +210,10 @@ class ScannerApiIntegrationTest {
     @DisplayName("Đồng bộ offline gửi một tin BATCH theo thứ tự quét; phần tử thiếu barcode trả 400")
     @SuppressWarnings("unchecked")
     void syncBatchSendsOneOrderedBatch() throws Exception {
+        String terminalId = registerTerminal("cashier");
+        String pairingId = pair(terminalId, "cashier", "cashier");
         String barcode = firstBarcode();
-        String body = "{\"scans\":["
+        String body = "{\"pairingId\":\"" + pairingId + "\",\"scans\":["
                 + "{\"barcode\":\"" + barcode + "\",\"clientScanId\":\"b-2\",\"timestamp\":\"2026-10-20T10:05:00Z\"},"
                 + "{\"barcode\":\"999\",\"clientScanId\":\"b-1\",\"timestamp\":\"2026-10-20T10:00:00Z\"}]}";
         mvc.perform(post("/api/scanner/sync-batch").header("Authorization", tokenFor("cashier"))
@@ -144,14 +222,14 @@ class ScannerApiIntegrationTest {
                 .andExpect(jsonPath("$.data.totalSent").value(2));
 
         var captor = org.mockito.ArgumentCaptor.forClass(Object.class);
-        verify(messagingTemplate, times(1)).convertAndSendToUser(eq("cashier"), eq(ScannerService.USER_QUEUE), captor.capture());
-        Map<String, Object> payload = (Map<String, Object>) captor.getValue();
+        verify(messagingTemplate, times(2)).convertAndSend(eq(TerminalAccess.topicOf(terminalId)), captor.capture());
+        Map<String, Object> payload = (Map<String, Object>) captor.getAllValues().get(1);
         assertThat(payload.get("type")).isEqualTo("BATCH");
         List<Map<String, Object>> scans = (List<Map<String, Object>>) payload.get("scans");
         assertThat(scans).extracting(s -> s.get("clientScanId")).containsExactly("b-1", "b-2");
 
         mvc.perform(post("/api/scanner/sync-batch").header("Authorization", tokenFor("cashier"))
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"scans\":[{\"clientScanId\":\"x\"}]}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"pairingId\":\"" + pairingId + "\",\"scans\":[{\"clientScanId\":\"x\"}]}"))
                 .andExpect(status().isBadRequest());
     }
 }

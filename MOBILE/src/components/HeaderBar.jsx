@@ -4,6 +4,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 export default function HeaderBar({
   isOnline,
   scanMode,
+  pairing,
+  onOpenPairing,
   onToggleMode,
   queueCount,
   onOpenQueue,
@@ -46,6 +48,19 @@ export default function HeaderBar({
         </View>
       </View>
 
+      {/* Quầy POS đang nhận mã quét */}
+      <TouchableOpacity
+        style={[styles.pairingChip, !pairing && styles.pairingChipMissing]}
+        onPress={onOpenPairing}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.pairingText} numberOfLines={1}>
+          {pairing
+            ? `🔗 Đang ghép: ${pairing.terminalName}`
+            : '⚠️ Chưa ghép quầy POS · quét QR trên máy POS'}
+        </Text>
+      </TouchableOpacity>
+
       {/* Mode Switcher Tabs */}
       <View style={styles.modeTabs}>
         <TouchableOpacity
@@ -80,6 +95,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b'
+  },
+  pairingChip: {
+    backgroundColor: '#064e3b',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 10
+  },
+  pairingChipMissing: {
+    backgroundColor: '#78350f'
+  },
+  pairingText: {
+    color: '#f8fafc',
+    fontSize: 12,
+    fontWeight: '600'
   },
   topRow: {
     flexDirection: 'row',

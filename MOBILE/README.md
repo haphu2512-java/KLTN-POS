@@ -8,7 +8,8 @@
 
 1. **Bắn mã vạch trực tiếp vào POS (Remote Scanner Mode)**:
    - Dùng camera điện thoại quét mã vạch (EAN-13, EAN-8, Code 128, QR Code,...).
-   - Truyền mã tức thì qua **Spring Boot REST & STOMP WebSocket** (`/topic/barcode-scans`).
+   - **Ghép cặp với quầy bằng mã QR**: trên máy POS bấm "Ghép điện thoại", điện thoại đã đăng nhập quét QR (hoặc nhập mã 6 số trong Cài đặt). Từ đó mã quét đi vào giỏ của đúng quầy đó, dù máy POS đăng nhập tài khoản nào.
+   - Truyền mã tức thì qua **Spring Boot REST & STOMP WebSocket** (`/topic/terminals/{id}/scans`).
    - Màn hình POS trên máy tính tự động nhận diện mã và thêm ngay vào giỏ hàng mà không cần dây nối.
 2. **Tra cứu giá & tồn kho di động (Price & Stock Check Mode)**:
    - Nhân viên quét sản phẩm để xem tên, phân loại, đơn vị tính, giá bán và số lượng tồn kho theo chi nhánh.
@@ -62,7 +63,17 @@ npm start
 Mọi API trừ `ping` đều cần header `Authorization: Bearer <JWT>` (lấy từ `POST /api/auth/login`).
 
 - **GET** `/api/scanner/ping`: Kiểm tra kết nối, không cần đăng nhập.
-- **POST** `/api/scanner/broadcast`: Bắn một mã vào giỏ POS của cùng tài khoản, qua hàng đợi riêng `/user/queue/barcode-scans` (tin `type: "SCAN"`). Gửi trùng `clientScanId` sẽ bị bỏ qua.
+- **POST** `/api/scanner/pair`: Body `{ "code": "123456" }` (mã đọc từ QR `POS-PAIR:123456` trên máy POS). Trả `pairingId` và tên quầy. Mã chỉ dùng một lần, hết hạn sau 5 phút. Ghép cặp gắn với tài khoản đã quét QR.
+- **GET/DELETE** `/api/scanner/pairings/{pairingId}`: Điện thoại kiểm tra hoặc hủy ghép cặp của mình.
+- **POST** `/api/scanner/broadcast`: Body có `pairingId`. Bắn một mã vào giỏ của quầy đã ghép, qua kênh `/topic/terminals/{id}/scans` (tin `type: "SCAN"`). Chưa ghép hoặc đã bị gỡ: trả 409 `NOT_PAIRED`. Gửi trùng `clientScanId` sẽ bị bỏ qua.
 - **GET** `/api/scanner/lookup?barcode=`: Tra giá và tồn kho tại chi nhánh của tài khoản; không gửi gì tới POS.
 - **GET** `/api/scanner/products/cache`: Danh mục sản phẩm đang kinh doanh (không có giá vốn) để tra cứu Offline.
-- **POST** `/api/scanner/sync-batch`: Body `{ "scans": [...] }`, tối đa 200 mã mỗi lần. Server gửi một tin `type: "BATCH"` theo thứ tự quét; POS hỏi thu ngân trước khi thêm vào giỏ.
+- **POST** `/api/scanner/sync-batch`: Body `{ "pairingId": "...", "scans": [...] }`, tối đa 200 mã mỗi lần. Server gửi một tin `type: "BATCH"` theo thứ tự quét; POS hỏi thu ngân trước khi thêm vào giỏ.
+
+### Phía máy POS (ghép cặp)
+
+- **POST** `/api/scanner/terminals`: Máy POS đăng ký mình là một quầy (gọi một lần, id lưu ở `localStorage.pos_terminal_id`).
+- **POST** `/api/scanner/terminals/{id}/pairing-code`: Tạo mã 6 số để hiện QR.
+- **GET** `/api/scanner/terminals/{id}/pairings`, **DELETE** `/api/scanner/terminals/{id}/pairings/{pairingId}`: Xem và gỡ điện thoại đã ghép.
+- WebSocket: máy POS subscribe `/topic/terminals/{id}/scans`; server chỉ cho tài khoản cùng chi nhánh với quầy nghe kênh này. Ngoài `SCAN`/`BATCH` còn có tin `PAIRED`/`UNPAIRED` khi có điện thoại ghép hoặc bị gỡ.
+- Máy quét mã vạch USB/Bluetooth cắm vào máy POS không cần ghép cặp: nó gõ mã như bàn phím và POS nhận trực tiếp.

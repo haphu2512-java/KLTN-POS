@@ -21,6 +21,10 @@ public class BarcodeScanRequest {
     @Size(max = 100)
     private String deviceName;
 
+    /** Mã ghép cặp điện thoại ↔ quầy POS (nhận được khi quét QR trên máy POS) */
+    @Size(max = 64)
+    private String pairingId;
+
     /** Mã duy nhất do điện thoại sinh ra, dùng để server bỏ qua lần gửi trùng */
     @Size(max = 64)
     private String clientScanId;
