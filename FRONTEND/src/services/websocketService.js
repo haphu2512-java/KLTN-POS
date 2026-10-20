@@ -53,6 +53,16 @@ class WebSocketService {
               console.warn('Invalid sales-update payload:', message.body);
             }
           });
+
+          // Subscribe to remote barcode scans from mobile phone
+          this.client.subscribe('/topic/barcode-scans', (message) => {
+            try {
+              const data = JSON.parse(message.body);
+              this.emit('barcode-scanned-remote', data);
+            } catch {
+              console.warn('Invalid barcode-scans payload:', message.body);
+            }
+          });
         },
         onDisconnect: () => {
           this.isConnected = false;
