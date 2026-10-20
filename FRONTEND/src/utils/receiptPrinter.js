@@ -1,27 +1,62 @@
 import { formatCurrency, formatDateTime } from './formatters';
 
-export function generateReceiptHtml(order, invoiceCode = `HD${Date.now().toString().slice(-6)}`, branchName = 'Chi nhánh Quận 1', cashierName = 'Nguyễn Văn A') {
-  const itemsHtml = order.items.map(item => `
+const PAYMENT_LABELS = { CASH: 'Tiền mặt', VIETQR: 'Chuyển khoản', CARD: 'Thẻ' };
+
+/** Escape dữ liệu (tên sản phẩm, khách hàng...) trước khi chèn vào HTML hóa đơn */
+export function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Dữ liệu in lấy từ hóa đơn server trả về (mã, giá, tiền thối là số đã được ghi nhận),
+ * không lấy từ giỏ hàng trên màn hình.
+ */
+export function receiptFromInvoice(invoice, cashierName) {
+  return {
+    code: `HD${String(invoice.id).padStart(6, '0')}`,
+    createdAt: invoice.createdAt,
+    branchName: invoice.branch?.name || '',
+    branchAddress: invoice.branch?.address || '',
+    cashierName,
+    customerName: invoice.customer?.name || 'Khách lẻ',
+    items: (invoice.details || []).map((d) => ({
+      name: d.product?.name || '',
+      quantity: d.quantity,
+      unitPrice: d.unitPrice
+    })),
+    subtotal: invoice.subtotal,
+    discount: invoice.discount,
+    total: invoice.totalAmount,
+    received: invoice.receivedAmount,
+    change: invoice.changeAmount,
+    paymentMethod: invoice.paymentMethod
+  };
+}
+
+export function generateReceiptHtml(receipt) {
+  const itemsHtml = receipt.items.map(item => `
     <tr>
-      <td style="padding: 4px 0; font-size: 12px;">${item.name}</td>
-      <td style="padding: 4px 0; text-align: center; font-size: 12px;">${item.quantity}</td>
-      <td style="padding: 4px 0; text-align: right; font-size: 12px;">${formatCurrency(item.price)}</td>
-      <td style="padding: 4px 0; text-align: right; font-size: 12px; font-weight: bold;">${formatCurrency(item.price * item.quantity)}</td>
+      <td style="padding: 4px 0; font-size: 12px;">${escapeHtml(item.name)}</td>
+      <td style="padding: 4px 0; text-align: center; font-size: 12px;">${escapeHtml(item.quantity)}</td>
+      <td style="padding: 4px 0; text-align: right; font-size: 12px;">${formatCurrency(item.unitPrice)}</td>
+      <td style="padding: 4px 0; text-align: right; font-size: 12px; font-weight: bold;">${formatCurrency(Number(item.unitPrice) * Number(item.quantity))}</td>
     </tr>
   `).join('');
 
-  const subtotal = order.items.reduce((sum, it) => sum + it.price * it.quantity, 0);
-  const discount = order.discount || 0;
-  const total = Math.max(0, subtotal - discount);
-  const received = order.receivedAmount || total;
-  const change = Math.max(0, received - total);
+  const discount = Number(receipt.discount) || 0;
+  const paymentLabel = PAYMENT_LABELS[receipt.paymentMethod] || receipt.paymentMethod;
 
   return `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8" />
-      <title>Hóa Đơn ${invoiceCode}</title>
+      <title>Hóa Đơn ${escapeHtml(receipt.code)}</title>
       <style>
         @page { size: 80mm auto; margin: 0; }
         body {
@@ -46,17 +81,18 @@ export function generateReceiptHtml(order, invoiceCode = `HD${Date.now().toStrin
     <body>
       <div class="text-center">
         <h2 style="margin: 0; font-size: 16px;">HỆ THỐNG POS BÁN LẺ</h2>
-        <div style="font-size: 11px;">${branchName}</div>
+        <div style="font-size: 11px;">${escapeHtml(receipt.branchName)}</div>
+        ${receipt.branchAddress ? `<div style="font-size: 10px;">${escapeHtml(receipt.branchAddress)}</div>` : ''}
         <div style="font-size: 10px;">Hotline: 1900 1234 • Giờ mở cửa: 07:00 - 22:00</div>
       </div>
 
       <div class="divider"></div>
 
       <div>
-        <div>Mã HĐ: <span class="bold">${invoiceCode}</span></div>
-        <div>Ngày giờ: ${formatDateTime()}</div>
-        <div>Thu ngân: ${cashierName}</div>
-        <div>Khách hàng: ${order.customer ? order.customer.name : 'Khách lẻ'}</div>
+        <div>Mã HĐ: <span class="bold">${escapeHtml(receipt.code)}</span></div>
+        <div>Ngày giờ: ${formatDateTime(receipt.createdAt || new Date())}</div>
+        <div>Thu ngân: ${escapeHtml(receipt.cashierName)}</div>
+        <div>Khách hàng: ${escapeHtml(receipt.customerName)}</div>
       </div>
 
       <div class="divider"></div>
@@ -80,7 +116,7 @@ export function generateReceiptHtml(order, invoiceCode = `HD${Date.now().toStrin
       <table style="margin: 0;">
         <tr>
           <td>Tổng tiền hàng:</td>
-          <td class="text-right">${formatCurrency(subtotal)}</td>
+          <td class="text-right">${formatCurrency(receipt.subtotal)}</td>
         </tr>
         ${discount > 0 ? `
         <tr>
@@ -90,15 +126,15 @@ export function generateReceiptHtml(order, invoiceCode = `HD${Date.now().toStrin
         ` : ''}
         <tr style="font-size: 14px;" class="bold">
           <td>THANH TOÁN:</td>
-          <td class="text-right">${formatCurrency(total)}</td>
+          <td class="text-right">${formatCurrency(receipt.total)}</td>
         </tr>
         <tr>
-          <td>Tiền khách đưa (${order.paymentMethod}):</td>
-          <td class="text-right">${formatCurrency(received)}</td>
+          <td>Tiền khách đưa (${escapeHtml(paymentLabel)}):</td>
+          <td class="text-right">${formatCurrency(receipt.received)}</td>
         </tr>
         <tr>
           <td>Tiền thừa trả khách:</td>
-          <td class="text-right bold">${formatCurrency(change)}</td>
+          <td class="text-right bold">${formatCurrency(receipt.change)}</td>
         </tr>
       </table>
 
@@ -113,42 +149,7 @@ export function generateReceiptHtml(order, invoiceCode = `HD${Date.now().toStrin
   `;
 }
 
-export async function printInvoiceReceipt(order, invoiceCode, branchName, cashierName) {
-  const html = generateReceiptHtml(order, invoiceCode, branchName, cashierName);
-
-  // If running in Electron Desktop App
-  if (window.electronAPI && typeof window.electronAPI.printReceipt === 'function') {
-    // Write to hidden iframe in current window and trigger silent print
-    let iframe = document.getElementById('pos-print-iframe');
-    if (!iframe) {
-      iframe = document.createElement('iframe');
-      iframe.id = 'pos-print-iframe';
-      iframe.style.position = 'fixed';
-      iframe.style.right = '0';
-      iframe.style.bottom = '0';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = '0';
-      document.body.appendChild(iframe);
-    }
-
-    const doc = iframe.contentWindow.document;
-    doc.open();
-    doc.write(html);
-    doc.close();
-
-    setTimeout(async () => {
-      try {
-        await window.electronAPI.printReceipt({ silent: true });
-      } catch (err) {
-        console.warn('Silent print failed, falling back to window.print:', err);
-        iframe.contentWindow.print();
-      }
-    }, 250);
-    return;
-  }
-
-  // Web Browser fallback: use hidden iframe and window.print()
+function printInHiddenIframe(html) {
   let iframe = document.getElementById('pos-print-iframe');
   if (!iframe) {
     iframe = document.createElement('iframe');
@@ -171,4 +172,24 @@ export async function printInvoiceReceipt(order, invoiceCode, branchName, cashie
     iframe.contentWindow.focus();
     iframe.contentWindow.print();
   }, 250);
+}
+
+/**
+ * In hóa đơn K80. Trong Electron, main process mở một cửa sổ ẩn chỉ chứa HTML hóa đơn rồi in
+ * (in thẳng cửa sổ chính sẽ ra ảnh màn hình POS). Trên trình duyệt thì in qua iframe ẩn.
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function printInvoiceReceipt(receipt) {
+  const html = generateReceiptHtml(receipt);
+
+  if (window.electronAPI && typeof window.electronAPI.printReceipt === 'function') {
+    try {
+      return await window.electronAPI.printReceipt({ html, silent: true });
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  printInHiddenIframe(html);
+  return { success: true };
 }

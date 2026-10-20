@@ -3,6 +3,7 @@ package com.pos.sale;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -26,6 +27,10 @@ public class InvoiceRequest {
     private BigDecimal receivedAmount;
 
     private String note;
+
+    /** Mã chống trùng do POS tạo cho mỗi đơn (UUID); tùy chọn */
+    @Size(max = 64, message = "Mã yêu cầu tối đa 64 ký tự")
+    private String clientRequestId;
 
     @NotEmpty(message = "Hóa đơn phải có ít nhất 1 sản phẩm")
     private List<Item> items;
