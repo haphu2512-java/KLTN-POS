@@ -45,16 +45,32 @@ export default function Table({
                 onClick={() => onRowClick && onRowClick(row, idx)}
                 style={{ cursor: onRowClick ? 'pointer' : 'default' }}
               >
-                {columns.map((col) => (
-                  <td
-                    key={col.key}
-                    className={`align-${col.align || 'left'}`}
-                  >
-                    {col.render
-                      ? col.render(row[col.key], row, idx)
-                      : row[col.key] ?? '—'}
-                  </td>
-                ))}
+                {columns.map((col) => {
+                  const val = row[col.key];
+                  let cellContent;
+                  if (col.render) {
+                    try {
+                      cellContent = col.render(val, row, idx);
+                    } catch {
+                      try {
+                        cellContent = col.render(row, idx);
+                      } catch {
+                        cellContent = val ?? '—';
+                      }
+                    }
+                  } else {
+                    cellContent = val ?? '—';
+                  }
+
+                  return (
+                    <td
+                      key={col.key}
+                      className={`align-${col.align || 'left'}`}
+                    >
+                      {cellContent}
+                    </td>
+                  );
+                })}
               </tr>
             ))
           )}

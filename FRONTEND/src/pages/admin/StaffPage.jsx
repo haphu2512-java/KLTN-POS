@@ -158,22 +158,23 @@ export default function StaffPage({
     {
       key: 'username',
       title: 'Tài khoản',
-      render: (u) => <strong style={{ color: 'var(--text-main)' }}>{u.username}</strong>
+      render: (val, u) => <strong style={{ color: 'var(--text-main)' }}>{val || u?.username}</strong>
     },
     { key: 'fullName', title: 'Họ và tên' },
     {
       key: 'role',
       title: 'Vai trò',
-      render: (u) => {
+      render: (val, u) => {
+        const role = val || u?.role;
         let variant = 'secondary';
         let label = 'Thu ngân';
-        if (u.role === 'ADMIN') {
+        if (role === 'ADMIN') {
           variant = 'danger';
           label = 'Quản trị viên';
-        } else if (u.role === 'MANAGER') {
+        } else if (role === 'MANAGER') {
           variant = 'brand';
           label = 'Quản lý';
-        } else if (u.role === 'WAREHOUSE') {
+        } else if (role === 'WAREHOUSE') {
           variant = 'warning';
           label = 'Thủ kho';
         }
@@ -183,26 +184,32 @@ export default function StaffPage({
     {
       key: 'branchId',
       title: 'Chi nhánh',
-      render: (u) => `Chi nhánh ${u.branchId || 1}`
+      render: (val, u) => `Chi nhánh ${val || u?.branchId || 1}`
     },
     {
       key: 'active',
       title: 'Trạng thái',
-      render: (u) => (
-        <Badge variant={u.active ? 'success' : 'secondary'}>
-          {u.active ? 'Đang hoạt động' : 'Đã khóa'}
-        </Badge>
-      )
+      render: (val, u) => {
+        const active = val !== undefined ? val : u?.active;
+        return (
+          <Badge variant={active ? 'success' : 'secondary'}>
+            {active ? 'Đang hoạt động' : 'Đã khóa'}
+          </Badge>
+        );
+      }
     },
     {
       key: 'createdAt',
       title: 'Ngày tạo',
-      render: (u) => (u.createdAt ? formatDateTime(u.createdAt) : '—')
+      render: (val, u) => {
+        const dt = val || u?.createdAt;
+        return dt ? formatDateTime(dt) : '—';
+      }
     },
     {
       key: 'actions',
       title: 'Thao tác',
-      render: (u) => (
+      render: (_, u) => (
         <div className="staff-actions-cell">
           <Button
             size="sm"

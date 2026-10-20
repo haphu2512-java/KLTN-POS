@@ -197,69 +197,84 @@ export default function ReportPage({
       key: 'id',
       title: 'Mã HĐ',
       width: '90px',
-      render: (i) => <strong style={{ color: 'var(--text-main)', fontFamily: 'monospace' }}>#{i.id}</strong>
+      render: (val, i) => <strong style={{ color: 'var(--text-main)', fontFamily: 'monospace' }}>#{val || i?.id}</strong>
     },
     {
       key: 'createdAt',
       title: 'Thời gian',
       width: '150px',
-      render: (i) => (i.createdAt ? formatDateTime(i.createdAt) : '—')
+      render: (val, i) => {
+        const dt = val || i?.createdAt;
+        return dt ? formatDateTime(dt) : '—';
+      }
     },
     {
       key: 'customer',
       title: 'Khách hàng',
-      render: (i) => (i.customer ? `${i.customer.name} (${i.customer.phone})` : 'Khách lẻ')
+      render: (val, i) => {
+        const cust = val || i?.customer;
+        return cust ? `${cust.name} (${cust.phone})` : 'Khách lẻ';
+      }
     },
     {
       key: 'totalAmount',
       title: 'Tổng tiền',
       align: 'right',
-      render: (i) => <strong style={{ color: 'var(--primary-600)' }}>{formatCurrency(i.totalAmount)}</strong>
+      render: (val, i) => {
+        const total = val ?? i?.totalAmount ?? 0;
+        return <strong style={{ color: 'var(--primary-600)' }}>{formatCurrency(total)}</strong>;
+      }
     },
     {
       key: 'paymentMethod',
       title: 'Hình thức',
       align: 'center',
-      render: (i) => <Badge variant="secondary">{i.paymentMethod}</Badge>
+      render: (val, i) => <Badge variant="secondary">{val || i?.paymentMethod}</Badge>
     },
     {
       key: 'status',
       title: 'Trạng thái',
       align: 'center',
-      render: (i) => (
-        <Badge variant={i.status === 'REFUNDED' ? 'danger' : 'success'}>
-          {i.status === 'REFUNDED' ? 'Đã hoàn trả' : 'Đã thanh toán'}
-        </Badge>
-      )
+      render: (val, i) => {
+        const st = val || i?.status;
+        return (
+          <Badge variant={st === 'REFUNDED' ? 'danger' : 'success'}>
+            {st === 'REFUNDED' ? 'Đã hoàn trả' : 'Đã thanh toán'}
+          </Badge>
+        );
+      }
     },
     {
       key: 'note',
       title: 'Ghi chú',
-      render: (i) => <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{i.note || '—'}</span>
+      render: (val, i) => <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{val || i?.note || '—'}</span>
     },
     {
       key: 'actions',
       title: 'Thao tác',
       align: 'center',
-      render: (i) => (
-        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-          {i.status !== 'REFUNDED' ? (
-            <Button
-              size="sm"
-              variant="danger"
-              onClick={() => {
-                setRefundTarget(i);
-                setShowRefundModal(true);
-              }}
-              title="Thực hiện hoàn trả hàng và hoàn tiền cho khách"
-            >
-              Trả hàng
-            </Button>
-          ) : (
-            <span style={{ fontSize: '11px', color: 'var(--danger-600)' }}>Đã hoàn kho</span>
-          )}
-        </div>
-      )
+      render: (_, i) => {
+        const st = i?.status;
+        return (
+          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+            {st !== 'REFUNDED' ? (
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => {
+                  setRefundTarget(i);
+                  setShowRefundModal(true);
+                }}
+                title="Thực hiện hoàn trả hàng và hoàn tiền cho khách"
+              >
+                Trả hàng
+              </Button>
+            ) : (
+              <span style={{ fontSize: '11px', color: 'var(--danger-600)' }}>Đã hoàn kho</span>
+            )}
+          </div>
+        );
+      }
     }
   ];
 

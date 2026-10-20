@@ -105,26 +105,32 @@ export default function PartnerPage({
     {
       key: 'name',
       title: 'Họ và tên',
-      render: (c) => <strong style={{ color: 'var(--text-main)' }}>{c.name}</strong>
+      render: (val, c) => <strong style={{ color: 'var(--text-main)' }}>{val || c?.name}</strong>
     },
     {
       key: 'phone',
       title: 'Số điện thoại',
-      render: (c) => <span style={{ color: 'var(--text-main)', fontFamily: 'monospace' }}>{c.phone}</span>
+      render: (val, c) => <span style={{ color: 'var(--text-main)', fontFamily: 'monospace' }}>{val || c?.phone || '—'}</span>
     },
     {
       key: 'points',
       title: 'Điểm tích lũy',
-      render: (c) => (
-        <Badge variant={c.points > 50 ? 'brand' : 'secondary'}>
-          {formatNumber(c.points || 0)} điểm
-        </Badge>
-      )
+      render: (val, c) => {
+        const pts = val ?? c?.points ?? 0;
+        return (
+          <Badge variant={pts > 50 ? 'brand' : 'secondary'}>
+            {formatNumber(pts)} điểm
+          </Badge>
+        );
+      }
     },
     {
       key: 'createdAt',
       title: 'Ngày đăng ký',
-      render: (c) => (c.createdAt ? formatDateTime(c.createdAt) : '—')
+      render: (val, c) => {
+        const dt = val || c?.createdAt;
+        return dt ? formatDateTime(dt) : '—';
+      }
     }
   ];
 
@@ -140,22 +146,25 @@ export default function PartnerPage({
     {
       key: 'name',
       title: 'Tên nhà cung cấp',
-      render: (s) => <strong style={{ color: 'var(--text-main)' }}>{s.name}</strong>
+      render: (val, s) => <strong style={{ color: 'var(--text-main)' }}>{val || s?.name}</strong>
     },
     {
       key: 'phone',
       title: 'Số điện thoại',
-      render: (s) => (s.phone ? <span style={{ fontFamily: 'monospace' }}>{s.phone}</span> : '—')
+      render: (val, s) => {
+        const ph = val || s?.phone;
+        return ph ? <span style={{ fontFamily: 'monospace' }}>{ph}</span> : '—';
+      }
     },
     {
       key: 'email',
       title: 'Email',
-      render: (s) => s.email || '—'
+      render: (val, s) => val || s?.email || '—'
     },
     {
       key: 'address',
       title: 'Địa chỉ',
-      render: (s) => s.address || '—'
+      render: (val, s) => val || s?.address || '—'
     }
   ];
 
