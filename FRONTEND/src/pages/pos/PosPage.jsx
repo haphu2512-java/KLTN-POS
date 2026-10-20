@@ -5,6 +5,7 @@ import PosPayment from './PosPayment';
 import ProductSearchModal from './ProductSearchModal';
 import CustomerModal from './CustomerModal';
 import VietQRModal from './VietQRModal';
+import ScannerPairingModal from './ScannerPairingModal';
 import { Modal, Button } from '../../components/common';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { useHotkeys } from '../../hooks/useHotkeys';
@@ -16,6 +17,7 @@ import { inventoryService } from '../../services/inventoryService';
 import { customerService } from '../../services/customerService';
 import { saleService } from '../../services/saleService';
 import { websocketService } from '../../services/websocketService';
+import { scannerPairingService } from '../../services/scannerPairingService';
 import './PosPage.css';
 
 // Mã chống trùng cho mỗi đơn: bấm thanh toán lại sau khi mất phản hồi sẽ không tạo hóa đơn thứ hai
@@ -125,6 +127,10 @@ export default function PosPage({
   const [isCustomerOpen, setIsCustomerOpen] = useState(false);
   const [isVietQROpen, setIsVietQROpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isPairingOpen, setIsPairingOpen] = useState(false);
+  // Quầy (máy POS) này; điện thoại ghép cặp với quầy để bắn mã vào giỏ
+  const [terminal, setTerminal] = useState(null);
+  const [pairedCount, setPairedCount] = useState(0);
   // Các mã quét offline trên điện thoại vừa đồng bộ lên, chờ thu ngân xác nhận
   const [remoteBatch, setRemoteBatch] = useState(null);
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -258,7 +264,7 @@ export default function PosPage({
 
   // Hook Barcode scanner
   useBarcodeScanner(handleBarcodeScanned, {
-    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !remoteBatch
+    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !isPairingOpen && !remoteBatch
   });
 
   // Listen to simulated scan events (e.g. from BarcodePrintModal or mock tester)
@@ -272,7 +278,32 @@ export default function PosPage({
     return () => window.removeEventListener('pos:barcode_scanned', handleCustomScan);
   }, [handleBarcodeScanned]);
 
-  // Mã quét từ điện thoại đăng nhập cùng tài khoản (server chỉ gửi tới đúng tài khoản này)
+  // Đăng ký máy này là một quầy (một lần, id lưu trên máy) và nghe mã quét của điện thoại đã ghép
+  useEffect(() => {
+    let cancelled = false;
+    scannerPairingService
+      .ensureTerminal(`Quầy ${branchId || 1}`)
+      .then((t) => {
+        if (cancelled) return;
+        setTerminal(t);
+        websocketService.setTerminal(t.id);
+        return scannerPairingService.listPairings(t.id).then((list) => !cancelled && setPairedCount(list.length));
+      })
+      .catch((err) => console.warn('Không đăng ký được quầy POS:', err.message));
+    return () => {
+      cancelled = true;
+      websocketService.setTerminal(null);
+    };
+  }, [branchId, isOnline]);
+
+  useEffect(() => {
+    if (!terminal) return;
+    return websocketService.on('scanner-pairing', () => {
+      scannerPairingService.listPairings(terminal.id).then((list) => setPairedCount(list.length)).catch(() => {});
+    });
+  }, [terminal]);
+
+  // Mã quét từ điện thoại đã ghép cặp với quầy này (server chỉ gửi tới đúng quầy)
   useEffect(() => {
     const unsub = websocketService.on('barcode-scanned-remote', (payload) => {
       if (payload?.action !== 'ADD_TO_CART') return;
@@ -546,6 +577,7 @@ export default function PosPage({
       setIsCustomerOpen(false);
       setIsVietQROpen(false);
       setIsHelpOpen(false);
+      setIsPairingOpen(false);
       setRemoteBatch(null);
     }
   });
@@ -560,6 +592,9 @@ export default function PosPage({
         shiftName="Ca sáng"
         isOnline={isOnline}
         isWsConnected={isWsConnected}
+        terminalName={terminal?.name}
+        pairedCount={pairedCount}
+        onOpenPairing={() => setIsPairingOpen(true)}
         onOpenHelp={() => setIsHelpOpen(true)}
       />
 
@@ -637,6 +672,15 @@ export default function PosPage({
         onSelectCustomer={(cust) => updateCurrentOrder({ customer: cust })}
         onAddNewCustomer={(newCust) => setCustomers([...customers, newCust])}
       />
+
+      {isPairingOpen && (
+        <ScannerPairingModal
+          isOpen
+          onClose={() => setIsPairingOpen(false)}
+          terminal={terminal}
+          onTerminalChange={setTerminal}
+        />
+      )}
 
       <VietQRModal
         isOpen={isVietQROpen}

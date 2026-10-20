@@ -9,6 +9,9 @@ export default function PosHeader({
   shiftName = 'Ca sáng',
   isOnline = true,
   isWsConnected = false,
+  terminalName,
+  pairedCount = 0,
+  onOpenPairing,
   onOpenHelp
 }) {
   const [timeStr, setTimeStr] = useState(formatDateTime());
@@ -46,6 +49,14 @@ export default function PosHeader({
           {statusText}
         </span>
         <span className="pos-time">{timeStr}</span>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onOpenPairing}
+          title="Ghép điện thoại quét mã vạch với quầy này"
+        >
+          {terminalName || 'Quầy POS'} · {pairedCount > 0 ? `${pairedCount} điện thoại` : 'Ghép điện thoại'}
+        </Button>
         <Button variant="secondary" size="sm" hotkey="F1" onClick={onOpenHelp} title="Xem hướng dẫn phím tắt">
           Phím tắt
         </Button>

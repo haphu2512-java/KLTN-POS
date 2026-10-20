@@ -7,7 +7,8 @@ const STORAGE_KEYS = {
   SCAN_MODE: '@pos_scanner_mode', // 'POS_REMOTE' | 'PRICE_CHECK'
   HAPTIC_ENABLED: '@pos_scanner_haptic',
   SOUND_ENABLED: '@pos_scanner_sound',
-  AUTH_SESSION: '@pos_scanner_session' // { token, username, fullName, role, branchId }
+  AUTH_SESSION: '@pos_scanner_session', // { token, username, fullName, role, branchId }
+  PAIRING: '@pos_scanner_pairing' // { pairingId, terminalName }
 };
 
 // Default server URL based on platform
@@ -20,7 +21,25 @@ const getDefaultServerUrl = () => {
 };
 
 export const AppConfig = {
-  // Phiên đăng nhập: điện thoại dùng cùng tài khoản với máy POS cần nhận mã quét
+  // Quầy POS đã ghép cặp (quét QR trên máy POS); mã quét được bắn vào giỏ của quầy này
+  async getPairing() {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.PAIRING);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  async setPairing(pairing) {
+    await AsyncStorage.setItem(STORAGE_KEYS.PAIRING, JSON.stringify(pairing));
+  },
+
+  async clearPairing() {
+    await AsyncStorage.removeItem(STORAGE_KEYS.PAIRING);
+  },
+
+  // Phiên đăng nhập của nhân viên đang cầm điện thoại
   async getSession() {
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_SESSION);

@@ -1,5 +1,6 @@
 package com.pos.config;
 
+import com.pos.scanner.TerminalAccess;
 import com.pos.security.CustomUserDetailsService;
 import com.pos.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JwtTokenProvider tokenProvider;
     private final CustomUserDetailsService userDetailsService;
+    private final TerminalAccess terminalAccess;
 
     // Dùng chung danh sách origin với CORS thay vì cho phép mọi origin ("*")
     @Value("${cors.allowed-origins:http://localhost:*,http://127.0.0.1:*,http://192.168.*.*:*,http://10.*.*.*:*,http://172.*.*.*:*,file://*}")
@@ -76,7 +78,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 } else if (StompCommand.SEND.equals(accessor.getCommand())) {
                     checkSendDestination(accessor.getDestination());
                 } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
-                    checkSubscribeDestination(accessor.getDestination());
+                    checkSubscribeDestination(accessor.getDestination(),
+                            accessor.getUser() == null ? null : accessor.getUser().getName());
                 }
                 return message;
             }
@@ -97,11 +100,17 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     /**
      * Chỉ cho subscribe /topic/** và hàng đợi riêng của chính mình qua /user/queue/**.
      * Subscribe thẳng /queue/... (tên hàng đợi đã gắn session của người khác) bị chặn.
+     * Không cho dùng ký tự đại diện (broker so khớp kiểu Ant: "/topic/**" sẽ nghe trộm mọi quầy).
+     * Kênh mã quét của quầy (/topic/terminals/{id}/scans) chỉ cho tài khoản cùng chi nhánh với quầy.
      */
-    static void checkSubscribeDestination(String destination) {
+    void checkSubscribeDestination(String destination, String username) {
         if (destination == null
-                || !(destination.startsWith("/topic/") || destination.startsWith("/user/queue/"))) {
+                || !(destination.startsWith("/topic/") || destination.startsWith("/user/queue/"))
+                || destination.contains("*") || destination.contains("?") || destination.contains("{")) {
             throw new MessagingException("Không được đăng ký nhận tin từ " + destination);
+        }
+        if (destination.startsWith(TerminalAccess.TOPIC_PREFIX) && !terminalAccess.canSubscribe(username, destination)) {
+            throw new MessagingException("Không được nghe mã quét của quầy này");
         }
     }
 

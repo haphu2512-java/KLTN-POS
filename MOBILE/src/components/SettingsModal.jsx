@@ -21,6 +21,9 @@ export default function SettingsModal({
   onClose,
   onSettingsSaved,
   session,
+  pairing,
+  onPairCode,
+  onUnpair,
   onLogout,
   onAuthError
 }) {
@@ -32,6 +35,8 @@ export default function SettingsModal({
   const [isSyncingCatalog, setIsSyncingCatalog] = useState(false);
   const [cachedCount, setCachedCount] = useState(0);
   const [lastSyncTime, setLastSyncTime] = useState(null);
+  const [pairCode, setPairCode] = useState('');
+  const [isPairing, setIsPairing] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -87,6 +92,25 @@ export default function SettingsModal({
     } finally {
       setIsSyncingCatalog(false);
     }
+  };
+
+  // Nhập tay mã 6 số hiện dưới QR trên máy POS (khi camera không đọc được QR)
+  const handleManualPair = async () => {
+    if (!/^\d{6}$/.test(pairCode.trim())) {
+      Alert.alert('Mã không hợp lệ', 'Nhập đúng 6 chữ số hiện trên máy POS.');
+      return;
+    }
+    setIsPairing(true);
+    const ok = await onPairCode(pairCode.trim());
+    setIsPairing(false);
+    if (ok) setPairCode('');
+  };
+
+  const handleUnpair = () => {
+    Alert.alert('Hủy ghép cặp', `Điện thoại sẽ ngừng bắn mã vào ${pairing?.terminalName}.`, [
+      { text: 'Không', style: 'cancel' },
+      { text: 'Hủy ghép', style: 'destructive', onPress: onUnpair }
+    ]);
   };
 
   const handleSave = async () => {
@@ -175,6 +199,54 @@ export default function SettingsModal({
                   </Text>
                 </View>
               )}
+            </View>
+
+            {/* PAIRING: điện thoại bắn mã vào quầy POS đã ghép */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Quầy POS nhận mã quét</Text>
+              {pairing ? (
+                <>
+                  <View style={styles.cacheInfoBox}>
+                    <Text style={styles.cacheCount}>
+                      Đang ghép: <Text style={styles.highlightText}>{pairing.terminalName}</Text>
+                    </Text>
+                    <Text style={styles.cacheTime}>Muốn đổi quầy: quét QR trên máy POS khác.</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.syncCatalogBtn, { backgroundColor: '#7f1d1d' }]}
+                    onPress={handleUnpair}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.syncCatalogBtnText}>Hủy ghép cặp</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <Text style={styles.cacheTime}>
+                  Trên máy POS bấm "Ghép điện thoại", rồi đưa camera vào mã QR. Hoặc nhập mã 6 số:
+                </Text>
+              )}
+              <View style={[styles.presetsRow, { alignItems: 'center' }]}>
+                <TextInput
+                  style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                  value={pairCode}
+                  onChangeText={setPairCode}
+                  placeholder="Mã 6 số trên máy POS"
+                  placeholderTextColor="#64748b"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+                <TouchableOpacity
+                  style={[styles.presetChip, { paddingVertical: 12 }]}
+                  onPress={handleManualPair}
+                  disabled={isPairing}
+                >
+                  {isPairing ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.presetText}>Ghép</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* ACCOUNT: chi nhánh lấy theo tài khoản đăng nhập, không chọn tay */}

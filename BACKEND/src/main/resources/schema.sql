@@ -127,3 +127,23 @@ CREATE TABLE IF NOT EXISTS invoice_detail (
     FOREIGN KEY (invoice_id) REFERENCES invoice(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES product(id) ON DELETE CASCADE
 );
+
+-- 11. Bảng Quầy POS (mỗi máy POS là một quầy; id do server cấp, lưu trên máy POS)
+CREATE TABLE IF NOT EXISTS pos_terminal (
+    id VARCHAR(36) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    branch_id BIGINT,
+    created_by VARCHAR(50),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 12. Bảng Ghép cặp Điện thoại quét mã ↔ Quầy POS (tạo khi điện thoại quét QR trên máy POS)
+CREATE TABLE IF NOT EXISTS scanner_pairing (
+    id VARCHAR(36) PRIMARY KEY,
+    terminal_id VARCHAR(36) NOT NULL,
+    username VARCHAR(50) NOT NULL,
+    device_name VARCHAR(100),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_used_at DATETIME,
+    FOREIGN KEY (terminal_id) REFERENCES pos_terminal(id) ON DELETE CASCADE
+);
