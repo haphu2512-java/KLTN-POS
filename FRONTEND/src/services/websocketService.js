@@ -11,11 +11,10 @@ class WebSocketService {
 
   connect(wsUrl) {
     if (!wsUrl) {
-      const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-      const wsProtocol = isHttps ? 'wss:' : 'ws:';
-      const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+      // Lấy từ VITE_WS_URL trong FRONTEND/.env; nếu không có thì dùng /ws cùng origin (đi qua proxy của Vite)
       const envWsUrl = import.meta.env?.VITE_WS_URL;
-      wsUrl = envWsUrl || `${wsProtocol}//${host}:8080/ws`;
+      const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+      wsUrl = envWsUrl || `${isHttps ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
     }
     if (this.client && this.client.active) {
       return;

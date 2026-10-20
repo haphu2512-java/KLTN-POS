@@ -33,13 +33,13 @@ public class ForecastService {
     private final BranchRepository branchRepository;
     private final ForecastResultRepository forecastResultRepository;
 
-    @Value("${ai.forecast.algorithm:EXP_SMOOTH}")
+    @Value("${ai.forecast.algorithm}")
     private String configuredAlgorithm = "EXP_SMOOTH";
 
-    @Value("${ai.forecast.default-days:7}")
+    @Value("${ai.forecast.default-days}")
     private int configuredForecastDays = 7;
 
-    @Value("${ai.forecast.safety-factor:1.10}")
+    @Value("${ai.forecast.safety-factor}")
     private double safetyFactor = 1.10;
 
     /**

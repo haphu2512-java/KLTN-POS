@@ -3,10 +3,13 @@ import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/common/Button';
 import './LoginPage.css';
 
+// Mật khẩu tài khoản mẫu cho môi trường demo, đặt trong FRONTEND/.env; để trống thì không điền sẵn
+const DEMO_PASSWORD = import.meta.env.VITE_DEMO_PASSWORD || '';
+
 export default function LoginPage({ onSkipOffline }) {
   const { login } = useAuth();
   const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('123456');
+  const [password, setPassword] = useState(DEMO_PASSWORD);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -83,14 +86,14 @@ export default function LoginPage({ onSkipOffline }) {
             <button
               type="button"
               className="quick-role-btn"
-              onClick={() => handleQuickSelect('admin', '123456')}
+              onClick={() => handleQuickSelect('admin', DEMO_PASSWORD)}
             >
               Quản trị (admin)
             </button>
             <button
               type="button"
               className="quick-role-btn"
-              onClick={() => handleQuickSelect('cashier', '123456')}
+              onClick={() => handleQuickSelect('cashier', DEMO_PASSWORD)}
             >
               Thu ngân (cashier)
             </button>

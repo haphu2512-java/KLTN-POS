@@ -5,7 +5,6 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
@@ -17,22 +16,22 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Component
-@Slf4j
 public class JwtTokenProvider {
 
-    /** Secret mẫu công khai trong repo — chỉ dùng cho môi trường dev/demo */
-    static final String DEMO_SECRET = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
+    /** HMAC-SHA256 cần khóa tối thiểu 256 bit */
+    static final int MIN_SECRET_BYTES = 32;
 
-    @Value("${jwt.secret:" + DEMO_SECRET + "}")
+    @Value("${jwt.secret}")
     private String secret;
 
-    @Value("${jwt.expiration:86400000}")
+    @Value("${jwt.expiration}")
     private long expirationMs;
 
     @PostConstruct
-    void warnIfDemoSecret() {
-        if (DEMO_SECRET.equals(secret)) {
-            log.warn("JWT_SECRET đang dùng giá trị mẫu công khai trong repo. Hãy đặt biến môi trường JWT_SECRET riêng trước khi triển khai thực tế.");
+    void validateSecret() {
+        if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException("JWT_SECRET chưa được đặt hoặc ngắn hơn " + MIN_SECRET_BYTES
+                    + " ký tự. Hãy khai báo JWT_SECRET trong file .env (xem .env.example).");
         }
     }
 

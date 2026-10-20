@@ -37,21 +37,36 @@
 - Docker Desktop (Windows)
 - Node.js 18+
 
+### Cấu hình môi trường (`.env`)
+Mọi cấu hình và bí mật đều lấy từ file `.env`, không có giá trị bí mật nào viết sẵn trong code. Mỗi phần có một file mẫu:
+
+| File | Dùng cho | Cách tạo |
+|------|----------|----------|
+| `.env` (thư mục gốc) | Backend Spring Boot và Docker Compose | `cp .env.example .env` |
+| `FRONTEND/.env` | Vite dev server, React, Electron | `cp FRONTEND/.env.example FRONTEND/.env` |
+| `MOBILE/.env` | App quét mã Expo | `cp MOBILE/.env.example MOBILE/.env` |
+
+Biến bắt buộc trong `.env` gốc: `DB_PASSWORD`, `JWT_SECRET` (tối thiểu 32 ký tự, ví dụ `openssl rand -hex 32`), `SEED_DEFAULT_PASSWORD` (lần chạy đầu), và `DB_ROOT_PASSWORD` khi chạy bằng Docker. Thiếu biến bắt buộc thì backend hoặc Docker Compose dừng ngay và báo tên biến còn thiếu.
+
 ### Khởi động Backend + MySQL
 ```bash
-# Tại thư mục gốc dự án
+# Tại thư mục gốc dự án (đã tạo .env)
 docker compose up -d
 
-# Kiểm tra backend đã chạy
+# Hoặc chạy backend trực tiếp (vẫn đọc ../.env)
+cd BACKEND && mvn spring-boot:run
+
 # Swagger UI: http://localhost:8080/swagger-ui/index.html
 # API Login: POST http://localhost:8080/api/auth/login
 ```
 
 ### Tài khoản mặc định
-| Tài khoản | Mật khẩu | Vai trò |
-|-----------|----------|---------|
-| `admin` | `123456` | ADMIN (toàn quyền) |
-| `cashier` | `123456` | CASHIER (chỉ bán hàng) |
+Tạo tự động khi database còn trống, mật khẩu là giá trị `SEED_DEFAULT_PASSWORD` trong `.env`.
+
+| Tài khoản | Vai trò |
+|-----------|---------|
+| `admin` | ADMIN (toàn quyền) |
+| `cashier` | CASHIER (chỉ bán hàng) |
 
 ### Khởi động Frontend
 ```bash
@@ -61,7 +76,7 @@ npm run dev          # Giao diện web: http://localhost:5173
 npm run dev:electron # Chạy Electron desktop app (cần backend đã chạy)
 ```
 
-> **Lưu ý quan trọng:** Frontend dùng Vite Proxy (`/api` → `http://localhost:8080`). Không gặp lỗi CORS khi chạy qua `npm run dev`.
+> **Lưu ý quan trọng:** Khi chạy `npm run dev`, frontend dùng Vite Proxy (`/api`, `/ws` → `DEV_PROXY_TARGET`, mặc định `http://localhost:8080`) nên không gặp lỗi CORS. Khi build Electron phải đặt `VITE_API_BASE_URL` và `VITE_WS_URL` trong `FRONTEND/.env`.
 
 ---
 
