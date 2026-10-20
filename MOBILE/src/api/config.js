@@ -11,10 +11,14 @@ const STORAGE_KEYS = {
   PAIRING: '@pos_scanner_pairing' // { pairingId, terminalName }
 };
 
-// Default server URL based on platform
+// Default server URL based on .env and platform
 const getDefaultServerUrl = () => {
+  // Read from EXPO_PUBLIC_SERVER_URL in .env if defined
+  const envUrl = process.env.EXPO_PUBLIC_SERVER_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim().length > 0) {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
   if (Platform.OS === 'android') {
-    // 10.0.2.2 is the Android emulator's alias to host loopback interface
     return 'http://10.0.2.2:8080';
   }
   return 'http://localhost:8080';
