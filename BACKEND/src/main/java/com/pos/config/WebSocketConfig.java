@@ -34,7 +34,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final TerminalAccess terminalAccess;
 
     // Dùng chung danh sách origin với CORS thay vì cho phép mọi origin ("*")
-    @Value("${cors.allowed-origins:http://localhost:*,http://127.0.0.1:*,http://192.168.*.*:*,http://10.*.*.*:*,http://172.*.*.*:*,file://*}")
+    @Value("${cors.allowed-origins}")
     private String allowedOrigins;
 
     @Override

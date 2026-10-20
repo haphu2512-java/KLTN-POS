@@ -13,6 +13,7 @@ import com.pos.user.User;
 import com.pos.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -32,9 +33,16 @@ public class DatabaseInitializer implements CommandLineRunner {
     private final InventoryRepository inventoryRepository;
     private final PasswordEncoder passwordEncoder;
 
+    @Value("${app.seed.default-password:}")
+    private String seedPassword;
+
     @Override
     public void run(String... args) {
         if (branchRepository.count() == 0) {
+            if (seedPassword == null || seedPassword.isBlank()) {
+                throw new IllegalStateException("Database trống nhưng chưa đặt SEED_DEFAULT_PASSWORD trong file .env "
+                        + "để tạo tài khoản mẫu admin/cashier (xem .env.example).");
+            }
             log.info("Khởi tạo dữ liệu mẫu ban đầu cho hệ thống POS...");
 
             // 1. Tạo Chi nhánh
@@ -52,10 +60,10 @@ public class DatabaseInitializer implements CommandLineRunner {
                     .active(true)
                     .build());
 
-            // 2. Tạo Tài khoản mẫu (Mật khẩu mặc định: 123456)
+            // 2. Tạo Tài khoản mẫu (mật khẩu lấy từ SEED_DEFAULT_PASSWORD)
             userRepository.save(User.builder()
                     .username("admin")
-                    .password(passwordEncoder.encode("123456"))
+                    .password(passwordEncoder.encode(seedPassword))
                     .fullName("Quản Trị Viên")
                     .role(Role.ADMIN)
                     .branchId(branch1.getId())
@@ -64,7 +72,7 @@ public class DatabaseInitializer implements CommandLineRunner {
 
             userRepository.save(User.builder()
                     .username("cashier")
-                    .password(passwordEncoder.encode("123456"))
+                    .password(passwordEncoder.encode(seedPassword))
                     .fullName("Nguyễn Văn A")
                     .role(Role.CASHIER)
                     .branchId(branch1.getId())

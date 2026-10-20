@@ -213,7 +213,7 @@ spring.jpa.show-sql=false
 spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
 
 # JWT Security
-jwt.secret=9a3f4e8b2d1c7f0a5e8c3b6d9e2a1f4a7c0b8e6d3f2a1c5b8e9d0f3a6b2c5e8d
+jwt.secret=${JWT_SECRET}
 jwt.expiration=86400000
 
 # OpenAPI / Swagger UI
@@ -593,7 +593,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/pos_inventory?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-root}
-      JWT_SECRET: ${JWT_SECRET:-9a3f4e8b2d1c7f0a5e8c3b6d9e2a1f4a7c0b8e6d3f2a1c5b8e9d0f3a6b2c5e8d}
+      JWT_SECRET: ${JWT_SECRET:?Thiếu JWT_SECRET trong .env}
     ports:
       - "8080:8080"
 
