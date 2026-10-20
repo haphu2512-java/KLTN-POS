@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native';
-import { ScannerApi } from '../api/scannerApi';
+import { ScannerApi, AuthError } from '../api/scannerApi';
 import { OfflineStorage } from '../storage/offlineStorage';
 import { formatDate } from '../utils/formatters';
 
@@ -17,7 +17,8 @@ export default function OfflineQueueModal({
   visible,
   queue,
   onClose,
-  onQueueUpdated
+  onQueueUpdated,
+  onAuthError
 }) {
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -26,15 +27,20 @@ export default function OfflineQueueModal({
     setIsSyncing(true);
     try {
       const res = await ScannerApi.syncOfflineQueue();
+      onQueueUpdated();
       if (res.success) {
         Alert.alert('Thành công', res.message);
-        onQueueUpdated();
         onClose();
       } else {
         Alert.alert('Thất bại', res.message);
       }
     } catch (e) {
-      Alert.alert('Lỗi', `Không thể đồng bộ: ${e.message}`);
+      onQueueUpdated();
+      if (e instanceof AuthError) {
+        onAuthError(e);
+      } else {
+        Alert.alert('Lỗi', `Không thể đồng bộ: ${e.message}`);
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -72,7 +78,7 @@ export default function OfflineQueueModal({
             <View>
               <Text style={styles.title}>Hàng đợi quét Offline</Text>
               <Text style={styles.subtitle}>
-                {queue.length} mã đang chờ mạng để gửi tới quầy POS
+                {queue.length} mã chờ gửi. Sau khi đồng bộ, xác nhận trên màn hình POS để thêm vào giỏ.
               </Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>

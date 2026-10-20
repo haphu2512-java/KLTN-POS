@@ -46,8 +46,8 @@ npm start
 1. Tải ứng dụng **Expo Go** trên App Store (iOS) hoặc Google Play (Android).
 2. Đảm bảo điện thoại và máy tính kết nối **cùng một mạng Wi-Fi**.
 3. Dùng ứng dụng Camera của điện thoại (hoặc tính năng Scan QR trong app Expo Go) quét mã QR hiển thị trên màn hình terminal.
-4. Vào biểu tượng **⚙️ Cài đặt** trên app điện thoại:
-   - Điền IP máy tính của bạn: `http://<IP_WIFI_CUA_BAN>:8080` (Ví dụ: `http://192.168.1.15:8080`).
+4. Ở màn hình **Đăng nhập máy quét**, điền IP máy tính (`http://<IP_WIFI_CUA_BAN>:8080`) và **đăng nhập bằng đúng tài khoản đang dùng trên máy POS**. Mã quét chỉ được gửi tới máy POS của tài khoản đó.
+5. Vào biểu tượng **⚙️ Cài đặt** trên app điện thoại:
    - Nhấn **⚡ Kiểm tra kết nối máy chủ** -> Báo `✓ Kết nối thành công`.
    - Nhấn **📥 Tải danh mục sản phẩm về máy (Offline)**.
 
@@ -59,6 +59,10 @@ npm start
 
 ## 📡 API & WebSocket Specification
 
-- **POST** `/api/scanner/broadcast`: Nhận barcode từ điện thoại và phát qua STOMP topic `/topic/barcode-scans`.
-- **GET** `/api/scanner/products/cache`: Trả về toàn bộ danh mục sản phẩm đang kinh doanh để cache Offline.
-- **POST** `/api/scanner/sync-batch`: Đồng bộ danh sách hàng đợi các mã đã quét trong lúc mất mạng.
+Mọi API trừ `ping` đều cần header `Authorization: Bearer <JWT>` (lấy từ `POST /api/auth/login`).
+
+- **GET** `/api/scanner/ping`: Kiểm tra kết nối, không cần đăng nhập.
+- **POST** `/api/scanner/broadcast`: Bắn một mã vào giỏ POS của cùng tài khoản, qua hàng đợi riêng `/user/queue/barcode-scans` (tin `type: "SCAN"`). Gửi trùng `clientScanId` sẽ bị bỏ qua.
+- **GET** `/api/scanner/lookup?barcode=`: Tra giá và tồn kho tại chi nhánh của tài khoản; không gửi gì tới POS.
+- **GET** `/api/scanner/products/cache`: Danh mục sản phẩm đang kinh doanh (không có giá vốn) để tra cứu Offline.
+- **POST** `/api/scanner/sync-batch`: Body `{ "scans": [...] }`, tối đa 200 mã mỗi lần. Server gửi một tin `type: "BATCH"` theo thứ tự quét; POS hỏi thu ngân trước khi thêm vào giỏ.

@@ -54,8 +54,8 @@ class WebSocketService {
             }
           });
 
-          // Subscribe to remote barcode scans from mobile phone
-          this.client.subscribe('/topic/barcode-scans', (message) => {
+          // Mã quét từ điện thoại đăng nhập cùng tài khoản (hàng đợi riêng của user, không phát cho mọi quầy)
+          this.client.subscribe('/user/queue/barcode-scans', (message) => {
             try {
               const data = JSON.parse(message.body);
               this.emit('barcode-scanned-remote', data);
