@@ -57,6 +57,22 @@ public class ScannerController {
                 scannerService.catalog(currentUserService.getCurrentUser())));
     }
 
+    @GetMapping("/products/search")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+    @Operation(summary = "Tìm sản phẩm theo tên hoặc mã để gán mã vạch vừa quét")
+    public ResponseEntity<ApiResponse<List<ScannerProductDto>>> searchProducts(@RequestParam String q) {
+        return ResponseEntity.ok(ApiResponse.ok(scannerService.search(q, currentUserService.getCurrentUser())));
+    }
+
+    @PutMapping("/products/{id}/barcode")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+    @Operation(summary = "Gán mã vạch vừa quét cho sản phẩm (thay mã cũ; 409 nếu mã đã thuộc sản phẩm khác)")
+    public ResponseEntity<ApiResponse<ScannerProductDto>> assignBarcode(
+            @PathVariable Long id, @Valid @RequestBody AssignBarcodeRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Đã gán mã vạch cho sản phẩm",
+                scannerService.assignBarcode(id, req.getBarcode(), currentUserService.getCurrentUser())));
+    }
+
     @PostMapping("/sync-batch")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
     @Operation(summary = "Đồng bộ các mã quét lúc offline; POS sẽ hỏi xác nhận trước khi thêm vào giỏ")

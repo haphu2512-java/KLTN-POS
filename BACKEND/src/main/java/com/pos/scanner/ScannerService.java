@@ -1,11 +1,14 @@
 package com.pos.scanner;
 
+import com.pos.common.BusinessException;
 import com.pos.inventory.Inventory;
 import com.pos.inventory.InventoryRepository;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
 import com.pos.user.User;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,9 +21,11 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ScannerService {
 
     private static final int RECENT_SCAN_IDS_LIMIT = 5000;
+    private static final int SEARCH_LIMIT = 30;
 
     private final ProductRepository productRepository;
     private final InventoryRepository inventoryRepository;
@@ -48,6 +53,41 @@ public class ScannerService {
         return productRepository.findByActiveTrue().stream()
                 .map(p -> ScannerProductDto.from(p, stockByProduct.get(p.getId())))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ScannerProductDto> search(String query, User user) {
+        String q = query == null ? "" : query.trim();
+        if (q.isEmpty()) {
+            return List.of();
+        }
+        return productRepository.searchProducts(q).stream()
+                .limit(SEARCH_LIMIT)
+                .map(p -> ScannerProductDto.from(p, stockOf(p, user)))
+                .toList();
+    }
+
+    /**
+     * Thay mã vạch của sản phẩm bằng mã vừa quét từ bao bì.
+     * Dùng khi dữ liệu nhập về mang mã nội bộ (vd. mã của Bách Hóa Xanh) thay vì mã in trên sản phẩm.
+     */
+    @Transactional
+    public ScannerProductDto assignBarcode(Long productId, String barcode, User user) {
+        String clean = barcode.trim();
+        Product product = productRepository.findById(productId)
+                .filter(p -> Boolean.TRUE.equals(p.getActive()))
+                .orElseThrow(() -> new BusinessException("PRODUCT_NOT_FOUND",
+                        "Không tìm thấy sản phẩm với ID: " + productId, HttpStatus.NOT_FOUND));
+
+        Optional<Product> owner = productRepository.findByBarcode(clean);
+        if (owner.isPresent() && !owner.get().getId().equals(product.getId())) {
+            throw new BusinessException("BARCODE_ALREADY_EXISTS",
+                    "Mã vạch " + clean + " đang thuộc sản phẩm \"" + owner.get().getName() + "\"", HttpStatus.CONFLICT);
+        }
+
+        log.info("{} gán mã vạch {} cho sản phẩm #{} (mã cũ {})", user.getUsername(), clean, product.getId(), product.getBarcode());
+        product.setBarcode(clean);
+        return ScannerProductDto.from(productRepository.save(product), stockOf(product, user));
     }
 
     /** Bắn một mã vào giỏ hàng của quầy POS mà điện thoại đã ghép cặp */

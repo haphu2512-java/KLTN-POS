@@ -26,6 +26,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -231,5 +232,40 @@ class ScannerApiIntegrationTest {
         mvc.perform(post("/api/scanner/sync-batch").header("Authorization", tokenFor("cashier"))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"pairingId\":\"" + pairingId + "\",\"scans\":[{\"clientScanId\":\"x\"}]}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Gán mã vạch vừa quét cho sản phẩm: tra được bằng mã mới, mã của sản phẩm khác trả 409, thu ngân không được gán")
+    void assignScannedBarcode() throws Exception {
+        String catalog = mvc.perform(get("/api/scanner/products/cache").header("Authorization", tokenFor("admin")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Integer id = com.jayway.jsonpath.JsonPath.read(catalog, "$.data[1].id");
+        String name = com.jayway.jsonpath.JsonPath.read(catalog, "$.data[1].name");
+        String otherBarcode = com.jayway.jsonpath.JsonPath.read(catalog, "$.data[2].barcode");
+        String newBarcode = "8934588012228";
+
+        mvc.perform(get("/api/scanner/products/search").param("q", name).header("Authorization", tokenFor("admin")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value(id))
+                .andExpect(jsonPath("$.data[0].costPrice").doesNotExist());
+
+        mvc.perform(put("/api/scanner/products/" + id + "/barcode").header("Authorization", tokenFor("cashier"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"barcode\":\"" + newBarcode + "\"}"))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(put("/api/scanner/products/" + id + "/barcode").header("Authorization", tokenFor("admin"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"barcode\":\" " + newBarcode + " \"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.barcode").value(newBarcode));
+
+        mvc.perform(get("/api/scanner/lookup").param("barcode", newBarcode).header("Authorization", tokenFor("cashier")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(id));
+
+        mvc.perform(put("/api/scanner/products/" + id + "/barcode").header("Authorization", tokenFor("admin"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"barcode\":\"" + otherBarcode + "\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("BARCODE_ALREADY_EXISTS"));
     }
 }

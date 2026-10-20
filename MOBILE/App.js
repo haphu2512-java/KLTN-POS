@@ -10,6 +10,7 @@ import {
   BeVietnamPro_700Bold
 } from '@expo-google-fonts/be-vietnam-pro';
 import ProductResultSheet from './src/components/ProductResultSheet';
+import AssignBarcodeModal from './src/components/AssignBarcodeModal';
 import OfflineQueueModal from './src/components/OfflineQueueModal';
 import LoginScreen from './src/components/LoginScreen';
 import TabBar from './src/components/TabBar';
@@ -51,6 +52,9 @@ function AppContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [scanResult, setScanResult] = useState(null);
   const [isResultOpen, setIsResultOpen] = useState(false);
+
+  // Mã đang được gán cho sản phẩm (từ thẻ "Không tìm thấy sản phẩm")
+  const [assignBarcode, setAssignBarcode] = useState(null);
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isSyncingCatalog, setIsSyncingCatalog] = useState(false);
@@ -295,6 +299,34 @@ function AppContent() {
     }
   };
 
+  // Thu ngân không được sửa danh mục; khớp quyền của PUT /api/scanner/products/{id}/barcode
+  const canAssignBarcode = ['ADMIN', 'MANAGER', 'WAREHOUSE'].includes(session?.role);
+
+  // iOS không mở được Modal mới khi Modal cũ chưa đóng hẳn, nên chờ hiệu ứng đóng xong
+  const MODAL_SWITCH_DELAY_MS = 350;
+
+  const handleOpenAssign = (barcode) => {
+    setIsResultOpen(false);
+    setTimeout(() => setAssignBarcode(barcode), MODAL_SWITCH_DELAY_MS);
+  };
+
+  const handleBarcodeAssigned = async (product) => {
+    const barcode = assignBarcode;
+    setAssignBarcode(null);
+    await triggerScanFeedback(true);
+    setScanResult({
+      barcode,
+      mode: 'PRICE_CHECK',
+      online: true,
+      found: true,
+      product,
+      message: `Đã gán mã cho "${product.name}". Lần sau quét mã này sẽ ra sản phẩm.`
+    });
+    setTimeout(() => setIsResultOpen(true), MODAL_SWITCH_DELAY_MS);
+    setCatalogVersion((v) => v + 1);
+    await refreshData();
+  };
+
   const handleSyncCatalog = async () => {
     setIsSyncingCatalog(true);
     try {
@@ -431,6 +463,16 @@ function AppContent() {
         closeLabel={activeTab === 'scan' ? 'Tiếp tục quét' : 'Đóng'}
         onClose={() => setIsResultOpen(false)}
         onSendToPos={handleSendToPos}
+        canAssignBarcode={canAssignBarcode}
+        onAssignBarcode={handleOpenAssign}
+      />
+
+      <AssignBarcodeModal
+        visible={!!assignBarcode}
+        barcode={assignBarcode}
+        onClose={() => setAssignBarcode(null)}
+        onAssigned={handleBarcodeAssigned}
+        onAuthError={handleAuthError}
       />
 
       <OfflineQueueModal
