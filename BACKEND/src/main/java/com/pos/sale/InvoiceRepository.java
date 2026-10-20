@@ -21,6 +21,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     @Query("SELECT i FROM Invoice i WHERE i.id = :id")
     Optional<Invoice> findByIdForUpdate(@Param("id") Long id);
 
+    Optional<Invoice> findByClientRequestId(String clientRequestId);
+
     List<Invoice> findByBranchIdOrderByCreatedAtDesc(Long branchId);
 
     Page<Invoice> findByBranchIdOrderByCreatedAtDesc(Long branchId, Pageable pageable);

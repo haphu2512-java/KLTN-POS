@@ -59,16 +59,23 @@ class ScannerWebSocketDeliveryTest {
                 user.getBranchId(), user.getRole().name(), user.getFullName());
     }
 
-    private BlockingQueue<Map<String, Object>> subscribe(String username) throws Exception {
+    private StompSession connect(String username) throws Exception {
         WebSocketStompClient client = new WebSocketStompClient(new StandardWebSocketClient());
         client.setMessageConverter(new MappingJackson2MessageConverter());
         StompHeaders connectHeaders = new StompHeaders();
         connectHeaders.add("Authorization", tokenFor(username));
-        StompSession session = client.connectAsync("ws://localhost:" + port + "/ws", new WebSocketHttpHeaders(),
+        return client.connectAsync("ws://localhost:" + port + "/ws", new WebSocketHttpHeaders(),
                 connectHeaders, new StompSessionHandlerAdapter() {}).get(5, TimeUnit.SECONDS);
+    }
 
+    private BlockingQueue<Map<String, Object>> subscribe(String username) throws Exception {
+        return subscribe(username, "/user/queue/barcode-scans");
+    }
+
+    private BlockingQueue<Map<String, Object>> subscribe(String username, String destination) throws Exception {
+        StompSession session = connect(username);
         BlockingQueue<Map<String, Object>> received = new LinkedBlockingQueue<>();
-        session.subscribe("/user/queue/barcode-scans", new StompFrameHandler() {
+        session.subscribe(destination, new StompFrameHandler() {
             @Override
             public Type getPayloadType(StompHeaders headers) {
                 return Map.class;
@@ -101,5 +108,18 @@ class ScannerWebSocketDeliveryTest {
         assertThat(msg.get("type")).isEqualTo("SCAN");
         assertThat(msg.get("barcode")).isEqualTo("ws-test-123");
         assertThat(adminPos.poll(1, TimeUnit.SECONDS)).isNull();
+    }
+
+    @Test
+    @DisplayName("Client không gửi thẳng được vào hàng đợi của tài khoản khác hay vào /topic")
+    void clientCannotInjectMessages() throws Exception {
+        BlockingQueue<Map<String, Object>> cashierPos = subscribe("cashier");
+        BlockingQueue<Map<String, Object>> inventoryFeed = subscribe("cashier", "/topic/inventory-updates");
+
+        connect("admin").send("/user/cashier/queue/barcode-scans", Map.of("type", "SCAN", "barcode", "INJECTED"));
+        connect("admin").send("/topic/inventory-updates", Map.of("branchId", 1, "productId", 1));
+
+        assertThat(cashierPos.poll(2, TimeUnit.SECONDS)).isNull();
+        assertThat(inventoryFeed.poll(1, TimeUnit.SECONDS)).isNull();
     }
 }

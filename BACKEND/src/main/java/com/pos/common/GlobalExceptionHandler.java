@@ -1,5 +1,6 @@
 package com.pos.common;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -34,6 +35,14 @@ public class GlobalExceptionHandler {
                 .data(errors)
                 .build();
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    /** Hai yêu cầu cùng clientRequestId tới gần như đồng thời: bản sau bị ràng buộc unique chặn lại */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(DataIntegrityViolationException ex) {
+        ApiResponse<Void> response = ApiResponse.error("DATA_CONFLICT",
+                "Dữ liệu bị trùng hoặc đang được xử lý, vui lòng tải lại và thử lại");
+        return new ResponseEntity<>(response, HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(BadCredentialsException.class)

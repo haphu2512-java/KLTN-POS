@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import PosHeader from './PosHeader';
 import PosCart from './PosCart';
 import PosPayment from './PosPayment';
@@ -10,13 +10,33 @@ import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { useHotkeys } from '../../hooks/useHotkeys';
 import { playBeepSuccess, playBeepWarning } from '../../utils/audio';
 import { formatCurrency } from '../../utils/formatters';
-import { printInvoiceReceipt } from '../../utils/receiptPrinter';
+import { printInvoiceReceipt, receiptFromInvoice } from '../../utils/receiptPrinter';
 import { productService } from '../../services/productService';
 import { inventoryService } from '../../services/inventoryService';
 import { customerService } from '../../services/customerService';
 import { saleService } from '../../services/saleService';
 import { websocketService } from '../../services/websocketService';
 import './PosPage.css';
+
+// Mã chống trùng cho mỗi đơn: bấm thanh toán lại sau khi mất phản hồi sẽ không tạo hóa đơn thứ hai
+function newRequestId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function emptyOrder() {
+  return {
+    items: [],
+    customer: null,
+    discount: 0,
+    paymentMethod: 'CASH',
+    receivedAmount: 0,
+    note: '',
+    requestId: newRequestId()
+  };
+}
 
 export default function PosPage({
   currentUser,
@@ -95,16 +115,10 @@ export default function PosPage({
   const [activeTabId, setActiveTabId] = useState('order-1');
 
   // Orders State Dict: initial order starts empty ready for scanning/adding
-  const [orders, setOrders] = useState({
-    'order-1': {
-      items: [],
-      customer: null,
-      discount: 0,
-      paymentMethod: 'CASH',
-      receivedAmount: 0,
-      note: ''
-    }
-  });
+  const [orders, setOrders] = useState(() => ({ 'order-1': emptyOrder() }));
+  const [isProcessing, setIsProcessing] = useState(false);
+  // Ref chặn bấm hai lần trước khi state kịp cập nhật (F4 + click, double click)
+  const processingRef = useRef(false);
 
   // Modals state
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -343,19 +357,21 @@ export default function PosPage({
 
   // Cancel Order (F9)
   const handleCancelOrder = () => {
-    if (currentOrder.items.length === 0) return;
+    if (isProcessing || currentOrder.items.length === 0) return;
     if (window.confirm('Bạn có chắc chắn muốn hủy đơn hàng hiện tại?')) {
       updateCurrentOrder({
         items: [],
         discount: 0,
         receivedAmount: 0,
-        note: ''
+        note: '',
+        requestId: newRequestId()
       });
     }
   };
 
   // Process Payment (F4)
   const handleProcessPayment = () => {
+    if (isProcessing) return;
     if (finalAmount <= 0) {
       alert('Đơn hàng chưa có sản phẩm để thanh toán!');
       return;
@@ -377,72 +393,113 @@ export default function PosPage({
 
   // Finalize payment & receipt
   const executeFinishPayment = async () => {
-    const invoiceCode = `HD${Date.now().toString().slice(-6)}`;
-    const branchName = `Chi nhánh ${branchId || 1}`;
+    if (processingRef.current) return;
+    processingRef.current = true;
+    const order = currentOrder;
+    const orderTabId = activeTabId;
     const cashierName = currentUser?.fullName || currentUser?.username || 'Thu ngân';
+    let receipt;
 
-    // 1. Call Backend API if online
-    if (isOnline) {
-      try {
-        await saleService.createInvoice({
-          branchId: Number(branchId) || 1,
-          customerId: currentOrder.customer?.id || null,
-          discount: currentOrder.discount || 0,
-          paymentMethod: currentOrder.paymentMethod,
-          receivedAmount: currentOrder.receivedAmount || finalAmount,
-          note: currentOrder.note || '',
-          items: currentOrder.items.map(it => ({
-            productId: it.id,
-            quantity: it.quantity,
-            unitPrice: it.price
-          }))
-        });
-      } catch (err) {
-        // Server từ chối (sai giá, giảm giá không hợp lệ, hết hàng, không có quyền...):
-        // dừng thanh toán, không in hóa đơn cho đơn chưa được ghi nhận
-        if (err.response) {
+    setIsProcessing(true);
+    try {
+      if (isOnline) {
+        // Chỉ coi là đã bán khi máy chủ đã ghi nhận hóa đơn
+        let invoice;
+        try {
+          invoice = await saleService.createInvoice({
+            branchId: Number(branchId) || 1,
+            customerId: order.customer?.id || null,
+            discount: order.discount || 0,
+            paymentMethod: order.paymentMethod,
+            receivedAmount: order.receivedAmount || finalAmount,
+            note: order.note || '',
+            clientRequestId: order.requestId,
+            items: order.items.map(it => ({
+              productId: it.id,
+              quantity: it.quantity,
+              unitPrice: it.price
+            }))
+          });
+        } catch (err) {
           playBeepWarning();
-          alert(`Không thể thanh toán: ${err.response.data?.message || 'Máy chủ từ chối hóa đơn'}`);
+          if (err.response) {
+            // Server từ chối (sai giá, giảm giá không hợp lệ, hết hàng, không có quyền...)
+            alert(`Không thể thanh toán: ${err.response.data?.message || 'Máy chủ từ chối hóa đơn'}`);
+          } else {
+            // Mất kết nối / hết thời gian chờ: chưa biết server đã lưu hay chưa.
+            // Giữ nguyên giỏ và mã đơn; bấm thanh toán lại sẽ không tạo hóa đơn trùng.
+            alert(
+              'Không nhận được phản hồi từ máy chủ, hóa đơn CHƯA được xác nhận.\n\n' +
+                'Đơn hàng vẫn được giữ nguyên. Kiểm tra kết nối mạng rồi bấm Thanh toán lại ' +
+                '(hệ thống sẽ không ghi trùng hóa đơn). Chưa giao hàng hoặc in hóa đơn cho khách.'
+            );
+          }
           return;
         }
-        // Mất kết nối: giữ hành vi ghi nhận cục bộ như trước
-        console.warn('Backend createInvoice failed, recorded locally:', err.message);
+        receipt = receiptFromInvoice(invoice, cashierName);
+      } else {
+        // Chế độ demo ngoại tuyến (chưa đăng nhập): không có máy chủ, hóa đơn chỉ để trình diễn
+        receipt = {
+          code: `DEMO-${Date.now().toString().slice(-6)}`,
+          branchName: `Chi nhánh ${branchId || 1} (demo, không lưu)`,
+          cashierName,
+          customerName: order.customer ? order.customer.name : 'Khách lẻ',
+          items: order.items.map(it => ({ name: it.name, quantity: it.quantity, unitPrice: it.price })),
+          subtotal,
+          discount: order.discount || 0,
+          total: finalAmount,
+          received: order.paymentMethod === 'CASH' ? order.receivedAmount || finalAmount : finalAmount,
+          change: Math.max(0, changeAmount),
+          paymentMethod: order.paymentMethod
+        };
       }
-    }
-    playBeepSuccess();
 
-    // 2. Deduct stock locally
-    setProducts(prev => {
-      const soldMap = new Map();
-      currentOrder.items.forEach(it => soldMap.set(it.id, it.quantity));
-      return prev.map(p => {
-        if (soldMap.has(p.id)) {
-          return { ...p, stock: Math.max(0, p.stock - soldMap.get(p.id)) };
-        }
-        return p;
+      playBeepSuccess();
+
+      // Trừ tồn kho trên màn hình theo số lượng đã bán
+      setProducts(prev => {
+        const soldMap = new Map();
+        order.items.forEach(it => soldMap.set(it.id, it.quantity));
+        return prev.map(p => {
+          if (soldMap.has(p.id)) {
+            return { ...p, stock: Math.max(0, p.stock - soldMap.get(p.id)) };
+          }
+          return p;
+        });
       });
-    });
 
-    // 3. Print K80 thermal receipt (Electron silent print or browser print)
-    printInvoiceReceipt(currentOrder, invoiceCode, branchName, cashierName);
+      // Làm trống đơn vừa thanh toán (kèm mã chống trùng mới)
+      setOrders(prev => ({
+        ...prev,
+        [orderTabId]: {
+          ...prev[orderTabId],
+          items: [],
+          customer: null,
+          discount: 0,
+          receivedAmount: 0,
+          note: '',
+          requestId: newRequestId()
+        }
+      }));
+      setIsVietQROpen(false);
 
-    alert(
-      `Thanh toán thành công [${invoiceCode}]!\n\n` +
-        `• Khách hàng: ${currentOrder.customer ? currentOrder.customer.name : 'Khách lẻ'}\n` +
-        `• Tổng thanh toán: ${formatCurrency(finalAmount)}\n` +
-        `• Phương thức: ${currentOrder.paymentMethod}\n` +
-        `• Tiền thừa trả khách: ${formatCurrency(Math.max(0, changeAmount))}\n\n` +
-        `Hóa đơn K80 đã được gửi đến lệnh in thành công!`
-    );
+      // In hóa đơn K80 từ dữ liệu server đã ghi nhận
+      const printResult = await printInvoiceReceipt(receipt);
 
-    // Reset current order
-    updateCurrentOrder({
-      items: [],
-      discount: 0,
-      receivedAmount: 0,
-      note: ''
-    });
-    setIsVietQROpen(false);
+      alert(
+        `Thanh toán thành công [${receipt.code}]!\n\n` +
+          `• Khách hàng: ${receipt.customerName}\n` +
+          `• Tổng thanh toán: ${formatCurrency(receipt.total)}\n` +
+          `• Phương thức: ${receipt.paymentMethod}\n` +
+          `• Tiền thừa trả khách: ${formatCurrency(receipt.change)}\n\n` +
+          (printResult?.success
+            ? 'Hóa đơn K80 đã được gửi đến máy in.'
+            : `Hóa đơn đã lưu nhưng KHÔNG in được: ${printResult?.error || 'lỗi máy in'}.`)
+      );
+    } finally {
+      processingRef.current = false;
+      setIsProcessing(false);
+    }
   };
 
   // Tab Handlers
@@ -457,14 +514,7 @@ export default function PosPage({
     setTabs([...tabs, newTab]);
     setOrders((prev) => ({
       ...prev,
-      [newId]: {
-        items: [],
-        customer: null,
-        discount: 0,
-        paymentMethod: 'CASH',
-        receivedAmount: 0,
-        note: ''
-      }
+      [newId]: emptyOrder()
     }));
     setActiveTabId(newId);
   };
@@ -552,6 +602,7 @@ export default function PosPage({
           changeAmount={changeAmount}
           onCancelOrder={handleCancelOrder}
           onProcessPayment={handleProcessPayment}
+          isProcessing={isProcessing}
         />
       </div>
 

@@ -68,12 +68,41 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             @Override
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
                 StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
-                if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
+                if (accessor == null) {
+                    return message;
+                }
+                if (StompCommand.CONNECT.equals(accessor.getCommand())) {
                     accessor.setUser(authenticate(accessor.getFirstNativeHeader("Authorization")));
+                } else if (StompCommand.SEND.equals(accessor.getCommand())) {
+                    checkSendDestination(accessor.getDestination());
+                } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+                    checkSubscribeDestination(accessor.getDestination());
                 }
                 return message;
             }
         });
+    }
+
+    /**
+     * Client chỉ được gửi tới /app/** (hiện chưa có @MessageMapping nào). Không cho client gửi thẳng vào
+     * /topic, /queue hay /user/{username}/..., vì broker sẽ chuyển tiếp nguyên văn: một tài khoản bất kỳ
+     * có thể chèn mã quét vào giỏ POS của tài khoản khác hoặc phát tin tồn kho giả.
+     */
+    static void checkSendDestination(String destination) {
+        if (destination == null || !destination.startsWith("/app/")) {
+            throw new MessagingException("Không được gửi tin tới " + destination);
+        }
+    }
+
+    /**
+     * Chỉ cho subscribe /topic/** và hàng đợi riêng của chính mình qua /user/queue/**.
+     * Subscribe thẳng /queue/... (tên hàng đợi đã gắn session của người khác) bị chặn.
+     */
+    static void checkSubscribeDestination(String destination) {
+        if (destination == null
+                || !(destination.startsWith("/topic/") || destination.startsWith("/user/queue/"))) {
+            throw new MessagingException("Không được đăng ký nhận tin từ " + destination);
+        }
     }
 
     private UsernamePasswordAuthenticationToken authenticate(String authHeader) {

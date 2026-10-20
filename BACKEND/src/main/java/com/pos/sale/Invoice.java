@@ -65,6 +65,10 @@ public class Invoice {
     @Column(length = 255)
     private String note;
 
+    /** Mã do máy POS tạo cho mỗi đơn; gửi lại cùng mã (sau khi timeout) sẽ không tạo hóa đơn thứ hai */
+    @Column(name = "client_request_id", length = 64, unique = true)
+    private String clientRequestId;
+
     @Builder.Default
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
