@@ -7,7 +7,14 @@ class WebSocketService {
     this.listeners = new Map();
   }
 
-  connect(wsUrl = import.meta.env?.VITE_WS_URL || 'ws://localhost:8080/ws') {
+  connect(wsUrl) {
+    if (!wsUrl) {
+      const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+      const wsProtocol = isHttps ? 'wss:' : 'ws:';
+      const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+      const envWsUrl = import.meta.env?.VITE_WS_URL;
+      wsUrl = envWsUrl || `${wsProtocol}//${host}:8080/ws`;
+    }
     if (this.client && this.client.active) {
       return;
     }

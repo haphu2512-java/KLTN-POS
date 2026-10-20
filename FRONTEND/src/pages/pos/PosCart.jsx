@@ -32,15 +32,61 @@ export default function PosCart({
       key: 'name',
       title: 'Tên hàng hóa / Mã vạch',
       render: (_, row) => (
-        <div>
-          <div className="font-medium" style={{ fontSize: '13px' }}>
-            {row.name}
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
-            className="text-muted"
-            style={{ fontSize: '11px', fontFamily: 'var(--font-mono)' }}
+            style={{
+              width: 44,
+              height: 44,
+              minWidth: 44,
+              borderRadius: 6,
+              backgroundColor: '#ffffff',
+              border: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+              flexShrink: 0
+            }}
           >
-            {row.barcode}
+            {row.imageUrl ? (
+              <img
+                src={row.imageUrl}
+                alt={row.name}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain'
+                }}
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  if (e.currentTarget.nextElementSibling) {
+                    e.currentTarget.nextElementSibling.style.display = 'flex';
+                  }
+                }}
+              />
+            ) : null}
+            <span
+              style={{
+                fontSize: '20px',
+                display: row.imageUrl ? 'none' : 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              🛍️
+            </span>
+          </div>
+          <div>
+            <div className="font-semibold" style={{ fontSize: '13.5px', color: 'var(--brand-900)' }}>
+              {row.name}
+            </div>
+            <div
+              className="text-muted"
+              style={{ fontSize: '11px', fontFamily: 'var(--font-mono)' }}
+            >
+              {row.barcode}
+            </div>
           </div>
         </div>
       )

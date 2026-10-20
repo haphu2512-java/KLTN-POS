@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, Input, Table, Badge, Button } from '../../components/common';
+import { Modal, Input, Table, Badge, Button, BarcodeView } from '../../components/common';
 import { formatCurrency } from '../../utils/formatters';
 
 export default function ProductSearchModal({
@@ -22,32 +22,83 @@ export default function ProductSearchModal({
     const term = searchTerm.toLowerCase().trim();
     if (!term) return true;
     return (
-      p.name.toLowerCase().includes(term) ||
-      p.barcode.includes(term) ||
-      p.category.toLowerCase().includes(term)
+      (p.name && p.name.toLowerCase().includes(term)) ||
+      (p.barcode && String(p.barcode).toLowerCase().includes(term)) ||
+      (p.category && p.category.toLowerCase().includes(term))
     );
   });
+
+  const displayedProducts = filtered.slice(0, 100);
 
   const columns = [
     {
       key: 'barcode',
       title: 'Mã vạch (Barcode)',
-      width: '130px',
+      width: '150px',
       render: (val) => (
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-          {val}
-        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <BarcodeView
+            value={val}
+            width={1.1}
+            height={26}
+            fontSize={10}
+            margin={1}
+          />
+        </div>
       )
     },
     {
       key: 'name',
       title: 'Tên hàng hóa',
       render: (val, row) => (
-        <div>
-          <div className="font-medium">{val}</div>
-          <span className="text-muted" style={{ fontSize: '11px' }}>
-            {row.category} • ĐVT: {row.unit}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              minWidth: 40,
+              borderRadius: 6,
+              backgroundColor: '#fff',
+              border: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              flexShrink: 0
+            }}
+          >
+            {row.imageUrl ? (
+              <img
+                src={row.imageUrl}
+                alt=""
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain'
+                }}
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  if (e.currentTarget.nextElementSibling) {
+                    e.currentTarget.nextElementSibling.style.display = 'flex';
+                  }
+                }}
+              />
+            ) : null}
+            <span
+              style={{
+                fontSize: '18px',
+                display: row.imageUrl ? 'none' : 'flex'
+              }}
+            >
+              🛍️
+            </span>
+          </div>
+          <div>
+            <div className="font-medium">{val}</div>
+            <span className="text-muted" style={{ fontSize: '11px' }}>
+              {row.category} • ĐVT: {row.unit}
+            </span>
+          </div>
         </div>
       )
     },
@@ -83,7 +134,10 @@ export default function ProductSearchModal({
           size="sm"
           variant="primary"
           disabled={row.stock <= 0}
-          onClick={() => {
+          onClick={(e) => {
+            if (e && e.stopPropagation) {
+              e.stopPropagation();
+            }
             onSelectProduct(row);
             onClose();
           }}
@@ -118,7 +172,7 @@ export default function ProductSearchModal({
 
         <Table
           columns={columns}
-          data={filtered}
+          data={displayedProducts}
           maxHeight="380px"
           emptyText="Không tìm thấy sản phẩm nào phù hợp"
           onRowClick={(row) => {

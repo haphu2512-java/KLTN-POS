@@ -45,6 +45,6 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
            "ORDER BY SUM(d.quantity) DESC")
     List<Object[]> getTopSellingProducts(@Param("branchId") Long branchId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    @Query("SELECT i FROM Invoice i WHERE (:branchId IS NULL OR i.branch.id = :branchId) AND i.createdAt BETWEEN :start AND :end ORDER BY i.createdAt DESC")
+    @Query("SELECT DISTINCT i FROM Invoice i LEFT JOIN FETCH i.details d LEFT JOIN FETCH d.product WHERE (:branchId IS NULL OR i.branch.id = :branchId) AND i.createdAt BETWEEN :start AND :end ORDER BY i.createdAt DESC")
     List<Invoice> findInvoicesByFilter(@Param("branchId") Long branchId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }

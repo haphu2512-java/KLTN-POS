@@ -1,14 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Button, Input, Table, Badge } from '../../components/common';
+import { Button, Input, Table, Badge, BarcodeView } from '../../components/common';
 import StockInModal from './StockInModal';
 import StockTransferModal from './StockTransferModal';
 import StockInDetailModal from './StockInDetailModal';
-import {
-  INITIAL_PRODUCTS,
-  INITIAL_SUPPLIERS,
-  INITIAL_BRANCHES,
-  INITIAL_STOCK_IN_HISTORY
-} from '../../data/mockProducts';
+import BarcodePrintModal from './BarcodePrintModal';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 import { productService } from '../../services/productService';
 import { inventoryService } from '../../services/inventoryService';
@@ -16,6 +11,11 @@ import { purchaseService } from '../../services/purchaseService';
 import { websocketService } from '../../services/websocketService';
 import { exportToCsv } from '../../utils/exportCsv';
 import './InventoryPage.css';
+
+const BRANCHES = [
+  { id: 1, name: 'Chi nhánh 1 (Quận 1)' },
+  { id: 2, name: 'Chi nhánh 2 (Bình Thạnh)' }
+];
 
 export default function InventoryPage({
   currentUser,
@@ -29,37 +29,55 @@ export default function InventoryPage({
   onNavigateToStaff,
   onLogout
 }) {
-  // State
-  const [products, setProducts] = useState(INITIAL_PRODUCTS);
-  const [suppliers, setSuppliers] = useState(INITIAL_SUPPLIERS);
-  const [branches] = useState(INITIAL_BRANCHES);
-  const [stockInHistory, setStockInHistory] = useState(INITIAL_STOCK_IN_HISTORY);
+  // State from Database
+  const [products, setProducts] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [branches] = useState(BRANCHES);
+  const [stockInHistory, setStockInHistory] = useState([]);
 
   const [currentBranchId, setCurrentBranchId] = useState(branchId || 1);
   const [activeTab, setActiveTab] = useState('inventory'); // 'inventory' | 'history'
+
+  // Barcode Printing State
+  const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
+  const [selectedBarcodeProduct, setSelectedBarcodeProduct] = useState(null);
 
   // Sync data from Backend
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
       try {
-        const [prodList, invList, supList, slipList] = await Promise.all([
+        const [prodRes, invRes, supRes, slipRes] = await Promise.allSettled([
           productService.getProducts(),
           inventoryService.getBranchInventory(currentBranchId),
           purchaseService.getSuppliers(),
           purchaseService.getStockIns(currentBranchId)
         ]);
 
+        const prodList = prodRes.status === 'fulfilled' ? prodRes.value : [];
+        const invList = invRes.status === 'fulfilled' ? invRes.value : [];
+        const supList = supRes.status === 'fulfilled' ? supRes.value : [];
+        const slipList = slipRes.status === 'fulfilled' ? slipRes.value : [];
+
         if (isMounted) {
           if (Array.isArray(prodList) && prodList.length > 0) {
             const stockMap = new Map();
-            (invList || []).forEach(inv => stockMap.set(inv.productId || inv.product?.id, inv.quantity));
+            const thresholdMap = new Map();
+            (invList || []).forEach(inv => {
+              const pid = inv.productId || inv.product?.id;
+              if (pid) {
+                stockMap.set(pid, inv.quantity);
+                if (inv.minThreshold !== undefined) {
+                  thresholdMap.set(pid, inv.minThreshold);
+                }
+              }
+            });
             const merged = prodList.map(p => ({
               ...p,
               stock: stockMap.has(p.id) ? stockMap.get(p.id) : (p.stock || 50),
               costPrice: p.costPrice || 0,
-              salePrice: p.sellingPrice || p.price || 0,
-              minThreshold: p.minThreshold || 10
+              salePrice: p.salePrice ?? p.sellingPrice ?? p.price ?? 0,
+              minThreshold: thresholdMap.has(p.id) ? thresholdMap.get(p.id) : (p.minThreshold || 5)
             }));
             setProducts(merged);
           }
@@ -90,9 +108,7 @@ export default function InventoryPage({
       }
     }
 
-    if (isOnline) {
-      loadData();
-    }
+    loadData();
 
     // Subscribe to STOMP WebSocket inventory updates
     const unsubWs = websocketService.on('inventory-update', (event) => {
@@ -163,6 +179,20 @@ export default function InventoryPage({
       return true;
     });
   }, [products, selectedCategory, stockStatusFilter, searchTerm]);
+
+  // Pagination for large inventory datasets (1900+ products)
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
+  const totalPages = Math.ceil(filteredProducts.length / pageSize) || 1;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategory, stockStatusFilter, searchTerm]);
+
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(start, start + pageSize);
+  }, [filteredProducts, currentPage, pageSize]);
 
   // Handle Save New Stock-In
   const handleSaveStockIn = async (newStockIn) => {
@@ -284,22 +314,72 @@ export default function InventoryPage({
     {
       key: 'barcode',
       title: 'Mã vạch (Barcode)',
-      width: '140px',
-      render: (val) => (
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-          {val}
-        </span>
+      width: '165px',
+      render: (val, row) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: 600 }}>
+              {val}
+            </div>
+            <BarcodeView
+              value={val}
+              width={1.0}
+              height={20}
+              displayValue={false}
+              margin={0}
+            />
+          </div>
+          <button
+            type="button"
+            style={{
+              background: 'rgba(56, 189, 248, 0.1)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              borderRadius: '4px',
+              padding: '2px 6px',
+              cursor: 'pointer',
+              color: '#38BDF8',
+              fontSize: '11px',
+              fontWeight: 600
+            }}
+            title="Xem và in tem mã vạch sản phẩm này"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedBarcodeProduct(row);
+              setIsBarcodeModalOpen(true);
+            }}
+          >
+            🏷️ In
+          </button>
+        </div>
       )
     },
     {
       key: 'name',
       title: 'Tên hàng hóa & Danh mục',
       render: (val, row) => (
-        <div>
-          <div className="font-medium">{val}</div>
-          <span className="text-muted" style={{ fontSize: '11px' }}>
-            {row.category} • ĐVT: <strong>{row.unit}</strong>
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {row.imageUrl && (
+            <img
+              src={row.imageUrl}
+              alt=""
+              style={{
+                width: 38,
+                height: 38,
+                objectFit: 'contain',
+                borderRadius: 4,
+                backgroundColor: '#fff',
+                border: '1px solid #e2e8f0',
+                flexShrink: 0
+              }}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          )}
+          <div>
+            <div className="font-medium">{val}</div>
+            <span className="text-muted" style={{ fontSize: '11px' }}>
+              {row.category} • ĐVT: <strong>{row.unit}</strong>
+            </span>
+          </div>
         </div>
       )
     },
@@ -657,6 +737,17 @@ export default function InventoryPage({
                 </div>
                 <Button
                   size="md"
+                  variant="primary"
+                  onClick={() => {
+                    setSelectedBarcodeProduct(null);
+                    setIsBarcodeModalOpen(true);
+                  }}
+                  title="Mở trình in tem mã vạch cho tất cả sản phẩm hoặc theo danh mục"
+                >
+                  🏷️ In tem mã vạch
+                </Button>
+                <Button
+                  size="md"
                   variant="secondary"
                   onClick={handleExportInventory}
                   title="Xuất bảng tồn kho ra file Excel/CSV"
@@ -670,11 +761,41 @@ export default function InventoryPage({
 
         {/* Active Content Tab */}
         {activeTab === 'inventory' ? (
-          <Table
-            columns={productColumns}
-            data={filteredProducts}
-            emptyText="Không có sản phẩm nào phù hợp với bộ lọc"
-          />
+          <>
+            <Table
+              columns={productColumns}
+              data={paginatedProducts}
+              emptyText="Không có sản phẩm nào phù hợp với bộ lọc"
+            />
+            {filteredProducts.length > pageSize && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '0 8px' }}>
+                <span className="text-muted" style={{ fontSize: '13px' }}>
+                  Hiển thị {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, filteredProducts.length)} / {filteredProducts.length} mặt hàng
+                </span>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  >
+                    ← Trước
+                  </Button>
+                  <span style={{ fontSize: '13px', fontWeight: 600 }}>
+                    Trang {currentPage} / {totalPages}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  >
+                    Sau →
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <Table
             columns={historyColumns}
@@ -708,6 +829,14 @@ export default function InventoryPage({
         isOpen={!!selectedSlip}
         onClose={() => setSelectedSlip(null)}
         slip={selectedSlip}
+      />
+
+      <BarcodePrintModal
+        isOpen={isBarcodeModalOpen}
+        onClose={() => setIsBarcodeModalOpen(false)}
+        products={filteredProducts}
+        initialSelectedProduct={selectedBarcodeProduct}
+        storeName="BÁCH HÓA POS"
       />
     </div>
   );

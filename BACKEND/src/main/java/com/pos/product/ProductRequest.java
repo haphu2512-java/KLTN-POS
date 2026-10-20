@@ -26,4 +26,5 @@ public class ProductRequest {
     private BigDecimal salePrice;
 
     private String unit;
+    private String imageUrl;
 }

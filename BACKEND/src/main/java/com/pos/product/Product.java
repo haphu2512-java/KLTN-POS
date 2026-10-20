@@ -24,11 +24,14 @@ public class Product {
     @Column(unique = true, nullable = false, length = 50)
     private String barcode;
 
-    @Column(nullable = false, length = 150)
+    @Column(nullable = false, length = 255)
     private String name;
 
-    @Column(length = 100)
+    @Column(length = 150)
     private String category;
+
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
 
     @Column(name = "cost_price", precision = 14, scale = 2)
     private BigDecimal costPrice;

@@ -6,9 +6,12 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => authService.getCurrentUser());
-  const [isBackendOnline, setIsBackendOnline] = useState(false);
+  const [isBackendOnline, setIsBackendOnline] = useState(() => !!localStorage.getItem('pos_token'));
   const [isWsConnected, setIsWsConnected] = useState(false);
-  const [branchId, setBranchId] = useState(1);
+  const [branchId, setBranchId] = useState(() => {
+    const saved = authService.getCurrentUser();
+    return saved?.branchId || 1;
+  });
 
   // Check auth expiration and WebSocket status
   useEffect(() => {

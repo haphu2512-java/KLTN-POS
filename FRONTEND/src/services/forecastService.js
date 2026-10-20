@@ -5,6 +5,6 @@ export const forecastService = {
     const res = await api.get('/forecast/demand', {
       params: { branchId, days, algorithm }
     });
-    return res.data || [];
+    return Array.isArray(res) ? res : (res?.data || []);
   },
 };

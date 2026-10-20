@@ -1,97 +1,315 @@
-# TodoList: Hệ thống POS và Quản lý Kho tích hợp AI Dự báo Tồn kho cho Cửa hàng Bán lẻ nhỏ
+# Hệ thống POS và Quản lý Kho tích hợp AI Dự báo Tồn kho cho Cửa hàng Bán lẻ nhỏ
 
 ## Thông tin đề tài
 - **Mô tả:** Giải pháp số hóa toàn diện cho cửa hàng bán lẻ nhỏ — bán hàng tại quầy (POS), quản lý tồn kho theo thời gian thực, đồng bộ đa chi nhánh, cảnh báo & gợi ý nhập hàng thông minh dựa trên AI/thuật toán dự báo.
 - **Công nghệ sử dụng:**
-  - **Backend:** Java Spring Boot (REST API), Spring Data JPA, Spring Security (JWT), Spring Scheduler (job đồng bộ/dự báo định kỳ)
-  - **Frontend (Desktop):** Electron + React/Vue (renderer), giao tiếp backend qua REST API/WebSocket
-  - **Database:** MySQL (hoặc SQL Server) — 1 DB trung tâm, cân nhắc SQLite/local cache cho chế độ offline tại từng chi nhánh
-  - **Realtime/đồng bộ:** WebSocket (Spring WebSocket/STOMP) hoặc polling định kỳ cho cập nhật tồn kho, thông báo
-  - **Phần cứng:** tích hợp máy in hóa đơn qua thư viện in nhiệt (ESC/POS) từ Electron (Node.js), máy quét mã vạch hoạt động như bàn phím (HID) hoặc qua Serial/USB
-  - **Dự báo AI:** thuật toán thống kê (Moving Average/Exponential Smoothing) hoặc thư viện Java (Weka/DL4J) chạy phía Spring Boot, hoặc gọi service Python riêng (Flask/FastAPI) nếu cần mô hình phức tạp hơn
+  - **Backend:** Java 21 + Spring Boot 3.3.3 (REST API + WebSocket STOMP), Spring Data JPA, Spring Security (JWT HS512), Spring Scheduler
+  - **Frontend (Desktop):** Electron 44 + React 19 + Vite 8 (renderer), giao tiếp backend qua Vite Proxy `/api` + STOMP WebSocket
+  - **Database:** MySQL 8.0 — 1.949+ sản phẩm thực (scrape từ Bach Hoa Xanh), 2 chi nhánh, 10+ khách hàng, toàn bộ dữ liệu tồn kho
+  - **Realtime/đồng bộ:** Spring WebSocket STOMP broker, topic `/topic/inventory-updates` push kho realtime sau mỗi giao dịch POS
+  - **Phần cứng:** In hóa đơn nhiệt K80 qua Electron silent print (ESC/POS), máy quét mã vạch HID < 50ms buffer
+  - **Dự báo AI:** Exponential Smoothing (α=0.35) + Moving Average 7 ngày chạy phía Spring Boot, `@Scheduled` job chạy định kỳ hàng đêm
 - **Chuẩn đầu ra:** Phần mềm POS + quản lý kho hoàn chỉnh, thử nghiệm thực tế tại ít nhất 1 cửa hàng.
 
 ---
 
-## Giai đoạn 0 — Chuẩn bị & Lập kế hoạch (Tuần 1–2)
-- [ ] Khảo sát thực tế 1–2 cửa hàng bán lẻ nhỏ (quy trình bán hàng, nhập/xuất kho, khó khăn hiện tại)
-- [ ] Xác định phạm vi MVP (những gì làm trước, gác lại sau)
-- [ ] Khởi tạo dự án Spring Boot (Maven/Gradle, cấu trúc layer: Controller/Service/Repository/Entity)
-- [ ] Khởi tạo dự án Electron (chọn kèm React hoặc Vue cho renderer, cấu hình build/packaging)
-- [ ] Thiết kế kiến trúc hệ thống tổng thể (Electron client POS ↔ Spring Boot API server ↔ MySQL ↔ module dự báo)
-- [ ] Lập sơ đồ ERD (Database Design): sản phẩm, tồn kho, chi nhánh, hóa đơn, khách hàng, nhà cung cấp
-- [ ] Viết tài liệu đặc tả yêu cầu (SRS) chi tiết
+## Trạng thái dự án (Cập nhật: 15/10/2026)
 
-## Giai đoạn 1 — Thiết kế hệ thống (Tuần 3–4)
-- [ ] Thiết kế cơ sở dữ liệu chi tiết trên MySQL (bảng, khóa chính/ngoại, index)
-- [ ] Thiết kế REST API (endpoint sản phẩm, hóa đơn, kho, chi nhánh, báo cáo) — chuẩn hóa theo Spring Boot Controller
-- [ ] Thiết kế cơ chế xác thực (Spring Security + JWT) cho đăng nhập nhân viên/phân quyền
-- [ ] Thiết kế UI/UX cho ứng dụng POS trên Electron (giao diện bán hàng nhanh, tối ưu thao tác bằng phím tắt)
-- [ ] Thiết kế UI/UX cho hệ thống quản trị kho trung tâm (dashboard, báo cáo) — có thể dùng chung Electron app hoặc web riêng
-- [ ] Lên kế hoạch tích hợp phần cứng qua Electron/Node.js (thư viện in ESC/POS, đọc máy quét mã vạch dạng HID)
+> **Hoàn thành 6/8 giai đoạn** — Hệ thống đã đủ chức năng cho thử nghiệm thực tế.
 
-## Giai đoạn 2 — Xây dựng Module POS (Electron) (Tuần 5–7)
-- [x] Xây dựng REST API bán hàng phía Spring Boot (tạo hóa đơn, trừ tồn kho tự động chống race condition)
-- [x] Giao diện bán hàng trên Electron: quét mã vạch (lắng nghe input HID <50ms), thêm/sửa/xóa sản phẩm trong hóa đơn
-- [x] Tính tổng tiền, áp dụng khuyến mãi/giảm giá, quản lý nhiều đơn hàng song song (Tabs F8)
-- [x] In hóa đơn: tích hợp in nhiệt ESC/POS khổ K80 qua Electron silent print và Web print
-- [x] Thanh toán đa kênh: Tiền mặt, Thẻ POS ngân hàng, Mã động VietQR Napas247
-- [x] Quản lý ca làm việc, đăng nhập nhân viên / thu ngân với JWT Token và phân quyền vai trò
-- [x] Hỗ trợ chế độ offline-first demo linh hoạt khi chưa kết nối máy chủ
+```
+✅ XONG   Giai đoạn 0 — Chuẩn bị & Lập kế hoạch
+✅ XONG   Giai đoạn 1 — Thiết kế hệ thống
+✅ XONG   Giai đoạn 2 — Module POS (Bán hàng)
+✅ XONG   Giai đoạn 3 — Module Quản lý Kho
+✅ XONG   Giai đoạn 4 — Đồng bộ đa chi nhánh (WebSocket STOMP)
+✅ XONG   Giai đoạn 5 — Báo cáo & Dự báo AI
+✅ XONG   Giai đoạn 6 — Kiểm thử & Mở rộng nghiệp vụ
+⏳ CẦN   Giai đoạn 7 — Triển khai thử nghiệm thực tế
+⏳ CẦN   Giai đoạn 8 — Hoàn thiện báo cáo đề tài
+```
 
-## Giai đoạn 3 — Xây dựng Module Quản lý Kho (Spring Boot API + Electron UI) (Tuần 6–8, song song GĐ2)
-- [x] API + giao diện quản lý danh mục sản phẩm (mã vạch, phân loại, giá vốn, giá bán, đơn vị tính)
-- [x] API + giao diện quản lý nhập kho (phiếu nhập, danh sách nhà cung cấp, cập nhật giá vốn)
-- [x] Cập nhật tồn kho theo thời gian thực khi bán hàng (Atomic UPDATE query chống âm kho)
-- [x] Xem lịch sử nhập kho và chi tiết từng phiếu nhập
-- [x] Cảnh báo hết hàng / hàng tồn thấp dựa trên ngưỡng an toàn `min_threshold`
+---
 
-## Giai đoạn 4 — Đồng bộ đa chi nhánh (Tuần 9–10)
-- [x] Thiết kế cơ chế đồng bộ dữ liệu: Spring WebSocket/STOMP broker endpoint `/ws`
-- [x] Xử lý cập nhật tồn kho nguyên tử (`deductStockAtomic`) chống tranh chấp giữa các quầy/chi nhánh
-- [x] Quản lý điều chuyển hàng hóa giữa các chi nhánh (`StockTransferModal` + API chuyển kho)
-- [x] Đẩy thông báo realtime tới Electron client qua WebSocket topic `/topic/inventory-updates`
-- [x] Client STOMP auto-reconnect và cập nhật bảng hàng hóa không cần tải lại trang
+## Hướng dẫn chạy hệ thống nhanh
 
-## Giai đoạn 5 — Module Báo cáo & Dự báo AI (Tuần 10–12)
-- [x] API báo cáo doanh thu, lợi nhuận theo ngày/tuần/tháng/chi nhánh (`ReportController` + `ReportService`)
-- [x] Giao diện báo cáo trên Electron (`ReportPage.jsx` với biểu đồ SVG tương tác doanh thu & lợi nhuận)
-- [x] Báo cáo Top sản phẩm bán chạy nhất kèm tỷ trọng doanh thu
-- [x] Thu thập & chuẩn hóa dữ liệu lịch sử bán hàng theo ngày cho mô hình dự báo
-- [x] Nghiên cứu & triển khai thuật toán dự báo kép: Moving Average 7 ngày & Exponential Smoothing ($\alpha = 0.35$)
-- [x] Xây dựng service dự báo nhu cầu tồn kho chạy định kỳ qua `@Scheduled` Spring Boot
-- [x] Sinh gợi ý nhập hàng tự động (công thức nhu cầu an toàn - tồn kho) kèm phân loại mức độ ưu tiên
-- [x] Đánh giá độ chính xác mô hình dự báo (MAE - Mean Absolute Error) đạt độ tin cậy cao
+### Yêu cầu
+- Docker Desktop (Windows)
+- Node.js 18+
 
-## Giai đoạn 6 — Kiểm thử, Mở rộng Nghiệp vụ & Tối ưu hóa (Tuần 12–13)
-- [x] Unit test cho các module chính với JUnit 5 & Mockito (16/16 tests passed: `UserServiceTest`, `ForecastServiceTest`, `InventoryServiceTest`, `InvoiceServiceTest`, `ReportServiceTest`)
-- [x] Kiểm thử tự động giao diện và tương tác người dùng qua Browser Subagent & Vite Build (0 errors, 131 modules)
-- [x] Khắc phục toàn bộ 9 vấn đề kỹ thuật & bảo mật trong `docs/fix.md` (Bảo mật `/api/auth/me`, thắt chặt CORS, Atomic customer points update, Pagination cho hóa đơn, Dự báo dữ liệu thực tế, Hoàn thiện Nightly Job)
-- [x] Thiết lập Dockerfile đa giai đoạn (`maven:3.9-eclipse-temurin-21-alpine` -> JRE 21) và `docker-compose.yml` chạy MySQL 8 + Spring Boot Backend độc lập không cần cài đặt môi trường
-- [x] **Xây dựng Module Quản lý Nhân viên & Phân quyền (Staff Management):** API CRUD tài khoản (`UserController`, `UserService`, `UserResponse`), phân quyền (`ADMIN`, `MANAGER`, `CASHIER`, `WAREHOUSE`), khóa/mở khóa tài khoản, đổi mật khẩu và giao diện `StaffPage.jsx`.
-- [x] **Xây dựng Module Quản lý Đối tác (Customer & Supplier Management):** Quản lý khách hàng thân thiết, tra cứu điểm tích lũy, quản lý nhà cung cấp hàng hóa trên giao diện `PartnerPage.jsx`.
-- [x] **Nghiệp vụ Trả hàng & Hoàn tiền (Sales Return & Refund):** Trạng thái hóa đơn `InvoiceStatus` (`PAID`, `REFUNDED`), API hoàn trả tự động hoàn tồn kho nguyên tử (`addStockAtomic`), thu hồi điểm thưởng, ghi chú lý do và giao diện thực hiện trả hàng trong tab Lịch sử Hóa đơn.
-- [x] **Xuất dữ liệu Báo cáo & Tồn kho (CSV/Excel Export):** Tích hợp tiện ích `exportCsv.js` chuẩn UTF-8 BOM hiển thị tiếng Việt trên Excel cho cả Báo cáo Doanh thu, Danh sách Hóa đơn và Bảng Tồn kho theo chi nhánh.
+### Khởi động Backend + MySQL
+```bash
+# Tại thư mục gốc dự án
+docker compose up -d
 
-## Giai đoạn 7 — Triển khai thử nghiệm thực tế (Tuần 14–15)
+# Kiểm tra backend đã chạy
+# Swagger UI: http://localhost:8080/swagger-ui/index.html
+# API Login: POST http://localhost:8080/api/auth/login
+```
+
+### Tài khoản mặc định
+| Tài khoản | Mật khẩu | Vai trò |
+|-----------|----------|---------|
+| `admin` | `123456` | ADMIN (toàn quyền) |
+| `cashier` | `123456` | CASHIER (chỉ bán hàng) |
+
+### Khởi động Frontend
+```bash
+cd FRONTEND
+npm install
+npm run dev          # Giao diện web: http://localhost:5173
+npm run dev:electron # Chạy Electron desktop app (cần backend đã chạy)
+```
+
+> **Lưu ý quan trọng:** Frontend dùng Vite Proxy (`/api` → `http://localhost:8080`). Không gặp lỗi CORS khi chạy qua `npm run dev`.
+
+---
+
+## Giai đoạn 0 — Chuẩn bị & Lập kế hoạch
+- [x] Khảo sát thực tế quy trình bán hàng, nhập/xuất kho tại cửa hàng bán lẻ nhỏ
+- [x] Xác định phạm vi MVP
+- [x] Khởi tạo dự án Spring Boot (Maven, Modular Monolith theo tính năng)
+- [x] Khởi tạo dự án Electron + React 19 + Vite 8
+- [x] Thiết kế kiến trúc hệ thống tổng thể
+- [x] Lập sơ đồ ERD Database
+
+## Giai đoạn 1 — Thiết kế hệ thống
+- [x] Thiết kế database MySQL 8.x (branch, users, product, inventory, invoice, stock_in, customer, supplier)
+- [x] Thiết kế REST API chuẩn hoá theo `ApiResponse<T>` wrapper
+- [x] Thiết kế Spring Security + JWT HS512 (24h expiration)
+- [x] Thiết kế UI/UX POS keyboard-first (F1–F9, Esc hotkeys)
+- [x] Thiết kế tích hợp phần cứng (ESC/POS printer, HID barcode scanner)
+
+## Giai đoạn 2 — Module POS (Electron) ✅
+- [x] API bán hàng Spring Boot: `POST /api/invoices` — tạo hóa đơn, trừ kho nguyên tử chống race condition
+- [x] Giao diện bán hàng: quét mã vạch HID < 50ms (`useBarcodeScanner.js`), thêm/sửa/xóa sản phẩm giỏ hàng
+- [x] Modal tra cứu sản phẩm F2 — tra cứu trong 1.949 sản phẩm từ database, giới hạn 100 kết quả/lần
+- [x] Tính tổng tiền, giảm giá, quản lý nhiều đơn song song (Tabs F8)
+- [x] In hóa đơn K80 nhiệt qua Electron silent print + Web print (`receiptPrinter.js`)
+- [x] Thanh toán: Tiền mặt, Thẻ/Chuyển khoản, VietQR Napas247 động (`VietQRModal.jsx`)
+- [x] Đăng nhập JWT, phân quyền ADMIN/CASHIER/MANAGER/WAREHOUSE, đăng xuất
+- [x] Offline-first demo mode khi backend không có sẵn
+
+## Giai đoạn 3 — Module Quản lý Kho ✅
+- [x] API + giao diện quản lý sản phẩm (mã vạch, danh mục, giá vốn, giá bán, đơn vị tính, ảnh)
+- [x] API + giao diện nhập kho: `POST /api/stock-in` — phiếu nhập nhiều mặt hàng, cộng tồn kho tự động
+- [x] Cập nhật tồn kho realtime khi bán hàng (`deductStockAtomic` — atomic UPDATE chống âm kho)
+- [x] Xem lịch sử nhập kho và chi tiết từng phiếu (`StockInDetailModal.jsx`)
+- [x] Điều chuyển hàng giữa chi nhánh (`StockTransferModal.jsx` + `POST /api/inventory/transfer`)
+- [x] Cảnh báo hàng tồn thấp: filter `quantity <= min_threshold`, badge đỏ/vàng/xanh
+- [x] Bộ lọc sản phẩm theo danh mục, tìm kiếm nhanh theo tên/mã vạch
+- [x] Xuất tồn kho ra CSV chuẩn UTF-8 BOM (hiển thị tiếng Việt trên Excel)
+
+## Giai đoạn 4 — Đồng bộ đa chi nhánh ✅
+- [x] Spring WebSocket STOMP — endpoint `/ws`, broker topic `/topic/inventory-updates` và `/topic/sales-updates`
+- [x] Atomic deductStock (`InventoryRepository.deductStock` với `quantity >= :qty` guard)
+- [x] Push notification realtime sau mỗi giao dịch POS (tồn kho cập nhật ngay màn hình các quầy khác)
+- [x] Frontend STOMP client (`websocketService.js`) tự động reconnect khi ngắt kết nối
+- [x] Điều chuyển kho giữa 2 chi nhánh trong 1 `@Transactional` nguyên tử
+- [x] Badge trạng thái kết nối `🟢 Máy chủ & WS` / `🟢 API Online` / `⚪ Ngoại tuyến`
+
+## Giai đoạn 5 — Báo cáo & Dự báo AI ✅
+- [x] API báo cáo doanh thu theo ngày/tuần/tháng/chi nhánh (`ReportController` + `ReportService`)
+- [x] Giao diện báo cáo: biểu đồ SVG doanh thu & lợi nhuận (`ReportPage.jsx`)
+- [x] Top sản phẩm bán chạy nhất kèm tỷ trọng doanh thu
+- [x] Lịch sử hóa đơn, xem chi tiết, thực hiện trả hàng & hoàn tiền (`REFUNDED` status)
+- [x] Xuất báo cáo doanh thu & danh sách hóa đơn ra CSV/Excel (`exportCsv.js`)
+- [x] Thuật toán dự báo kép: **Exponential Smoothing (α=0.35)** + **Moving Average 7 ngày** (`ForecastService.java`)
+- [x] `@Scheduled` nightly job tự động tính toán dự báo nhu cầu toàn bộ chi nhánh
+- [x] API `GET /api/forecast/demand` + `GET /api/forecast/recommendations` (gợi ý nhập hàng ưu tiên)
+- [x] Giao diện dự báo AI (`ForecastPage.jsx`): biểu đồ SVG thực tế vs dự báo, MAE, bảng đề xuất nhập hàng
+- [x] Đánh giá độ chính xác MAE (Mean Absolute Error)
+
+## Giai đoạn 6 — Kiểm thử & Mở rộng nghiệp vụ ✅
+- [x] Unit test JUnit 5 + Mockito: **16/16 tests PASS** (`UserServiceTest`, `ForecastServiceTest`, `InventoryServiceTest`, `InvoiceServiceTest`, `ReportServiceTest`)
+- [x] Kiểm thử giao diện tự động qua Browser Subagent + Vite Build (0 errors, 131 modules)
+- [x] Sửa 9 vấn đề kỹ thuật & bảo mật (xem `docs/fix.md`): bảo mật endpoint, CORS, atomic points, pagination, forecast fallback, WS logging, H2 test scope, Dockerfile
+- [x] **Sửa lỗi CORS preflight (2026-10-13):** Thêm `HttpMethod.OPTIONS` permit all, `CorsConfigurationSource` bean, Vite dev proxy `/api` → `http://localhost:8080`
+- [x] **Kết nối database thực tế:** 1.949 sản phẩm từ BachHoaXanh, tồn kho đầy đủ hai chi nhánh
+- [x] Dockerfile đa giai đoạn (`maven:3.9-eclipse-temurin-21-alpine` → JRE 21) + `docker-compose.yml`
+- [x] Module Quản lý Nhân viên (StaffPage.jsx): CRUD tài khoản, phân quyền 4 vai trò, khóa/mở tài khoản
+- [x] Module Đối tác (PartnerPage.jsx): Khách hàng thân thiết + tích điểm, Nhà cung cấp
+- [x] Trả hàng & Hoàn tiền: `InvoiceStatus.REFUNDED`, hoàn kho nguyên tử, thu hồi điểm thưởng
+- [x] Xuất dữ liệu CSV/Excel (UTF-8 BOM) cho báo cáo, hóa đơn và tồn kho
+
+## Giai đoạn 7 — Triển khai thử nghiệm thực tế
 - [ ] Cài đặt & triển khai tại 1 cửa hàng bán lẻ thực tế
+- [ ] Test máy in nhiệt K80 thực tế (silent print qua Electron)
+- [ ] Test máy quét mã vạch HID thực tế (< 50ms response)
 - [ ] Đào tạo nhân viên cửa hàng sử dụng hệ thống
 - [ ] Thu thập phản hồi, ghi nhận lỗi phát sinh
 - [ ] Sửa lỗi & tối ưu dựa trên phản hồi thực tế
 
-## Giai đoạn 8 — Hoàn thiện & Báo cáo đề tài (Tuần 16)
-- [ ] Hoàn thiện tài liệu hướng dẫn sử dụng
-- [ ] Hoàn thiện tài liệu kỹ thuật (kiến trúc, DB, API)
-- [ ] Viết báo cáo đề tài / khóa luận
+## Giai đoạn 8 — Hoàn thiện & Báo cáo đề tài
+- [ ] Vẽ ERD hoàn chỉnh → lưu vào `docs/erd.png`
+- [ ] Hoàn thiện tài liệu kỹ thuật (kiến trúc, API, database schema)
+- [ ] Hoàn thiện tài liệu hướng dẫn sử dụng (user manual)
+- [ ] Viết báo cáo khóa luận (SRS, thiết kế, cài đặt, kiểm thử, kết quả)
 - [ ] Chuẩn bị slide & demo bảo vệ đề tài
-- [ ] Đánh giá khả năng thương mại hóa (mô hình bán license / SaaS thu phí theo chi nhánh)
+- [ ] Đánh giá khả năng thương mại hóa (mô hình bán license / SaaS theo chi nhánh)
+
+---
+
+## Kiến trúc hệ thống
+
+```
+[Electron Desktop App (React 19 + Vite 8)]
+         │   axios/proxy  │  @stomp/stompjs
+         ▼               ▼
+[Vite Dev Proxy]──────[Spring Boot 3.3.3 :8080]
+  /api → :8080               │  REST API
+  /ws  → :8080          [Spring Security JWT]
+                              │
+                        [Spring Data JPA]
+                              │
+                       [MySQL 8.0 :3306]
+                    (pos_inventory database)
+                    1.949 sản phẩm thực tế
+```
+
+### Cấu trúc thư mục Backend
+```
+BACKEND/src/main/java/com/pos/
+├── PosBackendApplication.java
+├── auth/         # AuthController, LoginRequest, AuthResponse, UserProfileResponse
+├── branch/       # Branch entity, BranchRepository, BranchService
+├── common/       # ApiResponse<T>, BusinessException, GlobalExceptionHandler
+├── config/       # CorsConfig, DatabaseInitializer, OpenApiConfig, WebSocketConfig
+├── customer/     # Customer, CustomerController, CustomerService, CustomerRepository
+├── forecast/     # ForecastController, ForecastService (EXP_SMOOTH + MA7), ForecastResponse
+├── inventory/    # Inventory, InventoryController, InventoryService (atomic deduct/add), InventoryRepository
+├── product/      # Product, ProductController, ProductService, ProductRequest
+├── purchase/     # StockIn, StockInService, Supplier, SupplierController, SupplierService
+├── report/       # ReportController, ReportService, RevenueSummaryResponse, TopProductResponse
+├── sale/         # Invoice, InvoiceDetail, InvoiceController, InvoiceService (atomic + refund), InvoiceRepository
+├── security/     # JwtTokenProvider, JwtAuthFilter, SecurityConfig, CustomUserDetailsService
+└── user/         # User, Role, UserController, UserService, UserResponse
+```
+
+### Cấu trúc thư mục Frontend
+```
+FRONTEND/
+├── electron/
+│   ├── main.cjs          # Electron Main (BrowserWindow, IPC, silent print K80)
+│   └── preload.cjs       # ContextBridge (contextIsolation: true)
+└── src/
+    ├── components/
+    │   ├── common/       # Button, Input, Table, Badge, Modal, Tabs (+ CSS)
+    │   └── forecast/     # SalesTrendChart (SVG interactive)
+    ├── context/
+    │   └── AuthContext.jsx   # AuthProvider, useAuth, JWT + WS state
+    ├── hooks/
+    │   ├── useBarcodeScanner.js   # HID scanner < 50ms buffer
+    │   └── useHotkeys.js          # F1-F9, Esc global hotkeys
+    ├── pages/
+    │   ├── auth/         # LoginPage.jsx
+    │   ├── pos/          # PosPage, PosHeader, PosCart, PosPayment, ProductSearchModal, CustomerModal, VietQRModal
+    │   ├── inventory/    # InventoryPage, StockInModal, StockInDetailModal, StockTransferModal
+    │   ├── forecast/     # ForecastPage (AI demand forecast + recommendations)
+    │   ├── report/       # ReportPage (revenue chart, invoice history, refund)
+    │   ├── partner/      # PartnerPage (customers + suppliers)
+    │   └── admin/        # StaffPage (staff management + roles)
+    ├── services/
+    │   ├── api.js              # axios + JWT interceptor (baseURL: /api proxy)
+    │   ├── authService.js      # login, getCurrentUser, getToken, logout
+    │   ├── productService.js   # getProducts, getProductByBarcode, searchProducts
+    │   ├── inventoryService.js # getBranchInventory, getLowStock
+    │   ├── customerService.js  # getCustomers, getCustomerByPhone, createCustomer
+    │   ├── saleService.js      # createInvoice, getInvoices, refundInvoice
+    │   ├── purchaseService.js  # getStockIns, createStockIn, getSuppliers
+    │   ├── forecastService.js  # getDemandForecast
+    │   ├── reportService.js    # getRevenueReport, getTopProducts
+    │   ├── userService.js      # getUsers, createUser, updateUser, toggleStatus
+    │   └── websocketService.js # @stomp/stompjs STOMP client, auto-reconnect
+    └── utils/
+        ├── audio.js          # Web Audio API: beep 800Hz (success), buzz 220Hz (error)
+        ├── exportCsv.js      # CSV export UTF-8 BOM (Excel compatible)
+        ├── forecasting.js    # Client-side EXP_SMOOTH + MA (fallback khi offline)
+        ├── formatters.js     # formatCurrency, formatDate, formatDateTime
+        └── receiptPrinter.js # K80 receipt print (Electron IPC + window.print fallback)
+```
+
+---
+
+## API Endpoints
+
+### Authentication
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| POST | `/api/auth/login` | Đăng nhập, trả về JWT token |
+| GET | `/api/auth/me` | Lấy thông tin user hiện tại (cần JWT) |
+
+### Products
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| GET | `/api/products` | Danh sách sản phẩm (tìm kiếm theo `search`, `category`) |
+| GET | `/api/products/{id}` | Chi tiết sản phẩm |
+| GET | `/api/products/barcode/{barcode}` | Tra cứu theo mã vạch (POS scanner) |
+| POST | `/api/products` | Tạo sản phẩm mới |
+| PUT | `/api/products/{id}` | Cập nhật sản phẩm |
+| DELETE | `/api/products/{id}` | Xóa mềm sản phẩm |
+
+### Inventory
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| GET | `/api/inventory?branchId=` | Tồn kho theo chi nhánh |
+| GET | `/api/inventory/low-stock?branchId=` | Hàng tồn dưới ngưỡng an toàn |
+| POST | `/api/inventory/transfer` | Điều chuyển hàng giữa chi nhánh |
+
+### Sales & Invoices
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| GET | `/api/invoices?branchId=&page=&size=` | Danh sách hóa đơn (có phân trang) |
+| GET | `/api/invoices/{id}` | Chi tiết hóa đơn |
+| POST | `/api/invoices` | Tạo hóa đơn bán hàng (trừ kho nguyên tử) |
+| POST | `/api/invoices/{id}/refund` | Hoàn trả hóa đơn (cộng kho, thu hồi điểm) |
+
+### Stock-In & Suppliers
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| GET | `/api/stock-in?branchId=` | Danh sách phiếu nhập kho |
+| POST | `/api/stock-in` | Tạo phiếu nhập kho (cộng tồn kho tự động) |
+| GET | `/api/suppliers` | Danh sách nhà cung cấp |
+| POST | `/api/suppliers` | Tạo nhà cung cấp mới |
+
+### Customers
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| GET | `/api/customers` | Danh sách khách hàng |
+| GET | `/api/customers/phone/{phone}` | Tìm khách hàng theo SĐT (F3 POS) |
+| POST | `/api/customers` | Tạo khách hàng mới |
+
+### Reports
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| GET | `/api/reports/revenue?branchId=&days=` | Báo cáo doanh thu theo ngày |
+| GET | `/api/reports/top-products?branchId=&days=&limit=` | Top sản phẩm bán chạy |
+
+### Forecast AI
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| GET | `/api/forecast/demand?branchId=&days=&algorithm=` | Dự báo nhu cầu (EXP_SMOOTH hoặc MOVING_AVG) |
+| GET | `/api/forecast/recommendations?branchId=` | Danh sách gợi ý nhập hàng ưu tiên |
+
+### Users (Admin only)
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| GET | `/api/users` | Danh sách nhân viên |
+| POST | `/api/users` | Tạo tài khoản nhân viên |
+| PUT | `/api/users/{id}` | Cập nhật thông tin |
+| PUT | `/api/users/{id}/toggle-status` | Khóa/mở khóa tài khoản |
+
+### WebSocket
+| Endpoint | Mô tả |
+|----------|-------|
+| `/ws` (SockJS) | Kết nối WebSocket STOMP |
+| `/topic/inventory-updates` | Thông báo thay đổi tồn kho realtime |
 
 ---
 
 ## Rủi ro cần lưu ý
 - Tích hợp phần cứng (máy in/máy quét) qua Electron/Node.js có thể phát sinh vấn đề driver/tương thích trên Windows — nên test sớm trên máy thật.
-- Đóng gói & phân phối ứng dụng Electron (electron-builder) cho nhiều máy tính tại cửa hàng cần cấu hình auto-update hoặc quy trình cài đặt rõ ràng.
-- Độ chính xác mô hình dự báo phụ thuộc nhiều vào lượng dữ liệu lịch sử — cửa hàng nhỏ có thể thiếu dữ liệu, cần có phương án dự báo đơn giản khi dữ liệu ít.
-- Đồng bộ đa chi nhánh qua WebSocket dễ phát sinh lỗi khi mất mạng — cần xử lý offline-first (SQLite local trong Electron) và hàng đợi đồng bộ khi có mạng trở lại.
-- Bảo mật API: đảm bảo Spring Security/JWT được cấu hình đúng, tránh lộ endpoint quản trị kho cho client không xác thực.
-- Phạm vi khá rộng (POS + Kho + Đa chi nhánh + AI) so với thời gian đồ án — nên ưu tiên MVP trước (POS + Kho đơn chi nhánh chạy trên 1 Spring Boot + 1 Electron client), mở rộng đồng bộ đa chi nhánh & AI dự báo sau nếu còn thời gian.
+- Đóng gói & phân phối ứng dụng Electron (`electron-builder`) cho nhiều máy cần cấu hình auto-update hoặc quy trình cài đặt rõ ràng.
+- Độ chính xác mô hình dự báo phụ thuộc nhiều vào lượng dữ liệu lịch sử — với cửa hàng mới ít lịch sử, kết quả dự báo cần được diễn giải thận trọng.
+- Đồng bộ đa chi nhánh qua WebSocket khi mất mạng — cần offline-first (SQLite local) và hàng đợi đồng bộ (giai đoạn mở rộng).
+- Bảo mật API: Spring Security/JWT đã cấu hình đúng, CORS giới hạn origin an toàn, preflight OPTIONS được permit.
