@@ -25,6 +25,11 @@ class WebSocketService {
         reconnectDelay: 5000,
         heartbeatIncoming: 4000,
         heartbeatOutgoing: 4000,
+        // Gửi JWT trong frame CONNECT; đọc lại mỗi lần (re)connect để dùng token mới nhất sau khi đăng nhập
+        beforeConnect: (client) => {
+          const token = localStorage.getItem('pos_token');
+          client.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+        },
         onConnect: () => {
           this.isConnected = true;
           this.notifyConnectionChange(true);
@@ -34,7 +39,7 @@ class WebSocketService {
             try {
               const data = JSON.parse(message.body);
               this.emit('inventory-update', data);
-            } catch (e) {
+            } catch {
               console.warn('Invalid inventory-update payload:', message.body);
             }
           });
@@ -44,7 +49,7 @@ class WebSocketService {
             try {
               const data = JSON.parse(message.body);
               this.emit('sales-update', data);
-            } catch (e) {
+            } catch {
               console.warn('Invalid sales-update payload:', message.body);
             }
           });

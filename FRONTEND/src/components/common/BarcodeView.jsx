@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import JsBarcode from 'jsbarcode';
 
 /**
@@ -44,7 +44,6 @@ export default function BarcodeView({
         textAlign: 'center',
         textPosition: 'bottom',
         textMargin: 2,
-        fontSize: fontSize,
         background,
         lineColor,
         margin

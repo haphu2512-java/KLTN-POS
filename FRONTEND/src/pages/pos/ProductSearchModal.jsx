@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Modal, Input, Table, Badge, Button, BarcodeView } from '../../components/common';
 import { formatCurrency } from '../../utils/formatters';
 
@@ -11,11 +11,17 @@ export default function ProductSearchModal({
   const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef(null);
 
+  // Xóa từ khóa mỗi lần mở modal (điều chỉnh state khi prop đổi, không cần effect)
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) setSearchTerm('');
+  }
+
   useEffect(() => {
-    if (isOpen) {
-      setSearchTerm('');
-      setTimeout(() => inputRef.current?.focus(), 80);
-    }
+    if (!isOpen) return;
+    const timer = setTimeout(() => inputRef.current?.focus(), 80);
+    return () => clearTimeout(timer);
   }, [isOpen]);
 
   const filtered = products.filter((p) => {

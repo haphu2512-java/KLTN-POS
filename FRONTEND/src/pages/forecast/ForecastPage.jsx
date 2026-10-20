@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button, Table, Badge } from '../../components/common';
 import SalesTrendChart from '../../components/forecast/SalesTrendChart';
 import {
@@ -7,7 +7,7 @@ import {
   calculateMAE,
   calculateReplenishment
 } from '../../utils/forecasting';
-import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatters';
 import { forecastService } from '../../services/forecastService';
 import { productService } from '../../services/productService';
 import { reportService } from '../../services/reportService';
@@ -17,7 +17,6 @@ export default function ForecastPage({
   currentUser,
   branchId = 1,
   isOnline = true,
-  isWsConnected = false,
   onNavigateToPos,
   onNavigateToInventory,
   onNavigateToReport,
@@ -325,14 +324,16 @@ export default function ForecastPage({
           >
             📦 Quản lý Kho
           </Button>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={onNavigateToReport}
-            title="Xem báo cáo doanh thu & sản phẩm bán chạy"
-          >
-            📊 Báo cáo
-          </Button>
+          {onNavigateToReport && (
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={onNavigateToReport}
+              title="Xem báo cáo doanh thu & sản phẩm bán chạy"
+            >
+              📊 Báo cáo
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="md"

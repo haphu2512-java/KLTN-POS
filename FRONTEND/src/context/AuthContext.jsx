@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services/authService';
 import { websocketService } from '../services/websocketService';
 
@@ -74,6 +74,7 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook đi kèm Provider
 export function useAuth() {
   return useContext(AuthContext);
 }

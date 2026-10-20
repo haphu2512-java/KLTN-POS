@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import useAppNavigate from './hooks/useAppNavigate';
@@ -36,6 +36,12 @@ function AppRoutes() {
     logout();
   };
 
+  // Phân quyền giống backend: báo cáo cho ADMIN/MANAGER, dự báo thêm WAREHOUSE.
+  // Chế độ demo ngoại tuyến dùng dữ liệu mẫu nên vẫn cho xem để trình diễn.
+  const role = currentUser?.role;
+  const canViewReports = isOfflineDemo || role === 'ADMIN' || role === 'MANAGER';
+  const canViewForecast = canViewReports || role === 'WAREHOUSE';
+
   // Shared props cho mọi page
   const sharedProps = {
     currentUser,
@@ -44,6 +50,9 @@ function AppRoutes() {
     isWsConnected,
     onLogout: handleLogout,
     ...nav, // onNavigateToPos, onNavigateToInventory, onNavigateToForecast, ...
+    // Ẩn nút điều hướng tới trang không có quyền
+    onNavigateToForecast: canViewForecast ? nav.onNavigateToForecast : undefined,
+    onNavigateToReport: canViewReports ? nav.onNavigateToReport : undefined,
   };
 
   return (
@@ -67,17 +76,17 @@ function AppRoutes() {
       <Route
         path="/forecast"
         element={
-          <ForecastPage
-            {...sharedProps}
-          />
+          canViewForecast
+            ? <ForecastPage {...sharedProps} />
+            : <Navigate to="/" replace />
         }
       />
       <Route
         path="/report"
         element={
-          <ReportPage
-            {...sharedProps}
-          />
+          canViewReports
+            ? <ReportPage {...sharedProps} />
+            : <Navigate to="/" replace />
         }
       />
       <Route

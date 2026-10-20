@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Badge, Button } from '../../components/common';
 import { formatDateTime } from '../../utils/formatters';
 
@@ -62,23 +62,27 @@ export default function PosHeader({
           📦 Quản lý Kho
         </Button>
 
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onNavigateToForecast}
-          title="Chuyển sang màn hình Dự báo AI"
-        >
-          📈 Dự báo AI
-        </Button>
+        {onNavigateToForecast && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onNavigateToForecast}
+            title="Chuyển sang màn hình Dự báo AI"
+          >
+            📈 Dự báo AI
+          </Button>
+        )}
 
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onNavigateToReport}
-          title="Xem báo cáo doanh thu & sản phẩm bán chạy"
-        >
-          📊 Báo cáo
-        </Button>
+        {onNavigateToReport && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onNavigateToReport}
+            title="Xem báo cáo doanh thu & sản phẩm bán chạy"
+          >
+            📊 Báo cáo
+          </Button>
+        )}
 
         <Button
           variant="secondary"

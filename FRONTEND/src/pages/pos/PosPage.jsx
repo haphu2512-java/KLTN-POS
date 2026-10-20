@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import PosHeader from './PosHeader';
 import PosCart from './PosCart';
 import PosPayment from './PosPayment';
@@ -354,7 +354,6 @@ export default function PosPage({
 
   // Finalize payment & receipt
   const executeFinishPayment = async () => {
-    playBeepSuccess();
     const invoiceCode = `HD${Date.now().toString().slice(-6)}`;
     const branchName = `Chi nhánh ${branchId || 1}`;
     const cashierName = currentUser?.fullName || currentUser?.username || 'Thu ngân';
@@ -365,7 +364,6 @@ export default function PosPage({
         await saleService.createInvoice({
           branchId: Number(branchId) || 1,
           customerId: currentOrder.customer?.id || null,
-          employeeId: currentUser?.userId || 1,
           discount: currentOrder.discount || 0,
           paymentMethod: currentOrder.paymentMethod,
           receivedAmount: currentOrder.receivedAmount || finalAmount,
@@ -377,9 +375,18 @@ export default function PosPage({
           }))
         });
       } catch (err) {
+        // Server từ chối (sai giá, giảm giá không hợp lệ, hết hàng, không có quyền...):
+        // dừng thanh toán, không in hóa đơn cho đơn chưa được ghi nhận
+        if (err.response) {
+          playBeepWarning();
+          alert(`❌ Không thể thanh toán: ${err.response.data?.message || 'Máy chủ từ chối hóa đơn'}`);
+          return;
+        }
+        // Mất kết nối: giữ hành vi ghi nhận cục bộ như trước
         console.warn('Backend createInvoice failed, recorded locally:', err.message);
       }
     }
+    playBeepSuccess();
 
     // 2. Deduct stock locally
     setProducts(prev => {

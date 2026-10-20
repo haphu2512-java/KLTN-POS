@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { Tabs, Table, Button, Input } from '../../components/common';
 import { formatCurrency } from '../../utils/formatters';
 

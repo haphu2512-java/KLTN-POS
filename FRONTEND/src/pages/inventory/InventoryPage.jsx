@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button, Input, Table, Badge, BarcodeView } from '../../components/common';
 import StockInModal from './StockInModal';
 import StockTransferModal from './StockTransferModal';
@@ -21,7 +21,6 @@ export default function InventoryPage({
   currentUser,
   branchId = 1,
   isOnline = true,
-  isWsConnected = false,
   onNavigateToPos,
   onNavigateToForecast,
   onNavigateToReport,
@@ -181,13 +180,17 @@ export default function InventoryPage({
   }, [products, selectedCategory, stockStatusFilter, searchTerm]);
 
   // Pagination for large inventory datasets (1900+ products)
-  const [currentPage, setCurrentPage] = useState(1);
+  // Trang hiện tại gắn với bộ lọc: đổi bộ lọc thì tự quay về trang 1
+  const filterKey = `${selectedCategory}|${stockStatusFilter}|${searchTerm}`;
+  const [pageState, setPageState] = useState({ filterKey, page: 1 });
+  const currentPage = pageState.filterKey === filterKey ? pageState.page : 1;
+  const setCurrentPage = (update) =>
+    setPageState({
+      filterKey,
+      page: typeof update === 'function' ? update(currentPage) : update,
+    });
   const pageSize = 50;
   const totalPages = Math.ceil(filteredProducts.length / pageSize) || 1;
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedCategory, stockStatusFilter, searchTerm]);
 
   const paginatedProducts = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -215,6 +218,11 @@ export default function InventoryPage({
           newStockIn.id = created.code || `NK-${created.id}`;
         }
       } catch (err) {
+        // Server từ chối (ví dụ tài khoản thu ngân không có quyền nhập kho): không cộng kho giả trên giao diện
+        if (err.response) {
+          alert(`❌ Không thể nhập kho: ${err.response.data?.message || 'Máy chủ từ chối phiếu nhập'}`);
+          return;
+        }
         console.warn('Backend createStockIn failed, saved locally:', err.message);
       }
     }
@@ -242,7 +250,7 @@ export default function InventoryPage({
   };
 
   // Handle Stock Transfer
-  const handleTransfer = ({ productId, quantity, toBranchId, note }) => {
+  const handleTransfer = ({ productId, quantity, toBranchId }) => {
     setProducts((prev) =>
       prev.map((prod) => {
         if (prod.id === productId) {
@@ -558,22 +566,26 @@ export default function InventoryPage({
           >
             🔄 Điều chuyển kho
           </Button>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={onNavigateToForecast}
-            title="Chuyển sang màn hình Dự báo AI & Doanh số"
-          >
-            📈 Dự báo AI
-          </Button>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={onNavigateToReport}
-            title="Xem báo cáo doanh thu & sản phẩm bán chạy"
-          >
-            📊 Báo cáo
-          </Button>
+          {onNavigateToForecast && (
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={onNavigateToForecast}
+              title="Chuyển sang màn hình Dự báo AI & Doanh số"
+            >
+              📈 Dự báo AI
+            </Button>
+          )}
+          {onNavigateToReport && (
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={onNavigateToReport}
+              title="Xem báo cáo doanh thu & sản phẩm bán chạy"
+            >
+              📊 Báo cáo
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="md"

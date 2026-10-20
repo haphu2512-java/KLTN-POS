@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Modal, Button, Input, Table } from '../../components/common';
+import { useState } from 'react';
+import { Modal, Button } from '../../components/common';
 import { formatCurrency } from '../../utils/formatters';
 
 export default function StockInModal({

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import './SalesTrendChart.css';
 
 /**
@@ -30,7 +30,6 @@ export default function SalesTrendChart({
 
   const allValues = [...actualData, ...forecastData];
   const maxVal = Math.max(...allValues, 10) * 1.15;
-  const minVal = 0;
 
   const getX = (index) => {
     return paddingLeft + (index / (totalPoints - 1)) * chartWidth;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button, Table, Badge, Modal } from '../../components/common';
 import { customerService } from '../../services/customerService';
 import { purchaseService } from '../../services/purchaseService';
@@ -6,8 +6,6 @@ import { formatNumber, formatDateTime } from '../../utils/formatters';
 import './PartnerPage.css';
 
 export default function PartnerPage({
-  currentUser,
-  branchId = 1,
   isOnline = true,
   onNavigateToPos,
   onNavigateToInventory,
@@ -57,7 +55,9 @@ export default function PartnerPage({
   };
 
   useEffect(() => {
+    // Tải dữ liệu khi đổi tab hoặc trạng thái kết nối là chủ ý (hàm fetch tự bật cờ loading)
     if (activeTab === 'customers') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchCustomers(searchTerm);
     } else {
       fetchSuppliers();
@@ -180,12 +180,16 @@ export default function PartnerPage({
           <Button size="sm" variant="secondary" onClick={onNavigateToInventory}>
             📦 Quản lý Kho
           </Button>
-          <Button size="sm" variant="secondary" onClick={onNavigateToForecast}>
-            📈 Dự báo AI
-          </Button>
-          <Button size="sm" variant="secondary" onClick={onNavigateToReport}>
-            📊 Báo cáo
-          </Button>
+          {onNavigateToForecast && (
+            <Button size="sm" variant="secondary" onClick={onNavigateToForecast}>
+              📈 Dự báo AI
+            </Button>
+          )}
+          {onNavigateToReport && (
+            <Button size="sm" variant="secondary" onClick={onNavigateToReport}>
+              📊 Báo cáo
+            </Button>
+          )}
           {onNavigateToStaff && (
             <Button size="sm" variant="secondary" onClick={onNavigateToStaff}>
               👤 Nhân viên
