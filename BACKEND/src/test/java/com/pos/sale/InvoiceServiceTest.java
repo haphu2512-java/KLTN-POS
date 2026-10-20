@@ -8,6 +8,8 @@ import com.pos.customer.CustomerRepository;
 import com.pos.inventory.InventoryService;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
+import com.pos.user.Role;
+import com.pos.user.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +23,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,6 +47,29 @@ class InvoiceServiceTest {
 
     @InjectMocks
     private InvoiceService invoiceService;
+
+    private final User cashier = User.builder().id(7L).username("cashier").role(Role.CASHIER).branchId(1L).build();
+    private final User manager = User.builder().id(8L).username("manager").role(Role.MANAGER).branchId(1L).build();
+
+    private Product milk() {
+        return Product.builder().id(1L).name("Sữa tươi Vinamilk")
+                .costPrice(BigDecimal.valueOf(28000)).salePrice(BigDecimal.valueOf(36000)).build();
+    }
+
+    private InvoiceRequest cashRequest(BigDecimal unitPrice, BigDecimal discount, BigDecimal received) {
+        InvoiceRequest.Item item = new InvoiceRequest.Item();
+        item.setProductId(1L);
+        item.setQuantity(2);
+        item.setUnitPrice(unitPrice);
+
+        InvoiceRequest req = new InvoiceRequest();
+        req.setBranchId(1L);
+        req.setDiscount(discount);
+        req.setPaymentMethod(PaymentMethod.CASH);
+        req.setReceivedAmount(received);
+        req.setItems(List.of(item));
+        return req;
+    }
 
     @Test
     @DisplayName("Tạo hóa đơn thành công: tính đúng tổng tiền, trừ kho nguyên tử và tích điểm khách hàng")
@@ -76,9 +103,11 @@ class InvoiceServiceTest {
         req.setReceivedAmount(BigDecimal.valueOf(100000));
         req.setItems(List.of(item));
 
-        Invoice invoice = invoiceService.createInvoice(req);
+        Invoice invoice = invoiceService.createInvoice(req, cashier);
 
         assertNotNull(invoice);
+        // Nhân viên lấy từ tài khoản đăng nhập, không lấy employeeId client gửi lên
+        assertEquals(7L, invoice.getEmployeeId());
         // Subtotal = 36000 * 2 = 72000. Total = 72000 - 2000 = 70000.
         assertEquals(BigDecimal.valueOf(72000), invoice.getSubtotal());
         assertEquals(BigDecimal.valueOf(70000), invoice.getTotalAmount());
@@ -100,7 +129,84 @@ class InvoiceServiceTest {
         req.setBranchId(99L);
         req.setItems(List.of());
 
-        assertThrows(BusinessException.class, () -> invoiceService.createInvoice(req));
+        User admin = User.builder().id(1L).role(Role.ADMIN).build();
+        assertThrows(BusinessException.class, () -> invoiceService.createInvoice(req, admin));
+    }
+
+    @Test
+    @DisplayName("Thu ngân không được bán khác giá niêm yết")
+    void testCashierCannotOverridePrice() {
+        when(branchRepository.findById(1L)).thenReturn(Optional.of(Branch.builder().id(1L).build()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(milk()));
+
+        InvoiceRequest req = cashRequest(BigDecimal.ONE, BigDecimal.ZERO, BigDecimal.valueOf(100000));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> invoiceService.createInvoice(req, cashier));
+        assertEquals("PRICE_OVERRIDE_FORBIDDEN", ex.getCode());
+        verify(inventoryService, never()).deductStockAtomic(anyLong(), anyLong(), anyInt());
+    }
+
+    @Test
+    @DisplayName("Quản lý được phép bán khác giá niêm yết")
+    void testManagerCanOverridePrice() {
+        when(branchRepository.findById(1L)).thenReturn(Optional.of(Branch.builder().id(1L).build()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(milk()));
+        when(invoiceRepository.save(any(Invoice.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Invoice invoice = invoiceService.createInvoice(
+                cashRequest(BigDecimal.valueOf(30000), BigDecimal.ZERO, BigDecimal.valueOf(60000)), manager);
+
+        assertEquals(BigDecimal.valueOf(60000), invoice.getTotalAmount());
+        // Giá vốn lúc bán được lưu lại cho báo cáo lợi nhuận
+        assertEquals(BigDecimal.valueOf(28000), invoice.getDetails().get(0).getCostPrice());
+    }
+
+    @Test
+    @DisplayName("Không gửi giá thì dùng giá niêm yết")
+    void testMissingPriceUsesListPrice() {
+        when(branchRepository.findById(1L)).thenReturn(Optional.of(Branch.builder().id(1L).build()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(milk()));
+        when(invoiceRepository.save(any(Invoice.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Invoice invoice = invoiceService.createInvoice(cashRequest(null, null, null), cashier);
+
+        assertEquals(BigDecimal.valueOf(72000), invoice.getTotalAmount());
+    }
+
+    @Test
+    @DisplayName("Giảm giá âm hoặc lớn hơn tổng tiền bị từ chối")
+    void testInvalidDiscountRejected() {
+        when(branchRepository.findById(1L)).thenReturn(Optional.of(Branch.builder().id(1L).build()));
+
+        BusinessException negative = assertThrows(BusinessException.class, () -> invoiceService.createInvoice(
+                cashRequest(null, BigDecimal.valueOf(-1000), BigDecimal.valueOf(100000)), cashier));
+        assertEquals("INVALID_DISCOUNT", negative.getCode());
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(milk()));
+        BusinessException tooLarge = assertThrows(BusinessException.class, () -> invoiceService.createInvoice(
+                cashRequest(null, BigDecimal.valueOf(80000), BigDecimal.valueOf(100000)), cashier));
+        assertEquals("INVALID_DISCOUNT", tooLarge.getCode());
+    }
+
+    @Test
+    @DisplayName("Tiền mặt khách đưa thiếu bị từ chối")
+    void testCashUnderpaymentRejected() {
+        when(branchRepository.findById(1L)).thenReturn(Optional.of(Branch.builder().id(1L).build()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(milk()));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> invoiceService.createInvoice(
+                cashRequest(null, BigDecimal.ZERO, BigDecimal.valueOf(50000)), cashier));
+        assertEquals("INSUFFICIENT_PAYMENT", ex.getCode());
+    }
+
+    @Test
+    @DisplayName("Thu ngân không được bán cho chi nhánh khác")
+    void testCashierCannotSellForOtherBranch() {
+        InvoiceRequest req = cashRequest(null, BigDecimal.ZERO, BigDecimal.valueOf(100000));
+        req.setBranchId(2L);
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> invoiceService.createInvoice(req, cashier));
+        assertEquals("BRANCH_FORBIDDEN", ex.getCode());
     }
 
     @Test
@@ -124,7 +230,7 @@ class InvoiceServiceTest {
                 .details(List.of(detail))
                 .build();
 
-        when(invoiceRepository.findById(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(invoice));
         when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Invoice refunded = invoiceService.refundInvoice(10L, "Khách đổi ý");
@@ -143,7 +249,7 @@ class InvoiceServiceTest {
                 .status(InvoiceStatus.REFUNDED)
                 .build();
 
-        when(invoiceRepository.findById(11L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(invoice));
 
         assertThrows(BusinessException.class, () -> invoiceService.refundInvoice(11L, "Lỗi"));
     }

@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS invoice_detail (
     product_id BIGINT NOT NULL,
     quantity INT NOT NULL,
     unit_price DECIMAL(14,2) NOT NULL,
+    cost_price DECIMAL(14,2),
     total_price DECIMAL(14,2) NOT NULL,
     FOREIGN KEY (invoice_id) REFERENCES invoice(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES product(id) ON DELETE CASCADE

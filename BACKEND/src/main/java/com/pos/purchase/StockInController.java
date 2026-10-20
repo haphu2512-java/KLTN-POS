@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
@@ -31,6 +32,7 @@ public class StockInController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
     @Operation(summary = "Tạo phiếu nhập kho (tự động cộng tồn kho tương ứng)")
     public ResponseEntity<ApiResponse<StockIn>> create(@Valid @RequestBody StockInRequest req) {
         StockIn created = stockInService.createStockIn(req);

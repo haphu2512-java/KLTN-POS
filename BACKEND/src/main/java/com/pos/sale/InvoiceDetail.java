@@ -37,6 +37,10 @@ public class InvoiceDetail {
     @Column(name = "unit_price", nullable = false, precision = 14, scale = 2)
     private BigDecimal unitPrice;
 
+    /** Giá vốn tại thời điểm bán, để báo cáo lợi nhuận không bị ảnh hưởng khi giá vốn thay đổi sau này */
+    @Column(name = "cost_price", precision = 14, scale = 2)
+    private BigDecimal costPrice;
+
     @Column(name = "total_price", nullable = false, precision = 14, scale = 2)
     private BigDecimal totalPrice;
 }
