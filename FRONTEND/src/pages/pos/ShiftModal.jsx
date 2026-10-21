@@ -9,10 +9,11 @@ const toTime = (t) => (t ? String(t).slice(0, 5) : '');
  * Mở ca (chọn ca, nhập tiền đầu ca, xem ghi chú bàn giao của ca trước)
  * hoặc đóng ca (đếm tiền mặt trong két, hệ thống so với số tiền lẽ ra phải có).
  */
-export default function ShiftModal({ isOpen, onClose, current, onChanged }) {
+export default function ShiftModal({ isOpen, onClose, current, reason, onChanged }) {
   const session = current?.session || null;
   const previous = current?.previousShift || null;
-  const mustOpen = !session && current?.shiftRequired;
+  // Hộp luôn đóng được ("Để sau", Esc, nút ×) để không khóa màn hình; chỉ nhắc khi đang bán hàng
+  const saleBlocked = !session && current?.shiftRequired && reason === 'sale';
 
   // PosPage chỉ mount hộp này khi mở, nên giá trị ban đầu lấy thẳng từ ca hiện tại
   const [workShifts, setWorkShifts] = useState([]);
@@ -106,16 +107,14 @@ export default function ShiftModal({ isOpen, onClose, current, onChanged }) {
   return (
     <Modal
       isOpen={isOpen}
-      onClose={mustOpen ? undefined : onClose}
+      onClose={onClose}
       title={session ? `Đóng ${session.workShiftName}` : 'Mở ca làm việc'}
       maxWidth="480px"
       footer={
         <>
-          {!mustOpen && (
-            <Button variant="secondary" onClick={onClose}>
-              Để sau
-            </Button>
-          )}
+          <Button variant="secondary" onClick={onClose}>
+            Để sau
+          </Button>
           <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
             {session ? 'Chốt tiền và đóng ca' : 'Mở ca'}
           </Button>
@@ -154,7 +153,11 @@ export default function ShiftModal({ isOpen, onClose, current, onChanged }) {
           </>
         ) : (
           <>
-            {mustOpen && <div>Thu ngân cần mở ca trước khi bán hàng.</div>}
+            {saleBlocked && (
+              <div style={{ background: 'var(--warning-50)', color: 'var(--warning-700)', padding: '8px 10px', borderRadius: '6px' }}>
+                Cần mở ca trước khi thanh toán. Bấm "Để sau" nếu muốn tiếp tục chuẩn bị đơn.
+              </div>
+            )}
             {previous && (
               <div style={{ background: 'var(--bg-subtle)', padding: '8px 10px', borderRadius: '6px' }}>
                 <div style={{ fontWeight: 600 }}>

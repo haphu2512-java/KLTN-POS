@@ -317,7 +317,7 @@ FRONTEND/
 | GET | `/api/shifts?branchId=&from=&to=` | ADMIN/MANAGER xem lịch sử ca (MANAGER chỉ chi nhánh mình) |
 | POST | `/api/shifts/{id}/close` | ADMIN/MANAGER đóng hộ ca nhân viên quên đóng |
 
-Thu ngân phải mở ca mới tạo được hóa đơn (tắt bằng `POS_REQUIRE_OPEN_SHIFT=false`). Mỗi hóa đơn lưu `shift_session_id` của ca đang mở.
+Thu ngân phải mở ca mới tạo được hóa đơn (tắt bằng `POS_REQUIRE_OPEN_SHIFT=false`). Mỗi hóa đơn lưu `shift_session_id` của ca đang mở. Màn hình POS không khóa khi chưa mở ca: thu ngân vẫn điều hướng, tra cứu, chuẩn bị đơn và đăng xuất được; chỉ khi thêm hàng lần đầu hoặc thanh toán mới hiện hộp nhắc mở ca.
 
 ### Users (Admin only)
 | Method | Endpoint | Mô tả |
