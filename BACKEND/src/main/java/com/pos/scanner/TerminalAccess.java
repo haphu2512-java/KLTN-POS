@@ -1,5 +1,6 @@
 package com.pos.scanner;
 
+import com.pos.user.Role;
 import com.pos.user.User;
 import com.pos.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -8,8 +9,8 @@ import org.springframework.stereotype.Component;
 import java.util.Objects;
 
 /**
- * Quy tắc ai được dùng quầy nào: tài khoản không gắn chi nhánh (quản trị) dùng được mọi quầy,
- * còn lại chỉ quầy cùng chi nhánh. Tách riêng (chỉ phụ thuộc repository) để WebSocketConfig dùng được.
+ * Quy tắc ai được dùng quầy nào: quản trị dùng được mọi quầy, còn lại chỉ quầy thuộc chi nhánh
+ * của phiên đăng nhập. Tách riêng (chỉ phụ thuộc repository) để WebSocketConfig dùng được.
  */
 @Component
 @RequiredArgsConstructor
@@ -26,11 +27,15 @@ public class TerminalAccess {
     }
 
     public static boolean canUse(User user, PosTerminal terminal) {
-        return user.getBranchId() == null || Objects.equals(user.getBranchId(), terminal.getBranchId());
+        return canUse(user.getRole(), user.getCurrentBranchId(), terminal);
     }
 
-    /** POS chỉ được nghe kênh của quầy tồn tại và cùng chi nhánh với tài khoản đang đăng nhập */
-    public boolean canSubscribe(String username, String destination) {
+    static boolean canUse(Role role, Long sessionBranchId, PosTerminal terminal) {
+        return role == Role.ADMIN || Objects.equals(sessionBranchId, terminal.getBranchId());
+    }
+
+    /** POS chỉ được nghe kênh của quầy tồn tại và cùng chi nhánh với phiên đăng nhập */
+    public boolean canSubscribe(String username, Long sessionBranchId, String destination) {
         if (username == null || !destination.startsWith(TOPIC_PREFIX) || !destination.endsWith(TOPIC_SUFFIX)) {
             return false;
         }
@@ -39,7 +44,8 @@ public class TerminalAccess {
             return false;
         }
         return userRepository.findByUsername(username)
-                .flatMap(user -> terminalRepository.findById(terminalId).map(t -> canUse(user, t)))
+                .flatMap(user -> terminalRepository.findById(terminalId)
+                        .map(t -> canUse(user.getRole(), sessionBranchId, t)))
                 .orElse(false);
     }
 }

@@ -70,11 +70,26 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
            "AND i.status <> com.pos.sale.InvoiceStatus.REFUNDED ORDER BY i.createdAt DESC")
     List<Invoice> findInvoicesByFilter(@Param("branchId") Long branchId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    /** Doanh số đã thanh toán của một ca theo phương thức. Mỗi dòng: [phương thức, số hóa đơn, tổng tiền]. */
+    /**
+     * Doanh số bán ra trong một ca theo phương thức, tính cả hóa đơn sau đó bị hoàn trả
+     * (tiền hoàn trả trừ riêng ở {@link #sumRefundedByShift}). Mỗi dòng: [phương thức, số hóa đơn, tổng tiền].
+     */
     @Query("SELECT i.paymentMethod, COUNT(i), SUM(i.totalAmount) FROM Invoice i " +
-           "WHERE i.shiftSessionId = :shiftId AND i.status = com.pos.sale.InvoiceStatus.PAID " +
-           "GROUP BY i.paymentMethod")
-    List<Object[]> sumPaidByShift(@Param("shiftId") Long shiftId);
+           "WHERE i.shiftSessionId = :shiftId GROUP BY i.paymentMethod")
+    List<Object[]> sumSoldByShift(@Param("shiftId") Long shiftId);
 
-    long countByShiftSessionIdAndStatus(Long shiftSessionId, InvoiceStatus status);
+    /**
+     * Tiền hoàn trả chi ra từ két của một ca, theo phương thức. Hóa đơn hoàn trả chưa ghi ca chi tiền
+     * (dữ liệu cũ, hoặc lúc hoàn trả không có ca nào đang mở) được tính vào ca đã bán.
+     * Mỗi dòng: [phương thức, số hóa đơn, tổng tiền].
+     */
+    @Query("SELECT i.paymentMethod, COUNT(i), SUM(i.totalAmount) FROM Invoice i " +
+           "WHERE i.status = com.pos.sale.InvoiceStatus.REFUNDED AND (i.refundShiftSessionId = :shiftId " +
+           "OR (i.refundShiftSessionId IS NULL AND i.shiftSessionId = :shiftId)) GROUP BY i.paymentMethod")
+    List<Object[]> sumRefundedByShift(@Param("shiftId") Long shiftId);
+
+    /** Hóa đơn bán trong ca và hóa đơn (của ca khác) được hoàn trả bằng tiền két của ca này */
+    @Query("SELECT i FROM Invoice i WHERE i.shiftSessionId = :shiftId OR i.refundShiftSessionId = :shiftId " +
+           "ORDER BY i.createdAt ASC")
+    List<Invoice> findForShift(@Param("shiftId") Long shiftId);
 }

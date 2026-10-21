@@ -12,7 +12,7 @@ import java.util.List;
 @Data
 public class InvoiceRequest {
 
-    @NotNull(message = "Chi nhánh không được để trống")
+    /** Không bắt buộc: chi nhánh lấy từ phiên đăng nhập; nếu gửi thì phải trùng chi nhánh đó */
     private Long branchId;
 
     private Long customerId;

@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -16,7 +17,7 @@ public class UserResponse {
     private String username;
     private String fullName;
     private Role role;
-    private Long branchId;
+    private List<Long> branchIds;
     private Boolean active;
     private LocalDateTime createdAt;
 
@@ -26,7 +27,7 @@ public class UserResponse {
                 .username(user.getUsername())
                 .fullName(user.getFullName())
                 .role(user.getRole())
-                .branchId(user.getBranchId())
+                .branchIds(user.getBranchIds().stream().sorted().toList())
                 .active(user.getActive())
                 .createdAt(user.getCreatedAt())
                 .build();

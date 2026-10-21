@@ -1,5 +1,6 @@
 package com.pos.user;
 
+import com.pos.branch.BranchRepository;
 import com.pos.common.BusinessException;
 import com.pos.shift.ShiftSession;
 import com.pos.shift.ShiftSessionRepository;
@@ -12,11 +13,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,6 +35,9 @@ class UserServiceTest {
     @Mock
     private ShiftSessionRepository shiftSessionRepository;
 
+    @Mock
+    private BranchRepository branchRepository;
+
     @InjectMocks
     private UserService userService;
 
@@ -42,10 +49,11 @@ class UserServiceTest {
                 .password("plain123")
                 .fullName("Lê Thu Ngân")
                 .role(Role.CASHIER)
-                .branchId(1L)
+                .branchIds(Set.of(1L, 2L))
                 .build();
 
         when(userRepository.existsByUsername("cashier2")).thenReturn(false);
+        when(branchRepository.existsById(anyLong())).thenReturn(true);
         when(passwordEncoder.encode("plain123")).thenReturn("hashed123");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
@@ -60,6 +68,7 @@ class UserServiceTest {
         assertEquals("Lê Thu Ngân", res.getFullName());
         assertEquals(Role.CASHIER, res.getRole());
         assertTrue(res.getActive());
+        assertEquals(List.of(1L, 2L), res.getBranchIds());
         verify(passwordEncoder).encode("plain123");
         verify(userRepository).save(any(User.class));
     }
@@ -98,41 +107,73 @@ class UserServiceTest {
         verify(userRepository).save(user);
     }
 
-    private UpdateUserRequest moveTo(Long branchId) {
+    private UpdateUserRequest assign(Long... branchIds) {
         UpdateUserRequest req = new UpdateUserRequest();
         req.setFullName("Thu Ngân");
         req.setRole(Role.CASHIER);
-        req.setBranchId(branchId);
+        req.setBranchIds(Set.of(branchIds));
         return req;
     }
 
+    private User cashierAt(Long id, Long... branchIds) {
+        return User.builder().id(id).username("c" + id).fullName("Thu Ngân").role(Role.CASHIER)
+                .branchIds(new HashSet<>(Set.of(branchIds))).active(true).build();
+    }
+
     @Test
-    @DisplayName("Không cho chuyển chi nhánh khi nhân viên còn ca đang mở")
-    void branchChangeBlockedWhileShiftOpen() {
-        User user = User.builder().id(5L).username("c5").fullName("Thu Ngân").role(Role.CASHIER).branchId(1L).active(true).build();
+    @DisplayName("Thu ngân phải được phân công ít nhất một chi nhánh")
+    void cashierNeedsAtLeastOneBranch() {
+        CreateUserRequest req = CreateUserRequest.builder()
+                .username("no_branch").password("plain123").fullName("Chưa gán").role(Role.CASHIER).build();
+        when(userRepository.existsByUsername("no_branch")).thenReturn(false);
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> userService.createUser(req));
+        assertEquals("BRANCH_REQUIRED", ex.getCode());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Không cho bỏ phân công chi nhánh đang có ca mở của nhân viên")
+    void removingBranchBlockedWhileShiftOpenThere() {
+        User user = cashierAt(5L, 1L);
         when(userRepository.findById(5L)).thenReturn(Optional.of(user));
+        when(branchRepository.existsById(anyLong())).thenReturn(true);
         when(shiftSessionRepository.findByEmployeeIdAndStatus(5L, ShiftStatus.OPEN))
                 .thenReturn(Optional.of(ShiftSession.builder().id(9L).branchId(1L).build()));
 
-        BusinessException ex = assertThrows(BusinessException.class, () -> userService.updateUser(5L, moveTo(2L)));
+        BusinessException ex = assertThrows(BusinessException.class, () -> userService.updateUser(5L, assign(2L)));
 
         assertEquals("SHIFT_OPEN_BRANCH_CHANGE", ex.getCode());
-        assertEquals(1L, user.getBranchId());
+        assertEquals(Set.of(1L), user.getBranchIds());
         verify(userRepository, never()).save(any(User.class));
     }
 
     @Test
-    @DisplayName("Chuyển chi nhánh được khi không còn ca mở; sửa thông tin khác không cần kiểm tra ca")
-    void branchChangeAllowedWithoutOpenShift() {
-        User user = User.builder().id(6L).username("c6").fullName("Thu Ngân").role(Role.CASHIER).branchId(1L).active(true).build();
+    @DisplayName("Thêm chi nhánh khi đang có ca mở vẫn được, miễn giữ chi nhánh của ca đó")
+    void addingBranchAllowedWhileShiftOpen() {
+        User user = cashierAt(6L, 1L);
         when(userRepository.findById(6L)).thenReturn(Optional.of(user));
-        when(shiftSessionRepository.findByEmployeeIdAndStatus(6L, ShiftStatus.OPEN)).thenReturn(Optional.empty());
+        when(branchRepository.existsById(anyLong())).thenReturn(true);
+        when(shiftSessionRepository.findByEmployeeIdAndStatus(6L, ShiftStatus.OPEN))
+                .thenReturn(Optional.of(ShiftSession.builder().id(10L).branchId(1L).build()));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertEquals(2L, userService.updateUser(6L, moveTo(2L)).getBranchId());
+        assertEquals(List.of(1L, 2L), userService.updateUser(6L, assign(1L, 2L)).getBranchIds());
+    }
 
-        // Giữ nguyên chi nhánh: không hỏi đến ca
-        userService.updateUser(6L, moveTo(2L));
-        verify(shiftSessionRepository, times(1)).findByEmployeeIdAndStatus(6L, ShiftStatus.OPEN);
+    @Test
+    @DisplayName("Đổi phân công tự do khi không có ca mở; ADMIN không lưu phân công")
+    void reassignWithoutOpenShift() {
+        User user = cashierAt(7L, 1L);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(branchRepository.existsById(anyLong())).thenReturn(true);
+        when(shiftSessionRepository.findByEmployeeIdAndStatus(7L, ShiftStatus.OPEN)).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertEquals(List.of(2L), userService.updateUser(7L, assign(2L)).getBranchIds());
+
+        UpdateUserRequest toAdmin = assign(2L);
+        toAdmin.setRole(Role.ADMIN);
+        assertEquals(List.of(), userService.updateUser(7L, toAdmin).getBranchIds());
     }
 }

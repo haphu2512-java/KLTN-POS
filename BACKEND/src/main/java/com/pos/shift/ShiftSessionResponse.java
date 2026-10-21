@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 public class ShiftSessionResponse {
     private Long id;
     private Long branchId;
+    private String branchName;
     private Long workShiftId;
     private String workShiftName;
     private String workShiftTime;
@@ -25,12 +26,17 @@ public class ShiftSessionResponse {
     private LocalDateTime openedAt;
     private LocalDateTime closedAt;
     private Long closedBy;
+    private String closedByName;
+    /** Người khác (quản lý/quản trị) đóng hộ ca này */
+    private boolean closedByOther;
     private BigDecimal openingCash;
     private String openingNote;
     private BigDecimal cashSales;
     private BigDecimal nonCashSales;
     private Integer invoiceCount;
     private Integer refundedCount;
+    private BigDecimal cashRefunds;
+    private BigDecimal nonCashRefunds;
     private BigDecimal expectedCash;
     private BigDecimal closingCash;
     private BigDecimal cashDifference;

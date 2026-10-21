@@ -17,8 +17,9 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
-        ApiResponse<Void> response = ApiResponse.error(ex.getCode(), ex.getMessage());
+    public ResponseEntity<ApiResponse<Object>> handleBusinessException(BusinessException ex) {
+        ApiResponse<Object> response = ApiResponse.error(ex.getCode(), ex.getMessage());
+        response.setData(ex.getData());
         return new ResponseEntity<>(response, ex.getStatus());
     }
 

@@ -7,6 +7,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "users")
@@ -33,8 +35,22 @@ public class User {
     @Column(nullable = false, length = 20)
     private Role role;
 
-    @Column(name = "branch_id")
-    private Long branchId;
+    /**
+     * Các chi nhánh nhân viên được phép làm việc. Lúc đăng nhập nhân viên chọn một trong số này.
+     * ADMIN không cần gán: được chọn mọi chi nhánh đang hoạt động.
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_branch", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "branch_id", nullable = false)
+    @Builder.Default
+    private Set<Long> branchIds = new HashSet<>();
+
+    /**
+     * Chi nhánh của phiên đăng nhập hiện tại, lấy từ token đã xác thực (không lưu DB).
+     * Chỉ có giá trị khi User được lấy qua CurrentUserService.
+     */
+    @Transient
+    private Long currentBranchId;
 
     @Builder.Default
     @Column(nullable = false)

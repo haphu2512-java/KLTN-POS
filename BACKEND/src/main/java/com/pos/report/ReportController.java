@@ -1,6 +1,7 @@
 package com.pos.report;
 
 import com.pos.common.ApiResponse;
+import com.pos.security.CurrentUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -18,13 +19,14 @@ import java.util.List;
 public class ReportController {
 
     private final ReportService reportService;
+    private final CurrentUserService currentUserService;
 
     @GetMapping("/revenue")
     @Operation(summary = "Báo cáo tổng kết doanh thu và lợi nhuận theo chi nhánh & khoảng ngày")
     public ResponseEntity<ApiResponse<RevenueSummaryResponse>> getRevenueReport(
             @RequestParam(required = false) Long branchId,
             @RequestParam(defaultValue = "7") int days) {
-        return ResponseEntity.ok(ApiResponse.ok(reportService.getRevenueSummary(branchId, days)));
+        return ResponseEntity.ok(ApiResponse.ok(reportService.getRevenueSummary(currentUserService.branchForRead(branchId, true), days)));
     }
 
     @GetMapping("/top-products")
@@ -33,6 +35,6 @@ public class ReportController {
             @RequestParam(required = false) Long branchId,
             @RequestParam(defaultValue = "30") int days,
             @RequestParam(defaultValue = "10") int limit) {
-        return ResponseEntity.ok(ApiResponse.ok(reportService.getTopSellingProducts(branchId, days, limit)));
+        return ResponseEntity.ok(ApiResponse.ok(reportService.getTopSellingProducts(currentUserService.branchForRead(branchId, true), days, limit)));
     }
 }

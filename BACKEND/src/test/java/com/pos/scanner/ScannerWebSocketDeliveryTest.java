@@ -1,5 +1,6 @@
 package com.pos.scanner;
 
+import com.pos.support.TestAuth;
 import com.pos.security.CustomUserDetailsService;
 import com.pos.security.JwtTokenProvider;
 import com.jayway.jsonpath.JsonPath;
@@ -67,7 +68,7 @@ class ScannerWebSocketDeliveryTest {
     private String tokenFor(String username) {
         User user = userRepository.findByUsername(username).orElseThrow();
         return "Bearer " + tokenProvider.generateToken(userDetailsService.loadUserByUsername(username),
-                user.getBranchId(), user.getRole().name(), user.getFullName());
+                TestAuth.branchOf(user), user.getRole().name(), user.getFullName());
     }
 
     private StompSession connect(String username) throws Exception {
@@ -145,11 +146,11 @@ class ScannerWebSocketDeliveryTest {
     void clientCannotSnoopOrInject() throws Exception {
         Long otherBranch = branchRepository.findAll().stream()
                 .map(Branch::getId)
-                .filter(id -> !id.equals(userRepository.findByUsername("cashier").orElseThrow().getBranchId()))
+                .filter(id -> !id.equals(TestAuth.branchOf(userRepository.findByUsername("cashier").orElseThrow())))
                 .findFirst().orElseThrow();
         if (userRepository.findByUsername("cashier2").isEmpty()) {
             userRepository.save(User.builder().username("cashier2").password(passwordEncoder.encode("123456"))
-                    .fullName("Thu ngân chi nhánh 2").role(Role.CASHIER).branchId(otherBranch).build());
+                    .fullName("Thu ngân chi nhánh 2").role(Role.CASHIER).branchIds(TestAuth.branches(otherBranch)).build());
         }
 
         String quay = registerTerminal("cashier", "Quầy 1");

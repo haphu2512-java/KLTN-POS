@@ -44,7 +44,7 @@ public class TerminalService {
         PosTerminal terminal = PosTerminal.builder()
                 .id(UUID.randomUUID().toString())
                 .name(cleanName(name))
-                .branchId(user.getBranchId())
+                .branchId(user.getCurrentBranchId())
                 .createdBy(user.getUsername())
                 .build();
         return terminalRepository.save(terminal);

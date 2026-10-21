@@ -7,7 +7,7 @@ import lombok.Data;
 @Data
 public class StockTransferRequest {
 
-    @NotNull(message = "Chi nhánh xuất không được để trống")
+    /** Không bắt buộc: luôn là chi nhánh của phiên đăng nhập; nếu gửi thì phải trùng */
     private Long fromBranchId;
 
     @NotNull(message = "Chi nhánh nhận không được để trống")

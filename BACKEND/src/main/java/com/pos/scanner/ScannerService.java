@@ -47,8 +47,8 @@ public class ScannerService {
 
     @Transactional(readOnly = true)
     public List<ScannerProductDto> catalog(User user) {
-        Map<Long, Integer> stockByProduct = user.getBranchId() == null ? Map.of()
-                : inventoryRepository.findByBranchId(user.getBranchId()).stream()
+        Map<Long, Integer> stockByProduct = user.getCurrentBranchId() == null ? Map.of()
+                : inventoryRepository.findByBranchId(user.getCurrentBranchId()).stream()
                 .collect(Collectors.toMap(i -> i.getProduct().getId(), Inventory::getQuantity, (a, b) -> a));
         return productRepository.findByActiveTrue().stream()
                 .map(p -> ScannerProductDto.from(p, stockByProduct.get(p.getId())))
@@ -150,7 +150,7 @@ public class ScannerService {
 
         Map<String, Object> item = new HashMap<>();
         item.put("barcode", cleanBarcode);
-        item.put("branchId", user.getBranchId());
+        item.put("branchId", user.getCurrentBranchId());
         item.put("deviceName", req.getDeviceName() != null ? req.getDeviceName() : "Điện thoại quét mã");
         item.put("clientScanId", req.getClientScanId() != null ? req.getClientScanId() : UUID.randomUUID().toString());
         item.put("scannedAt", req.getTimestamp());
@@ -162,10 +162,10 @@ public class ScannerService {
     }
 
     private Integer stockOf(Product p, User user) {
-        if (user.getBranchId() == null) {
+        if (user.getCurrentBranchId() == null) {
             return null;
         }
-        return inventoryRepository.findByProductIdAndBranchId(p.getId(), user.getBranchId())
+        return inventoryRepository.findByProductIdAndBranchId(p.getId(), user.getCurrentBranchId())
                 .map(Inventory::getQuantity)
                 .orElse(null);
     }

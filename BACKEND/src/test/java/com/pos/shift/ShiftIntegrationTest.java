@@ -1,5 +1,6 @@
 package com.pos.shift;
 
+import com.pos.support.TestAuth;
 import com.pos.security.CustomUserDetailsService;
 import com.pos.security.JwtTokenProvider;
 import com.pos.user.Role;
@@ -55,12 +56,12 @@ class ShiftIntegrationTest {
     private String tokenFor(String username) {
         User user = userRepository.findByUsername(username).orElseThrow();
         UserDetails details = userDetailsService.loadUserByUsername(username);
-        return "Bearer " + tokenProvider.generateToken(details, user.getBranchId(), user.getRole().name(), user.getFullName());
+        return "Bearer " + tokenProvider.generateToken(details, TestAuth.branchOf(user), user.getRole().name(), user.getFullName());
     }
 
     private String newUser(String username, Role role, Long branchId) {
         userRepository.save(User.builder().username(username).password("x")
-                .fullName(username).role(role).branchId(branchId).active(true).build());
+                .fullName(username).role(role).branchIds(TestAuth.branches(branchId)).active(true).build());
         return tokenFor(username);
     }
 
@@ -137,7 +138,7 @@ class ShiftIntegrationTest {
     }
 
     @Test
-    @DisplayName("Quản lý chỉ xem và đóng hộ ca trong chi nhánh của mình; thu ngân không xem lịch sử ca")
+    @DisplayName("Quản lý chỉ xem và đóng hộ ca trong chi nhánh của mình; thu ngân chỉ thấy ca của chính mình")
     void managerScopedToBranch() throws Exception {
         String cashier = newUser("forgetful_cashier", Role.CASHIER, 1L);
         String body = mvc.perform(post("/api/shifts/open").header("Authorization", cashier)
@@ -146,7 +147,13 @@ class ShiftIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         long shiftId = com.jayway.jsonpath.JsonPath.parse(body).read("$.data.id", Long.class);
 
-        mvc.perform(get("/api/shifts").header("Authorization", cashier)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/shifts").header("Authorization", cashier))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.shifts.length()").value(1))
+                .andExpect(jsonPath("$.data.shifts[0].id").value(shiftId));
+        mvc.perform(post("/api/shifts/" + shiftId + "/close").header("Authorization", cashier)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"closingCash\":0}"))
+                .andExpect(status().isForbidden());
 
         String otherManager = newUser("manager_b2", Role.MANAGER, 2L);
         mvc.perform(post("/api/shifts/" + shiftId + "/close").header("Authorization", otherManager)

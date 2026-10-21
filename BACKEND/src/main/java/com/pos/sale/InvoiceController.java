@@ -26,11 +26,12 @@ public class InvoiceController {
     private final CurrentUserService currentUserService;
 
     @GetMapping
-    @Operation(summary = "Lấy danh sách hóa đơn bán lẻ (hỗ trợ phân trang hoặc lấy tất cả theo chi nhánh)")
+    @Operation(summary = "Danh sách hóa đơn (phân trang hoặc tất cả). ADMIN lọc chi nhánh bất kỳ, vai trò khác chỉ chi nhánh đang đăng nhập")
     public ResponseEntity<ApiResponse<?>> getAll(
             @RequestParam(required = false) Long branchId,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
+        branchId = currentUserService.branchForRead(branchId, true);
         if (page != null && size != null) {
             Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, size));
             return ResponseEntity.ok(ApiResponse.ok(invoiceService.getInvoices(branchId, pageable)));
@@ -58,7 +59,7 @@ public class InvoiceController {
             @PathVariable Long id,
             @RequestBody(required = false) java.util.Map<String, String> body) {
         String reason = body != null ? body.get("reason") : null;
-        Invoice refunded = invoiceService.refundInvoice(id, reason);
+        Invoice refunded = invoiceService.refundInvoice(id, reason, currentUserService.getCurrentUser());
         return ResponseEntity.ok(ApiResponse.ok("Hoàn trả hàng thành công", refunded));
     }
 }

@@ -162,13 +162,18 @@ public class InvoiceService {
     }
 
     @Transactional
-    public Invoice refundInvoice(Long id, String reason) {
+    public Invoice refundInvoice(Long id, String reason, User actor) {
         // Khóa dòng hóa đơn để 2 yêu cầu hoàn trả đồng thời không cùng cộng kho
         Invoice invoice = invoiceRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new BusinessException("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn với ID: " + id));
 
         if (invoice.getStatus() == InvoiceStatus.REFUNDED) {
             throw new BusinessException("ALREADY_REFUNDED", "Hóa đơn này đã được hoàn trả trước đó");
+        }
+        Long invoiceBranchId = invoice.getBranch().getId();
+        if (actor.getRole() != Role.ADMIN && !invoiceBranchId.equals(actor.getCurrentBranchId())) {
+            throw new BusinessException("BRANCH_FORBIDDEN",
+                    "Chỉ hoàn trả được hóa đơn của chi nhánh đang đăng nhập", HttpStatus.FORBIDDEN);
         }
 
         // 1. Hoàn tồn kho nguyên tử cho từng sản phẩm trong hóa đơn
@@ -197,6 +202,9 @@ public class InvoiceService {
 
         // 3. Cập nhật trạng thái hóa đơn
         invoice.setStatus(InvoiceStatus.REFUNDED);
+        invoice.setRefundedAt(java.time.LocalDateTime.now());
+        invoice.setRefundedBy(actor.getId());
+        invoice.setRefundShiftSessionId(shiftService.resolveShiftForRefund(actor, invoiceBranchId));
         String noteReason = (reason != null && !reason.trim().isEmpty()) ? " | Lý do trả: " + reason.trim() : "";
         String existingNote = invoice.getNote() != null ? invoice.getNote() : "";
         invoice.setNote((existingNote + " [ĐÃ HOÀN TRẢ" + noteReason + "]").trim());
@@ -205,20 +213,19 @@ public class InvoiceService {
     }
 
     /**
-     * ADMIN được chọn chi nhánh bất kỳ; các vai trò khác chỉ bán tại chi nhánh của mình.
+     * Bán tại chi nhánh của phiên đăng nhập (chọn lúc đăng nhập, nằm trong token), kể cả ADMIN.
+     * branchId client gửi lên chỉ dùng để phát hiện đơn cũ của phiên khác: lệch thì từ chối.
      */
     private Long resolveBranchId(Long requestedBranchId, User actor) {
-        if (actor.getRole() == Role.ADMIN || actor.getBranchId() == null) {
-            if (requestedBranchId == null) {
-                throw new BusinessException("BRANCH_REQUIRED", "Chi nhánh không được để trống");
-            }
-            return requestedBranchId;
+        Long session = actor.getCurrentBranchId();
+        if (session == null) {
+            throw new BusinessException("BRANCH_REQUIRED", "Phiên đăng nhập chưa chọn chi nhánh", HttpStatus.UNAUTHORIZED);
         }
-        if (requestedBranchId != null && !requestedBranchId.equals(actor.getBranchId())) {
-            throw new BusinessException("BRANCH_FORBIDDEN",
-                    "Bạn chỉ được bán hàng tại chi nhánh của mình", HttpStatus.FORBIDDEN);
+        if (requestedBranchId != null && !requestedBranchId.equals(session)) {
+            throw new BusinessException("BRANCH_MISMATCH",
+                    "Phiên đăng nhập đang ở chi nhánh khác. Hãy đăng nhập đúng chi nhánh để bán hàng.", HttpStatus.FORBIDDEN);
         }
-        return actor.getBranchId();
+        return session;
     }
 
     /**

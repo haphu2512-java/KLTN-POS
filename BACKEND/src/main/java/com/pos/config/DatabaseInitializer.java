@@ -17,12 +17,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
@@ -36,6 +40,7 @@ public class DatabaseInitializer implements CommandLineRunner {
     private final InventoryRepository inventoryRepository;
     private final WorkShiftRepository workShiftRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate;
 
     @Value("${app.seed.default-password:}")
     private String seedPassword;
@@ -43,6 +48,7 @@ public class DatabaseInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) {
         seedWorkShifts();
+        migrateSingleBranchColumn();
 
         if (branchRepository.count() == 0) {
             if (seedPassword == null || seedPassword.isBlank()) {
@@ -72,7 +78,6 @@ public class DatabaseInitializer implements CommandLineRunner {
                     .password(passwordEncoder.encode(seedPassword))
                     .fullName("Quản Trị Viên")
                     .role(Role.ADMIN)
-                    .branchId(branch1.getId())
                     .active(true)
                     .build());
 
@@ -81,7 +86,7 @@ public class DatabaseInitializer implements CommandLineRunner {
                     .password(passwordEncoder.encode(seedPassword))
                     .fullName("Nguyễn Văn A")
                     .role(Role.CASHIER)
-                    .branchId(branch1.getId())
+                    .branchIds(new HashSet<>(Set.of(branch1.getId())))
                     .active(true)
                     .build());
 
@@ -126,6 +131,25 @@ public class DatabaseInitializer implements CommandLineRunner {
             }
 
             log.info("Đã khởi tạo thành công dữ liệu mẫu cho hệ thống POS!");
+        }
+    }
+
+    /**
+     * Database cũ lưu một chi nhánh cố định ở cột users.branch_id. Nay nhân viên được phân công
+     * nhiều chi nhánh (bảng user_branch) và chọn chi nhánh lúc đăng nhập: chuyển giá trị cũ sang
+     * bảng mới rồi xóa ở cột cũ để lần chạy sau không chép lại. Database mới không có cột này thì bỏ qua.
+     */
+    void migrateSingleBranchColumn() {
+        try {
+            int moved = jdbcTemplate.update("INSERT INTO user_branch (user_id, branch_id) "
+                    + "SELECT u.id, u.branch_id FROM users u WHERE u.branch_id IS NOT NULL AND u.role <> 'ADMIN' "
+                    + "AND NOT EXISTS (SELECT 1 FROM user_branch ub WHERE ub.user_id = u.id AND ub.branch_id = u.branch_id)");
+            jdbcTemplate.update("UPDATE users SET branch_id = NULL WHERE branch_id IS NOT NULL");
+            if (moved > 0) {
+                log.info("Đã chuyển chi nhánh cố định của {} nhân viên sang phân công chi nhánh", moved);
+            }
+        } catch (DataAccessException e) {
+            log.debug("Không có cột users.branch_id cũ, bỏ qua bước chuyển dữ liệu: {}", e.getMessage());
         }
     }
 

@@ -1,5 +1,6 @@
 package com.pos.security;
 
+import com.pos.support.TestAuth;
 import com.pos.user.Role;
 import com.pos.user.User;
 import com.pos.user.UserRepository;
@@ -55,7 +56,7 @@ class ApiSecurityIntegrationTest {
     private String tokenFor(String username) {
         User user = userRepository.findByUsername(username).orElseThrow();
         UserDetails details = userDetailsService.loadUserByUsername(username);
-        return "Bearer " + tokenProvider.generateToken(details, user.getBranchId(), user.getRole().name(), user.getFullName());
+        return "Bearer " + tokenProvider.generateToken(details, TestAuth.branchOf(user), user.getRole().name(), user.getFullName());
     }
 
     @Test
@@ -113,7 +114,7 @@ class ApiSecurityIntegrationTest {
     @DisplayName("Tài khoản bị khóa không dùng được token cũ")
     void disabledUserTokenRejected() throws Exception {
         User user = userRepository.save(User.builder().username("tmp_cashier").password("x")
-                .fullName("Tạm").role(Role.CASHIER).branchId(1L).active(true).build());
+                .fullName("Tạm").role(Role.CASHIER).branchIds(TestAuth.branches(1L)).active(true).build());
         String token = tokenFor("tmp_cashier");
 
         user.setActive(false);
