@@ -45,9 +45,11 @@ function emptyOrder() {
 export default function PosPage({
   currentUser,
   branchId = 1,
+  branchName,
   isOnline = true,
   isWsConnected = false
 }) {
+  const branchLabel = branchName || `Chi nhánh ${branchId || 1}`;
   // Products & Customers from Database
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -344,7 +346,7 @@ export default function PosPage({
   useEffect(() => {
     let cancelled = false;
     scannerPairingService
-      .ensureTerminal(`Quầy ${branchId || 1}`)
+      .ensureTerminal(`Quầy ${branchLabel}`, branchId)
       .then((t) => {
         if (cancelled) return;
         setTerminal(t);
@@ -356,7 +358,7 @@ export default function PosPage({
       cancelled = true;
       websocketService.setTerminal(null);
     };
-  }, [branchId, isOnline]);
+  }, [branchId, branchLabel, isOnline]);
 
   useEffect(() => {
     if (!terminal) return;
@@ -505,7 +507,8 @@ export default function PosPage({
         let invoice;
         try {
           invoice = await saleService.createInvoice({
-            branchId: Number(branchId) || 1,
+            // Máy chủ bán tại chi nhánh của phiên đăng nhập; gửi kèm để phát hiện đơn của phiên cũ
+            branchId: Number(branchId) || undefined,
             customerId: order.customer?.id || null,
             discount: order.discount || 0,
             paymentMethod: order.paymentMethod,
@@ -539,7 +542,7 @@ export default function PosPage({
         // Chế độ demo ngoại tuyến (chưa đăng nhập): không có máy chủ, hóa đơn chỉ để trình diễn
         receipt = {
           code: `DEMO-${Date.now().toString().slice(-6)}`,
-          branchName: `Chi nhánh ${branchId || 1} (demo, không lưu)`,
+          branchName: `${branchLabel} (demo, không lưu)`,
           cashierName,
           customerName: order.customer ? order.customer.name : 'Khách lẻ',
           items: order.items.map(it => ({ name: it.name, quantity: it.quantity, unitPrice: it.price })),
@@ -653,7 +656,7 @@ export default function PosPage({
     <div className="pos-container">
       {/* Header */}
       <PosHeader
-        branchName={`Chi nhánh ${branchId || 1}`}
+        branchName={branchLabel}
         cashierName={currentUser?.fullName || currentUser?.username || 'Thu ngân'}
         role={currentUser?.role || 'CASHIER'}
         shiftName={shiftInfo?.session ? shiftInfo.session.workShiftName : 'Chưa mở ca'}

@@ -183,7 +183,11 @@ export default function SettingsScreen({
               <Text style={type.heading}>{name}</Text>
               <Text style={type.small}>
                 {ROLE_LABELS[session?.role] || session?.role || ''}
-                {session?.branchId ? ` · Chi nhánh #${session.branchId}` : ' · Không gắn chi nhánh'}
+                {session?.branchName
+                  ? ` · ${session.branchName}`
+                  : session?.branchId
+                    ? ` · Chi nhánh #${session.branchId}`
+                    : ''}
               </Text>
             </View>
           </View>

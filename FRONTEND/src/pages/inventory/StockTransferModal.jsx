@@ -7,10 +7,15 @@ export default function StockTransferModal({
   products = [],
   branches = [],
   currentBranchId = 1,
+  currentBranchName,
   onTransfer
 }) {
-  const [fromBranchId, setFromBranchId] = useState(currentBranchId);
-  const [toBranchId, setToBranchId] = useState(branches.find((b) => b.id !== currentBranchId)?.id || 2);
+  // Luôn xuất từ chi nhánh đang đăng nhập, chỉ chọn chi nhánh nhận
+  const fromBranchId = Number(currentBranchId);
+  const targets = branches.filter((b) => Number(b.id) !== fromBranchId);
+  const [pickedToBranchId, setToBranchId] = useState('');
+  // Danh sách chi nhánh có thể tải xong sau khi mở trang: mặc định chi nhánh nhận đầu tiên
+  const toBranchId = pickedToBranchId || targets[0]?.id || '';
   const [productId, setProductId] = useState(products[0]?.id || 1);
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState('');
@@ -19,8 +24,8 @@ export default function StockTransferModal({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (fromBranchId === toBranchId) {
-      alert('Chi nhánh xuất và chi nhánh nhận không được trùng nhau!');
+    if (!toBranchId || fromBranchId === Number(toBranchId)) {
+      alert('Chọn chi nhánh nhận khác chi nhánh đang đăng nhập!');
       return;
     }
     if (!selectedProduct) return;
@@ -63,21 +68,21 @@ export default function StockTransferModal({
             <label className="input-label" style={{ marginBottom: '4px', display: 'block' }}>
               Từ Chi Nhánh (Xuất)
             </label>
-            <select
-              value={fromBranchId}
-              onChange={(e) => setFromBranchId(Number(e.target.value))}
+            <div
               style={{
                 width: '100%',
                 height: '36px',
+                display: 'flex',
+                alignItems: 'center',
                 border: '1px solid var(--border-subtle)',
                 borderRadius: 'var(--radius-sm)',
-                padding: '0 8px'
+                padding: '0 8px',
+                backgroundColor: 'var(--bg-subtle)',
+                fontWeight: 600
               }}
             >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
+              {currentBranchName || `Chi nhánh ${fromBranchId}`}
+            </div>
           </div>
 
           <div>
@@ -95,7 +100,7 @@ export default function StockTransferModal({
                 padding: '0 8px'
               }}
             >
-              {branches.map((b) => (
+              {targets.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>

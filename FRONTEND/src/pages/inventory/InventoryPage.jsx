@@ -10,25 +10,27 @@ import { inventoryService } from '../../services/inventoryService';
 import { purchaseService } from '../../services/purchaseService';
 import { websocketService } from '../../services/websocketService';
 import { exportToCsv } from '../../utils/exportCsv';
+import useBranches from '../../hooks/useBranches';
 import './InventoryPage.css';
-
-const BRANCHES = [
-  { id: 1, name: 'Chi nhánh 1 (Quận 1)' },
-  { id: 2, name: 'Chi nhánh 2 (Bình Thạnh)' }
-];
 
 export default function InventoryPage({
   currentUser,
   branchId = 1,
+  branchName,
   isOnline = true
 }) {
+  // Chi nhánh của phiên đăng nhập: nhập kho và điều chuyển luôn từ chi nhánh này.
+  // Quản trị xem được tồn kho chi nhánh khác nhưng muốn nhập/xuất ở đó thì đăng nhập vào chi nhánh đó.
+  const isAdmin = currentUser?.role === 'ADMIN';
   // State from Database
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
-  const [branches] = useState(BRANCHES);
+  const branches = useBranches([{ id: branchId, name: branchName || `Chi nhánh ${branchId}` }]);
   const [stockInHistory, setStockInHistory] = useState([]);
 
   const [currentBranchId, setCurrentBranchId] = useState(branchId || 1);
+  const viewingSessionBranch = Number(currentBranchId) === Number(branchId);
+  const otherBranchHint = 'Đang xem chi nhánh khác. Đăng nhập vào chi nhánh đó để nhập kho hoặc điều chuyển.';
   const [activeTab, setActiveTab] = useState('inventory'); // 'inventory' | 'history'
 
   // Barcode Printing State
@@ -196,10 +198,9 @@ export default function InventoryPage({
     // 1. Call Backend API if online
     if (isOnline) {
       try {
+        // Chi nhánh và người nhập do máy chủ lấy từ phiên đăng nhập
         const payload = {
-          branchId: Number(currentBranchId) || 1,
           supplierId: Number(newStockIn.supplierId) || 1,
-          employeeId: currentUser?.userId || 1,
           note: newStockIn.note || '',
           items: newStockIn.items.map(it => ({
             productId: it.productId,
@@ -243,8 +244,16 @@ export default function InventoryPage({
     alert(`Đã hoàn tất nhập kho phiếu: ${newStockIn.id}! Tồn kho đã được cộng tự động.`);
   };
 
-  // Handle Stock Transfer
-  const handleTransfer = ({ productId, quantity, toBranchId }) => {
+  // Điều chuyển từ chi nhánh đang đăng nhập sang chi nhánh khác
+  const handleTransfer = async ({ productId, quantity, toBranchId, note }) => {
+    if (isOnline) {
+      try {
+        await inventoryService.transfer({ productId, quantity, toBranchId, note });
+      } catch (err) {
+        alert(`Không thể điều chuyển: ${err.response?.data?.message || err.message}`);
+        return;
+      }
+    }
     setProducts((prev) =>
       prev.map((prod) => {
         if (prod.id === productId) {
@@ -450,7 +459,8 @@ export default function InventoryPage({
             size="sm"
             variant="secondary"
             onClick={() => handleQuickStockIn(row)}
-            title="Nhập thêm hàng hóa này"
+            disabled={!viewingSessionBranch}
+            title={viewingSessionBranch ? 'Nhập thêm hàng hóa này' : otherBranchHint}
           >
             + Nhập hàng
           </Button>
@@ -527,24 +537,30 @@ export default function InventoryPage({
       {/* Header */}
       <header className="page-header">
         <h1 className="page-title">Kho hàng</h1>
-        <select
-          className="inv-select"
-          value={currentBranchId}
-          onChange={(e) => setCurrentBranchId(Number(e.target.value))}
-          aria-label="Chi nhánh"
-        >
-          {branches.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
+        {isAdmin ? (
+          <select
+            className="inv-select"
+            value={currentBranchId}
+            onChange={(e) => setCurrentBranchId(Number(e.target.value))}
+            aria-label="Chi nhánh"
+          >
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+                {Number(b.id) === Number(branchId) ? ' (đang đăng nhập)' : ''}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="page-subtitle">{branchName}</span>
+        )}
         <div className="page-header-spacer" />
         <Button
           variant="secondary"
           size="md"
           onClick={() => setIsTransferOpen(true)}
-          title="Điều chuyển hàng hóa giữa các chi nhánh"
+          disabled={!viewingSessionBranch}
+          title={viewingSessionBranch ? 'Điều chuyển hàng sang chi nhánh khác' : otherBranchHint}
         >
           Điều chuyển kho
         </Button>
@@ -552,7 +568,8 @@ export default function InventoryPage({
           variant="primary"
           size="md"
           onClick={() => setIsStockInOpen(true)}
-          title="Tạo phiếu nhập hàng mới từ nhà cung cấp"
+          disabled={!viewingSessionBranch}
+          title={viewingSessionBranch ? 'Tạo phiếu nhập hàng mới từ nhà cung cấp' : otherBranchHint}
         >
           Tạo phiếu nhập (F3)
         </Button>
@@ -754,8 +771,8 @@ export default function InventoryPage({
         onClose={() => setIsStockInOpen(false)}
         products={products}
         suppliers={suppliers}
-        branches={branches}
-        currentBranchId={currentBranchId}
+        branchId={branchId}
+        branchName={branchName}
         onSaveStockIn={handleSaveStockIn}
       />
 
@@ -764,7 +781,8 @@ export default function InventoryPage({
         onClose={() => setIsTransferOpen(false)}
         products={products}
         branches={branches}
-        currentBranchId={currentBranchId}
+        currentBranchId={branchId}
+        currentBranchName={branchName}
         onTransfer={handleTransfer}
       />
 

@@ -8,10 +8,9 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => authService.getCurrentUser());
   const [isBackendOnline, setIsBackendOnline] = useState(() => !!localStorage.getItem('pos_token'));
   const [isWsConnected, setIsWsConnected] = useState(false);
-  const [branchId, setBranchId] = useState(() => {
-    const saved = authService.getCurrentUser();
-    return saved?.branchId || 1;
-  });
+  // Chi nhánh của phiên đăng nhập: chọn lúc đăng nhập và nằm trong token, muốn đổi phải đăng nhập lại
+  const branchId = user?.branchId || null;
+  const branchName = user?.branchName || (branchId ? `Chi nhánh ${branchId}` : '');
 
   // Check auth expiration and WebSocket status
   useEffect(() => {
@@ -34,18 +33,24 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const login = async (username, password) => {
+  /**
+   * Kết quả: { success, data } khi vào được; { success: false, code, message, branches, openShiftBranchId }
+   * khi cần chọn chi nhánh (code = BRANCH_SELECTION_REQUIRED) hoặc bị từ chối.
+   */
+  const login = async (username, password, selectedBranchId) => {
     try {
-      const data = await authService.login(username, password);
+      const data = await authService.login(username, password, selectedBranchId);
       setUser(data);
-      if (data.branchId) setBranchId(data.branchId);
       setIsBackendOnline(true);
       return { success: true, data };
     } catch (err) {
-      // If backend is down or invalid credentials
+      const body = err.response?.data;
       return {
         success: false,
-        message: err.response?.data?.message || err.message || 'Đăng nhập thất bại'
+        code: body?.code,
+        message: body?.message || err.message || 'Đăng nhập thất bại',
+        branches: body?.data?.branches || null,
+        openShiftBranchId: body?.data?.openShiftBranchId || null
       };
     }
   };
@@ -60,7 +65,7 @@ export function AuthProvider({ children }) {
       value={{
         user,
         branchId,
-        setBranchId,
+        branchName,
         isBackendOnline,
         setIsBackendOnline,
         isWsConnected,

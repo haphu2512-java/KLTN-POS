@@ -149,3 +149,59 @@
   color: var(--text-main);
   border-color: var(--text-muted);
 }
+
+/* Bước chọn chi nhánh */
+.login-branch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.login-branch-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background-color: var(--bg-canvas);
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.login-branch-option:hover {
+  border-color: var(--text-muted);
+}
+
+.login-branch-option.is-selected {
+  border-color: var(--primary-600);
+  background-color: var(--primary-50);
+}
+
+.login-branch-option input {
+  margin-top: 3px;
+  accent-color: var(--primary-600);
+}
+
+.login-branch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.login-branch-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.login-branch-address {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.login-branch-flag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--warning-700);
+}

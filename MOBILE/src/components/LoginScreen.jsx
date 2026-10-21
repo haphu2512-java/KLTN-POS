@@ -11,7 +11,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { AppConfig, getAutoDetectedHost } from '../api/config';
-import { ScannerApi } from '../api/scannerApi';
+import { ScannerApi, BranchSelectionError } from '../api/scannerApi';
 import { Icon, Button } from './ui';
 import { colors, fonts, radius, type } from '../theme';
 
@@ -24,6 +24,9 @@ export default function LoginScreen({ onLoggedIn, notice }) {
   const [isScanningServer, setIsScanningServer] = useState(false);
   const [scanMessage, setScanMessage] = useState(null);
   const [error, setError] = useState(notice || null);
+  // Tài khoản nhiều chi nhánh: danh sách để chọn sau khi mật khẩu đúng
+  const [branches, setBranches] = useState(null);
+  const [openShiftBranchId, setOpenShiftBranchId] = useState(null);
 
   useEffect(() => {
     AppConfig.getServerUrl().then(setServerUrl);
@@ -54,7 +57,7 @@ export default function LoginScreen({ onLoggedIn, notice }) {
     }
   };
 
-  const handleLogin = async () => {
+  const handleLogin = async (branchId) => {
     if (!serverUrl.trim() || !username.trim() || !password) {
       setError('Vui lòng nhập địa chỉ máy chủ, tên đăng nhập và mật khẩu.');
       return;
@@ -62,10 +65,16 @@ export default function LoginScreen({ onLoggedIn, notice }) {
     setIsLoading(true);
     setError(null);
     try {
-      const session = await ScannerApi.login(serverUrl, username, password);
+      const session = await ScannerApi.login(serverUrl, username, password, branchId);
       setPassword('');
+      setBranches(null);
       onLoggedIn(session);
     } catch (e) {
+      if (e instanceof BranchSelectionError) {
+        setBranches(e.branches);
+        setOpenShiftBranchId(e.openShiftBranchId);
+        return;
+      }
       setError(e.name === 'AbortError' ? `Không kết nối được tới ${serverUrl}. Hãy kiểm tra xem điện thoại và máy tính cùng chung Wi-Fi.` : e.message);
     } finally {
       setIsLoading(false);
@@ -141,7 +150,7 @@ export default function LoginScreen({ onLoggedIn, notice }) {
               placeholder="Mật khẩu"
               placeholderTextColor={colors.textLight}
               secureTextEntry
-              onSubmitEditing={handleLogin}
+              onSubmitEditing={() => handleLogin()}
             />
           </Field>
 
@@ -152,7 +161,28 @@ export default function LoginScreen({ onLoggedIn, notice }) {
             </View>
           ) : null}
 
-          <Button label="Đăng nhập" onPress={handleLogin} loading={isLoading} style={{ marginTop: 4 }} />
+          {branches ? (
+            <View>
+              <Text style={[type.label, { marginBottom: 8 }]}>Chọn chi nhánh của máy POS cần ghép</Text>
+              {branches.map((b) => (
+                <TouchableOpacity
+                  key={b.id}
+                  style={styles.branchBtn}
+                  disabled={isLoading}
+                  onPress={() => handleLogin(b.id)}
+                >
+                  <Text style={styles.branchName}>{b.name}</Text>
+                  {b.address ? <Text style={styles.branchAddress}>{b.address}</Text> : null}
+                  {openShiftBranchId === b.id ? (
+                    <Text style={styles.branchFlag}>Bạn đang có ca chưa đóng ở đây</Text>
+                  ) : null}
+                </TouchableOpacity>
+              ))}
+              <Button label="Đổi tài khoản" variant="secondary" onPress={() => setBranches(null)} style={{ marginTop: 4 }} />
+            </View>
+          ) : (
+            <Button label="Đăng nhập" onPress={() => handleLogin()} loading={isLoading} style={{ marginTop: 4 }} />
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -172,6 +202,31 @@ function Field({ label, icon, children }) {
 }
 
 const styles = StyleSheet.create({
+  branchBtn: {
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    padding: 12,
+    marginBottom: 8,
+    backgroundColor: colors.white
+  },
+  branchName: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.text
+  },
+  branchAddress: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2
+  },
+  branchFlag: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.warningDark,
+    marginTop: 4
+  },
   container: {
     flexGrow: 1,
     justifyContent: 'center',

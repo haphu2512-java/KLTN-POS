@@ -4,17 +4,25 @@ import { formatCurrency, formatNumber, formatDateTime } from '../../utils/format
 import { reportService } from '../../services/reportService';
 import { saleService } from '../../services/saleService';
 import { exportToCsv } from '../../utils/exportCsv';
-import ShiftHistory from './ShiftHistory';
+import useBranches, { branchNameOf } from '../../hooks/useBranches';
 import './ReportPage.css';
 
 export default function ReportPage({
-  branchId = 1,
+  currentUser,
+  branchId,
+  branchName,
   isOnline = true
 }) {
-  const [selectedBranchId, setSelectedBranchId] = useState(branchId || 1);
+  // Quản trị xem được mọi chi nhánh ('' = tất cả); quản lý chỉ xem chi nhánh đang đăng nhập
+  const isAdmin = currentUser?.role === 'ADMIN';
+  const branches = useBranches();
+  const [selectedBranchId, setSelectedBranchId] = useState(isAdmin ? '' : branchId);
+  const scopeLabel = selectedBranchId
+    ? branchNameOf(branches, selectedBranchId) || branchName
+    : 'Tất cả chi nhánh';
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState('charts'); // 'charts' | 'invoices' | 'shifts'
+  const [viewMode, setViewMode] = useState('charts'); // 'charts' | 'invoices' (lịch sử ca đã chuyển sang tab Ca làm)
   const [invoices, setInvoices] = useState([]);
   const [refundTarget, setRefundTarget] = useState(null);
   const [refundReason, setRefundReason] = useState('');
@@ -117,7 +125,7 @@ export default function ReportPage({
         i.status === 'REFUNDED' ? 'Đã hoàn trả' : 'Đã thanh toán',
         i.note || ''
       ]);
-      exportToCsv(`DanhSachHoaDon_CN${selectedBranchId}`, headers, rows);
+      exportToCsv(`DanhSachHoaDon_CN${selectedBranchId || 'TatCa'}`, headers, rows);
     } else {
       const headers = ['Mã sản phẩm', 'Mã vạch', 'Tên sản phẩm', 'Số lượng bán', 'Doanh thu (VND)', 'Lợi nhuận ước tính (VND)'];
       const rows = topProducts.map((p) => [
@@ -128,7 +136,7 @@ export default function ReportPage({
         p.totalRevenue,
         p.estimatedProfit
       ]);
-      exportToCsv(`BaoCaoSanPhamBanChay_CN${selectedBranchId}`, headers, rows);
+      exportToCsv(`BaoCaoSanPhamBanChay_CN${selectedBranchId || 'TatCa'}`, headers, rows);
     }
   };
 
@@ -284,7 +292,7 @@ export default function ReportPage({
       {/* Header */}
       <header className="page-header">
         <h1 className="page-title">Báo cáo doanh thu</h1>
-        <span className="page-subtitle">Chi nhánh {selectedBranchId}</span>
+        <span className="page-subtitle">{scopeLabel}</span>
       </header>
 
       {/* Main Body */}
@@ -293,14 +301,20 @@ export default function ReportPage({
         <div className="report-filter-bar">
           <div className="report-filter-group">
             <span className="report-filter-label">Chi nhánh:</span>
-            <select
-              className="report-select"
-              value={selectedBranchId}
-              onChange={(e) => setSelectedBranchId(Number(e.target.value))}
-            >
-              <option value={1}>Chi nhánh 1 (Quận 1)</option>
-              <option value={2}>Chi nhánh 2 (Bình Thạnh)</option>
-            </select>
+            {isAdmin ? (
+              <select
+                className="report-select"
+                value={selectedBranchId}
+                onChange={(e) => setSelectedBranchId(e.target.value ? Number(e.target.value) : '')}
+              >
+                <option value="">Tất cả chi nhánh</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            ) : (
+              <strong title="Đăng nhập lại để đổi chi nhánh">{branchName}</strong>
+            )}
           </div>
 
           <div className="report-filter-group">
@@ -359,23 +373,14 @@ export default function ReportPage({
           >
             Lịch Sử Hóa Đơn & Trả Hàng ({invoices.length})
           </button>
-          <button
-            type="button"
-            className={`report-period-btn ${viewMode === 'shifts' ? 'active' : ''}`}
-            onClick={() => setViewMode('shifts')}
-          >
-            Ca Làm Việc & Bàn Giao
-          </button>
         </div>
 
-        {viewMode === 'shifts' ? (
-          <ShiftHistory branchId={selectedBranchId} days={days} isOnline={isOnline} />
-        ) : viewMode === 'invoices' ? (
+        {viewMode === 'invoices' ? (
           /* Invoices List Table */
           <div className="report-card">
             <div className="report-card-title">
               <span>Lịch Sử Giao Dịch & Hóa Đơn Bán Hàng</span>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Chi nhánh {selectedBranchId}</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{scopeLabel}</span>
             </div>
             <Table
               columns={invoiceColumns}

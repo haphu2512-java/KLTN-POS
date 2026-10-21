@@ -78,27 +78,41 @@ const authFetch = async (path, options = {}, timeoutMs = 3000) => {
   return response;
 };
 
+export class BranchSelectionError extends Error {
+  constructor(message, branches, openShiftBranchId) {
+    super(message || 'Vui lòng chọn chi nhánh làm việc');
+    this.name = 'BranchSelectionError';
+    this.branches = branches;
+    this.openShiftBranchId = openShiftBranchId || null;
+  }
+}
+
 const newScanId = () => `scan-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 
 export const ScannerApi = {
-  // Đăng nhập bằng tài khoản POS; mã quét sẽ được gửi tới máy POS đang đăng nhập cùng tài khoản
-  async login(serverUrl, username, password) {
+  // Đăng nhập bằng tài khoản POS; mã quét sẽ được gửi tới máy POS đang đăng nhập cùng tài khoản.
+  // Tài khoản có nhiều chi nhánh mà chưa chọn: ném BranchSelectionError kèm danh sách chi nhánh để chọn
+  // (chọn đúng chi nhánh của máy POS cần ghép).
+  async login(serverUrl, username, password, branchId) {
     const cleanUrl = await AppConfig.setServerUrl(serverUrl);
     const response = await fetchWithTimeout(
       `${cleanUrl}/api/auth/login`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ username: username.trim(), password })
+        body: JSON.stringify({ username: username.trim(), password, branchId: branchId || undefined })
       },
       8000
     );
     const json = await response.json().catch(() => null);
+    if (json?.code === 'BRANCH_SELECTION_REQUIRED' && Array.isArray(json.data?.branches)) {
+      throw new BranchSelectionError(json.message, json.data.branches, json.data.openShiftBranchId);
+    }
     if (!response.ok || !json?.data?.token) {
       throw new Error(json?.message || `Đăng nhập thất bại (HTTP ${response.status})`);
     }
-    const { token, username: user, fullName, role, branchId } = json.data;
-    const session = { token, username: user, fullName, role, branchId };
+    const { token, username: user, fullName, role, branchId: sessionBranchId, branchName } = json.data;
+    const session = { token, username: user, fullName, role, branchId: sessionBranchId, branchName };
     await AppConfig.setSession(session);
     return session;
   },

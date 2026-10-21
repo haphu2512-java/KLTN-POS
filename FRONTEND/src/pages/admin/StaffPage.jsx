@@ -2,12 +2,36 @@ import { useState, useEffect } from 'react';
 import { Button, Table, Badge, Modal } from '../../components/common';
 import { userService } from '../../services/userService';
 import { formatDateTime } from '../../utils/formatters';
+import useBranches, { branchNameOf } from '../../hooks/useBranches';
 import './StaffPage.css';
+
+/** Ô chọn nhiều chi nhánh được phân công; quản trị không cần (làm việc được mọi chi nhánh) */
+function BranchAssignment({ role, branches, value, onChange }) {
+  if (role === 'ADMIN') {
+    return <div className="staff-branch-note">Quản trị viên chọn được mọi chi nhánh khi đăng nhập.</div>;
+  }
+  const toggle = (id) =>
+    onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
+  return (
+    <div className="staff-branch-list">
+      {branches.map((b) => (
+        <label key={b.id} className="staff-branch-option">
+          <input type="checkbox" checked={value.includes(b.id)} onChange={() => toggle(b.id)} />
+          {b.name}
+        </label>
+      ))}
+      <div className="staff-branch-note">
+        Nhân viên chọn một trong các chi nhánh này khi đăng nhập. Không bỏ được chi nhánh đang có ca chưa đóng.
+      </div>
+    </div>
+  );
+}
 
 export default function StaffPage({
   branchId = 1,
   isOnline = true
 }) {
+  const branches = useBranches([{ id: branchId, name: `Chi nhánh ${branchId}` }]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,14 +49,14 @@ export default function StaffPage({
     password: '',
     fullName: '',
     role: 'CASHIER',
-    branchId: branchId || 1
+    branchIds: [branchId || 1]
   });
   const [editFormData, setEditFormData] = useState({
     id: null,
     username: '',
     fullName: '',
     role: 'CASHIER',
-    branchId: 1,
+    branchIds: [],
     active: true
   });
   const [newPassword, setNewPassword] = useState('');
@@ -41,8 +65,8 @@ export default function StaffPage({
     if (!isOnline) {
       // Offline fallback dummy
       setUsers([
-        { id: 1, username: 'admin', fullName: 'Quản Trị Viên', role: 'ADMIN', branchId: 1, active: true, createdAt: new Date().toISOString() },
-        { id: 2, username: 'cashier1', fullName: 'Thu Ngân Q1', role: 'CASHIER', branchId: 1, active: true, createdAt: new Date().toISOString() }
+        { id: 1, username: 'admin', fullName: 'Quản Trị Viên', role: 'ADMIN', branchIds: [], active: true, createdAt: new Date().toISOString() },
+        { id: 2, username: 'cashier1', fullName: 'Thu Ngân Q1', role: 'CASHIER', branchIds: [1], active: true, createdAt: new Date().toISOString() }
       ]);
       return;
     }
@@ -69,11 +93,15 @@ export default function StaffPage({
       alert('Vui lòng điền đầy đủ các thông tin bắt buộc');
       return;
     }
+    if (formData.role !== 'ADMIN' && formData.branchIds.length === 0) {
+      alert('Chọn ít nhất một chi nhánh cho nhân viên');
+      return;
+    }
     try {
       await userService.createUser(formData);
       alert('Tạo tài khoản nhân viên thành công!');
       setShowAddModal(false);
-      setFormData({ username: '', password: '', fullName: '', role: 'CASHIER', branchId: branchId || 1 });
+      setFormData({ username: '', password: '', fullName: '', role: 'CASHIER', branchIds: [branchId || 1] });
       fetchUsers();
     } catch (err) {
       alert(err.response?.data?.message || 'Có lỗi xảy ra khi tạo tài khoản');
@@ -118,7 +146,7 @@ export default function StaffPage({
       username: user.username,
       fullName: user.fullName || '',
       role: user.role || 'CASHIER',
-      branchId: user.branchId || 1,
+      branchIds: user.branchIds || [],
       active: user.active !== false
     });
     setShowEditModal(true);
@@ -130,11 +158,15 @@ export default function StaffPage({
       alert('Vui lòng nhập họ và tên');
       return;
     }
+    if (editFormData.role !== 'ADMIN' && editFormData.branchIds.length === 0) {
+      alert('Chọn ít nhất một chi nhánh cho nhân viên');
+      return;
+    }
     try {
       await userService.updateUser(editFormData.id, {
         fullName: editFormData.fullName,
         role: editFormData.role,
-        branchId: editFormData.branchId,
+        branchIds: editFormData.branchIds,
         active: editFormData.active
       });
       alert('Cập nhật thông tin nhân viên thành công!');
@@ -182,9 +214,12 @@ export default function StaffPage({
       }
     },
     {
-      key: 'branchId',
-      title: 'Chi nhánh',
-      render: (val, u) => `Chi nhánh ${val || u?.branchId || 1}`
+      key: 'branchIds',
+      title: 'Chi nhánh được phân công',
+      render: (val, u) =>
+        u?.role === 'ADMIN'
+          ? 'Tất cả'
+          : (val || []).map((id) => branchNameOf(branches, id)).join(', ') || 'Chưa phân công'
     },
     {
       key: 'active',
@@ -351,14 +386,12 @@ export default function StaffPage({
 
           <div className="staff-form-group">
             <label>Chi nhánh làm việc</label>
-            <select
-              className="staff-form-select"
-              value={formData.branchId}
-              onChange={(e) => setFormData({ ...formData, branchId: Number(e.target.value) })}
-            >
-              <option value={1}>Chi nhánh 1 (Quận 1 - Trung tâm)</option>
-              <option value={2}>Chi nhánh 2 (Quận 7)</option>
-            </select>
+            <BranchAssignment
+              role={formData.role}
+              branches={branches}
+              value={formData.branchIds}
+              onChange={(ids) => setFormData({ ...formData, branchIds: ids })}
+            />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
@@ -419,14 +452,12 @@ export default function StaffPage({
 
           <div className="staff-form-group">
             <label>Chi nhánh làm việc</label>
-            <select
-              className="staff-form-select"
-              value={editFormData.branchId}
-              onChange={(e) => setEditFormData({ ...editFormData, branchId: Number(e.target.value) })}
-            >
-              <option value={1}>Chi nhánh 1 (Quận 1 - Trung tâm)</option>
-              <option value={2}>Chi nhánh 2 (Quận 7)</option>
-            </select>
+            <BranchAssignment
+              role={editFormData.role}
+              branches={branches}
+              value={editFormData.branchIds}
+              onChange={(ids) => setEditFormData({ ...editFormData, branchIds: ids })}
+            />
           </div>
 
           <div className="staff-form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
