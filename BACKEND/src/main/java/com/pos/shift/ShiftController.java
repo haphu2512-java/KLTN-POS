@@ -29,6 +29,13 @@ public class ShiftController {
         return ResponseEntity.ok(ApiResponse.ok(shiftService.getWorkShifts()));
     }
 
+    @PostMapping("/work-shifts")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Thêm một ca cố định mới")
+    public ResponseEntity<ApiResponse<WorkShift>> createWorkShift(@Valid @RequestBody WorkShiftRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Đã thêm ca", shiftService.createWorkShift(req)));
+    }
+
     @PutMapping("/work-shifts/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Sửa tên, giờ bắt đầu/kết thúc của một ca cố định")
@@ -55,19 +62,29 @@ public class ShiftController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    @Operation(summary = "Lịch sử ca theo chi nhánh và khoảng ngày (mặc định hôm nay)")
-    public ResponseEntity<ApiResponse<List<ShiftSessionResponse>>> list(
+    @Operation(summary = "Lịch sử ca kèm tổng thiếu/dư (mặc định hôm nay)",
+            description = "ADMIN lọc theo chi nhánh, nhân viên, trạng thái; MANAGER chỉ chi nhánh đang đăng nhập; "
+                    + "vai trò khác chỉ thấy ca của chính mình.")
+    public ResponseEntity<ApiResponse<ShiftSummaryResponse>> list(
             @RequestParam(required = false) Long branchId,
+            @RequestParam(required = false) Long employeeId,
+            @RequestParam(required = false) ShiftStatus status,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return ResponseEntity.ok(ApiResponse.ok(shiftService.listShifts(branchId, from, to, currentUserService.getCurrentUser())));
+        ShiftFilter filter = new ShiftFilter(branchId, employeeId, from, to, status);
+        return ResponseEntity.ok(ApiResponse.ok(shiftService.listShifts(filter, currentUserService.getCurrentUser())));
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Chi tiết một ca (của mình, hoặc quản lý xem ca trong chi nhánh)")
     public ResponseEntity<ApiResponse<ShiftSessionResponse>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(shiftService.getShift(id, currentUserService.getCurrentUser())));
+    }
+
+    @GetMapping("/{id}/invoices")
+    @Operation(summary = "Hóa đơn bán và hoàn trả làm thay đổi tiền két của ca, để dò nguyên nhân thiếu/dư")
+    public ResponseEntity<ApiResponse<List<ShiftInvoiceRow>>> invoices(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(shiftService.getShiftInvoices(id, currentUserService.getCurrentUser())));
     }
 
     @PostMapping("/{id}/close")

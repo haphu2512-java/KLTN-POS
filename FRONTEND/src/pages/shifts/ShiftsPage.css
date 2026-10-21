@@ -1,0 +1,179 @@
+.shift-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.shift-filter-bar {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.shift-filter-wrap {
+  flex-wrap: wrap;
+}
+
+.shift-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.shift-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.shift-muted {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.shift-small {
+  font-size: 12px;
+}
+
+.shift-short {
+  color: var(--danger-600);
+}
+
+.shift-over {
+  color: var(--warning-600);
+}
+
+.shift-error,
+.shift-success {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.shift-error {
+  background-color: var(--danger-50);
+  border: 1px solid var(--danger-border);
+  color: var(--danger-600);
+}
+
+.shift-success {
+  background-color: var(--success-50);
+  border: 1px solid var(--success-border);
+  color: var(--success-700);
+}
+
+.shift-input {
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background-color: var(--bg-canvas);
+  color: var(--text-main);
+  font-size: 13px;
+  min-width: 0;
+}
+
+/* Chi tiết ca */
+.shift-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.shift-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.shift-detail-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 12px;
+  background-color: var(--bg-surface);
+}
+
+.shift-detail-card h4,
+.shift-clues h4,
+.shift-section-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.shift-calc-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.shift-calc-row.is-total {
+  border-top: 1px dashed var(--border-strong);
+  margin-top: 4px;
+  padding-top: 6px;
+  font-weight: 700;
+}
+
+.shift-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.shift-clues {
+  border: 1px solid var(--warning-border);
+  background-color: var(--warning-50);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.shift-clues ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.shift-force-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shift-force-row .shift-input {
+  flex: 1 1 160px;
+}
+
+/* Lịch ca cố định */
+.shift-schedule {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.shift-schedule th {
+  text-align: left;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.shift-schedule td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.shift-add-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}

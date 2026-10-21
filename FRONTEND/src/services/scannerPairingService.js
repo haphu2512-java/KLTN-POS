@@ -11,11 +11,13 @@ export const scannerPairingService = {
   },
 
   // Lấy quầy đã đăng ký trên máy này; chưa có (hoặc quầy thuộc chi nhánh khác) thì đăng ký mới
-  async ensureTerminal(defaultName = 'Quầy POS') {
+  // Quầy thuộc một chi nhánh: đăng nhập vào chi nhánh khác trên cùng máy thì đăng ký quầy mới cho chi nhánh đó
+  async ensureTerminal(defaultName = 'Quầy POS', branchId) {
     const savedId = localStorage.getItem(TERMINAL_KEY);
     if (savedId) {
       try {
-        return unwrap(await api.get(`/scanner/terminals/${savedId}`));
+        const saved = unwrap(await api.get(`/scanner/terminals/${savedId}`));
+        if (!branchId || Number(saved.branchId) === Number(branchId)) return saved;
       } catch (err) {
         if (err.response?.status !== 404) throw err;
       }

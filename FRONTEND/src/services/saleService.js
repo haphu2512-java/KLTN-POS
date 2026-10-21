@@ -1,8 +1,8 @@
 import api from './api';
 
 export const saleService = {
-  async getInvoices(branchId = 1) {
-    const res = await api.get('/invoices', { params: { branchId } });
+  async getInvoices(branchId) {
+    const res = await api.get('/invoices', { params: { branchId: branchId || undefined } });
     return Array.isArray(res) ? res : (res?.data || []);
   },
 

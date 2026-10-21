@@ -65,8 +65,15 @@ Tạo tự động khi database còn trống, mật khẩu là giá trị `SEED_
 
 | Tài khoản | Vai trò |
 |-----------|---------|
-| `admin` | ADMIN (toàn quyền) |
-| `cashier` | CASHIER (chỉ bán hàng) |
+| `admin` | ADMIN (toàn quyền, chọn được mọi chi nhánh) |
+| `cashier` | CASHIER (chỉ bán hàng, được phân công Chi nhánh Quận 1) |
+
+### Chi nhánh và ca làm
+- Chi nhánh được chọn ở bước đăng nhập. Nhân viên chỉ chọn được chi nhánh quản trị đã phân công (trang Nhân viên, một người có thể được phân công nhiều chi nhánh); được phân công một chi nhánh thì vào thẳng. Quản trị chọn được mọi chi nhánh.
+- Chi nhánh nằm trong token: bán hàng, nhập kho, điều chuyển, mở ca đều ghi vào chi nhánh đó. Muốn đổi chi nhánh thì đăng xuất và đăng nhập lại.
+- Đang có ca chưa đóng ở chi nhánh A thì không đăng nhập vào chi nhánh B được: phải vào A đóng ca (đếm két), hoặc nhờ quản trị đóng hộ ở tab Ca làm.
+- Tab **Ca làm**: quản trị xem ca mọi chi nhánh, lọc theo chi nhánh/ngày/nhân viên/trạng thái, xem tổng thiếu/dư, đóng hộ ca quên đóng, sửa lịch ca cố định. Thu ngân chỉ xem ca của mình, mở chi tiết để thấy cách tính tiền két, từng hóa đơn và gợi ý dò chênh lệch.
+- Tiền mặt dự kiến của ca = tiền đầu ca + bán tiền mặt − tiền mặt hoàn trả chi từ két của ca. Hoàn trả hóa đơn của ca đã đóng thì tính vào ca đang mở lúc hoàn trả.
 
 ### Khởi động Frontend
 ```bash

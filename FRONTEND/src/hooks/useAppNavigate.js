@@ -15,5 +15,6 @@ export default function useAppNavigate() {
     onNavigateToReport: () => navigate('/report'),
     onNavigateToPartners: () => navigate('/partners'),
     onNavigateToStaff: () => navigate('/staff'),
+    onNavigateToShifts: () => navigate('/shifts'),
   };
 }

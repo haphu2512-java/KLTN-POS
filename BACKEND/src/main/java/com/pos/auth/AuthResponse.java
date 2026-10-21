@@ -16,5 +16,7 @@ public class AuthResponse {
     private String username;
     private String fullName;
     private String role;
+    /** Chi nhánh của phiên đăng nhập (đã chọn lúc đăng nhập) */
     private Long branchId;
+    private String branchName;
 }

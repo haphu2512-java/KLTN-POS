@@ -17,14 +17,21 @@ CREATE TABLE IF NOT EXISTS branch (
 -- 2. Bảng Tài Khoản & Nhân Viên
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    branch_id BIGINT,
     username VARCHAR(50) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     full_name VARCHAR(100) NOT NULL,
     role VARCHAR(20) NOT NULL DEFAULT 'CASHIER',
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (branch_id) REFERENCES branch(id) ON DELETE SET NULL
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2b. Phân công chi nhánh: nhân viên chọn một trong các chi nhánh này lúc đăng nhập (ADMIN không cần gán)
+CREATE TABLE IF NOT EXISTS user_branch (
+    user_id BIGINT NOT NULL,
+    branch_id BIGINT NOT NULL,
+    PRIMARY KEY (user_id, branch_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (branch_id) REFERENCES branch(id) ON DELETE CASCADE
 );
 
 -- 3. Bảng Khách Hàng
@@ -110,6 +117,9 @@ CREATE TABLE IF NOT EXISTS invoice (
     note VARCHAR(255),
     client_request_id VARCHAR(64) UNIQUE,
     shift_session_id BIGINT,
+    refunded_at DATETIME,
+    refunded_by BIGINT,
+    refund_shift_session_id BIGINT,      -- ca có két chi tiền hoàn trả (null: tính vào ca đã bán)
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (branch_id) REFERENCES branch(id) ON DELETE CASCADE,
     FOREIGN KEY (customer_id) REFERENCES customer(id) ON DELETE SET NULL,
@@ -180,6 +190,9 @@ CREATE TABLE IF NOT EXISTS shift_session (
     cash_sales DECIMAL(14,2),
     non_cash_sales DECIMAL(14,2),
     invoice_count INT,
+    cash_refunds DECIMAL(14,2),          -- tiền mặt hoàn trả chi từ két trong ca
+    non_cash_refunds DECIMAL(14,2),
+    refunded_count INT,
     handover_note VARCHAR(500),
     FOREIGN KEY (branch_id) REFERENCES branch(id) ON DELETE CASCADE,
     FOREIGN KEY (work_shift_id) REFERENCES work_shift(id),

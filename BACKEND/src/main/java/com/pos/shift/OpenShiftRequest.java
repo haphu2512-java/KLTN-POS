@@ -13,9 +13,6 @@ public class OpenShiftRequest {
     /** Ca muốn mở; để trống thì lấy ca theo giờ hiện tại */
     private Long workShiftId;
 
-    /** Chỉ ADMIN không gắn chi nhánh mới cần gửi */
-    private Long branchId;
-
     @NotNull(message = "Tiền đầu ca không được để trống")
     @DecimalMin(value = "0", message = "Tiền đầu ca không được âm")
     private BigDecimal openingCash;

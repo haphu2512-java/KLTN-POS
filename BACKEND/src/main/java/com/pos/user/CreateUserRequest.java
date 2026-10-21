@@ -8,6 +8,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Set;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -28,5 +30,6 @@ public class CreateUserRequest {
     @NotNull(message = "Vai trò không được để trống")
     private Role role;
 
-    private Long branchId;
+    /** Các chi nhánh được phân công; bắt buộc ít nhất 1 với vai trò khác ADMIN */
+    private Set<Long> branchIds;
 }

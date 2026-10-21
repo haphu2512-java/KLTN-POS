@@ -1,8 +1,8 @@
 package com.pos.config;
 
 import com.pos.scanner.TerminalAccess;
-import com.pos.security.CustomUserDetailsService;
-import com.pos.security.JwtTokenProvider;
+import com.pos.security.BranchSession;
+import com.pos.security.SessionAuthenticator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -16,12 +16,11 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import java.security.Principal;
 import java.util.Arrays;
 
 @Configuration
@@ -29,8 +28,7 @@ import java.util.Arrays;
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private final JwtTokenProvider tokenProvider;
-    private final CustomUserDetailsService userDetailsService;
+    private final SessionAuthenticator sessionAuthenticator;
     private final TerminalAccess terminalAccess;
 
     // Dùng chung danh sách origin với CORS thay vì cho phép mọi origin ("*")
@@ -78,8 +76,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 } else if (StompCommand.SEND.equals(accessor.getCommand())) {
                     checkSendDestination(accessor.getDestination());
                 } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
-                    checkSubscribeDestination(accessor.getDestination(),
-                            accessor.getUser() == null ? null : accessor.getUser().getName());
+                    checkSubscribeDestination(accessor.getDestination(), accessor.getUser());
                 }
                 return message;
             }
@@ -101,15 +98,19 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
      * Chỉ cho subscribe /topic/** và hàng đợi riêng của chính mình qua /user/queue/**.
      * Subscribe thẳng /queue/... (tên hàng đợi đã gắn session của người khác) bị chặn.
      * Không cho dùng ký tự đại diện (broker so khớp kiểu Ant: "/topic/**" sẽ nghe trộm mọi quầy).
-     * Kênh mã quét của quầy (/topic/terminals/{id}/scans) chỉ cho tài khoản cùng chi nhánh với quầy.
+     * Kênh mã quét của quầy (/topic/terminals/{id}/scans) chỉ cho phiên đăng nhập cùng chi nhánh với quầy.
      */
-    void checkSubscribeDestination(String destination, String username) {
+    void checkSubscribeDestination(String destination, Principal user) {
         if (destination == null
                 || !(destination.startsWith("/topic/") || destination.startsWith("/user/queue/"))
                 || destination.contains("*") || destination.contains("?") || destination.contains("{")) {
             throw new MessagingException("Không được đăng ký nhận tin từ " + destination);
         }
-        if (destination.startsWith(TerminalAccess.TOPIC_PREFIX) && !terminalAccess.canSubscribe(username, destination)) {
+        String username = user == null ? null : user.getName();
+        Long branchId = user instanceof UsernamePasswordAuthenticationToken auth
+                && auth.getDetails() instanceof BranchSession session ? session.branchId() : null;
+        if (destination.startsWith(TerminalAccess.TOPIC_PREFIX)
+                && !terminalAccess.canSubscribe(username, branchId, destination)) {
             throw new MessagingException("Không được nghe mã quét của quầy này");
         }
     }
@@ -118,18 +119,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             throw new MessagingException("Thiếu token xác thực WebSocket");
         }
-        String token = authHeader.substring(7);
-        if (!tokenProvider.validateToken(token)) {
-            throw new MessagingException("Token WebSocket không hợp lệ hoặc đã hết hạn");
+        UsernamePasswordAuthenticationToken auth = sessionAuthenticator.authenticate(authHeader.substring(7));
+        if (auth == null) {
+            throw new MessagingException("Token WebSocket không hợp lệ, đã hết hạn hoặc tài khoản không còn quyền ở chi nhánh này");
         }
-        try {
-            UserDetails user = userDetailsService.loadUserByUsername(tokenProvider.getUsernameFromToken(token));
-            if (!user.isEnabled()) {
-                throw new MessagingException("Tài khoản đã bị khóa");
-            }
-            return new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
-        } catch (UsernameNotFoundException e) {
-            throw new MessagingException("Tài khoản không tồn tại");
-        }
+        return auth;
     }
 }

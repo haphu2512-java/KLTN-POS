@@ -101,3 +101,23 @@
   align-items: center;
   gap: 6px;
 }
+
+.staff-branch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.staff-branch-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.staff-branch-note {
+  font-size: 11px;
+  color: var(--text-muted);
+}

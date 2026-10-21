@@ -129,6 +129,8 @@ export default function ShiftModal({ isOpen, onClose, current, reason, onChanged
               {row('Mở lúc', formatDateTime(session.openedAt))}
               {row('Tiền đầu ca', formatCurrency(session.openingCash))}
               {row(`Bán tiền mặt (${session.invoiceCount} hóa đơn)`, formatCurrency(session.cashSales))}
+              {Number(session.cashRefunds) > 0 &&
+                row(`Hoàn trả tiền mặt (${session.refundedCount} hóa đơn)`, `− ${formatCurrency(session.cashRefunds)}`)}
               {row('Thẻ / chuyển khoản', formatCurrency(session.nonCashSales))}
               {row('Tiền mặt lẽ ra có trong két', formatCurrency(session.expectedCash), true)}
             </div>

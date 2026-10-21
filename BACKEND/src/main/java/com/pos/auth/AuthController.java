@@ -1,7 +1,9 @@
 package com.pos.auth;
 
+import com.pos.branch.Branch;
+import com.pos.branch.BranchRepository;
 import com.pos.common.ApiResponse;
-import com.pos.security.JwtTokenProvider;
+import com.pos.security.CurrentUserService;
 import com.pos.user.User;
 import com.pos.user.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,11 +26,15 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthenticationManager authenticationManager;
-    private final JwtTokenProvider tokenProvider;
     private final UserRepository userRepository;
+    private final LoginService loginService;
+    private final CurrentUserService currentUserService;
+    private final BranchRepository branchRepository;
 
     @PostMapping("/login")
-    @Operation(summary = "Đăng nhập hệ thống nhận JWT Token")
+    @Operation(summary = "Đăng nhập và chọn chi nhánh làm việc, nhận JWT Token",
+            description = "Tài khoản có nhiều chi nhánh mà chưa gửi branchId: trả 409 BRANCH_SELECTION_REQUIRED "
+                    + "kèm data.branches để chọn rồi gửi lại.")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
@@ -38,43 +44,28 @@ public class AuthController {
         User user = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng"));
 
-        String token = tokenProvider.generateToken(
-                userDetails,
-                user.getBranchId(),
-                user.getRole().name(),
-                user.getFullName()
-        );
-
-        AuthResponse authResponse = AuthResponse.builder()
-                .token(token)
-                .tokenType("Bearer")
-                .userId(user.getId())
-                .username(user.getUsername())
-                .fullName(user.getFullName())
-                .role(user.getRole().name())
-                .branchId(user.getBranchId())
-                .build();
-
+        AuthResponse authResponse = loginService.login(user, userDetails, request.getBranchId());
         return ResponseEntity.ok(ApiResponse.ok("Đăng nhập thành công", authResponse));
     }
 
     @GetMapping("/me")
-    @Operation(summary = "Lấy thông tin tài khoản hiện tại từ Token")
+    @Operation(summary = "Lấy thông tin tài khoản và chi nhánh của phiên hiện tại từ Token")
     public ResponseEntity<ApiResponse<UserProfileResponse>> getCurrentUser(@AuthenticationPrincipal UserDetails userDetails) {
         if (userDetails == null) {
             return ResponseEntity.ok(ApiResponse.error("UNAUTHORIZED", "Chưa đăng nhập"));
         }
-        User user = userRepository.findByUsername(userDetails.getUsername())
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng"));
-        
+        User user = currentUserService.getCurrentUser();
+        Long branchId = user.getCurrentBranchId();
+
         UserProfileResponse profile = UserProfileResponse.builder()
                 .id(user.getId())
                 .username(user.getUsername())
                 .fullName(user.getFullName())
                 .role(user.getRole() != null ? user.getRole().name() : null)
-                .branchId(user.getBranchId())
+                .branchId(branchId)
+                .branchName(branchId == null ? null : branchRepository.findById(branchId).map(Branch::getName).orElse(null))
                 .build();
-                
+
         return ResponseEntity.ok(ApiResponse.ok(profile));
     }
 }

@@ -1,6 +1,8 @@
 package com.pos.user;
 
+import com.pos.branch.BranchRepository;
 import com.pos.common.BusinessException;
+import com.pos.shift.ShiftSession;
 import com.pos.shift.ShiftSessionRepository;
 import com.pos.shift.ShiftStatus;
 import lombok.RequiredArgsConstructor;
@@ -11,8 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Objects;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,6 +26,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final ShiftSessionRepository shiftSessionRepository;
+    private final BranchRepository branchRepository;
 
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
@@ -47,7 +51,7 @@ public class UserService {
                 .password(passwordEncoder.encode(req.getPassword()))
                 .fullName(req.getFullName().trim())
                 .role(req.getRole())
-                .branchId(req.getBranchId())
+                .branchIds(validBranches(req.getRole(), req.getBranchIds()))
                 .active(true)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -62,17 +66,21 @@ public class UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("USER_NOT_FOUND", "Không tìm thấy người dùng với ID: " + id));
 
-        // Ca đang mở thuộc chi nhánh cũ: đổi chi nhánh lúc này làm nhân viên không bán được
-        // ở chi nhánh mới và cũng không mở được ca mới, nên phải đóng ca trước
-        if (!Objects.equals(user.getBranchId(), req.getBranchId())
-                && shiftSessionRepository.findByEmployeeIdAndStatus(user.getId(), ShiftStatus.OPEN).isPresent()) {
+        Set<Long> branchIds = validBranches(req.getRole(), req.getBranchIds());
+
+        // Bỏ phân công ở chi nhánh đang có ca mở thì nhân viên mất phiên ở đó (token hết hiệu lực)
+        // và không còn đăng nhập vào để đóng ca được, nên phải đóng ca trước
+        ShiftSession open = shiftSessionRepository.findByEmployeeIdAndStatus(user.getId(), ShiftStatus.OPEN).orElse(null);
+        if (open != null && req.getRole() != Role.ADMIN && !branchIds.contains(open.getBranchId())) {
             throw new BusinessException("SHIFT_OPEN_BRANCH_CHANGE",
-                    "Nhân viên đang có ca chưa đóng. Đóng ca trước khi chuyển chi nhánh.", HttpStatus.CONFLICT);
+                    "Nhân viên đang có ca chưa đóng ở chi nhánh bị bỏ. Đóng ca trước khi bỏ phân công chi nhánh này.",
+                    HttpStatus.CONFLICT);
         }
 
         user.setFullName(req.getFullName().trim());
         user.setRole(req.getRole());
-        user.setBranchId(req.getBranchId());
+        user.getBranchIds().clear();
+        user.getBranchIds().addAll(branchIds);
 
         if (req.getActive() != null) {
             user.setActive(req.getActive());
@@ -88,6 +96,24 @@ public class UserService {
         User updated = userRepository.save(user);
         log.info("Cập nhật thông tin nhân viên ID={}: role={}, active={}", id, updated.getRole(), updated.getActive());
         return UserResponse.fromEntity(updated);
+    }
+
+    /** ADMIN làm việc được mọi chi nhánh nên không lưu phân công; vai trò khác cần ít nhất 1 chi nhánh có thật */
+    private Set<Long> validBranches(Role role, Set<Long> requested) {
+        if (role == Role.ADMIN) {
+            return new HashSet<>();
+        }
+        if (requested == null || requested.isEmpty()) {
+            throw new BusinessException("BRANCH_REQUIRED", "Phải phân công ít nhất một chi nhánh cho nhân viên");
+        }
+        Set<Long> result = new HashSet<>();
+        for (Long id : requested) {
+            if (id == null || !branchRepository.existsById(id)) {
+                throw new BusinessException("BRANCH_NOT_FOUND", "Chi nhánh không tồn tại: " + id);
+            }
+            result.add(id);
+        }
+        return result;
     }
 
     @Transactional

@@ -73,6 +73,20 @@ public class Invoice {
     @Column(name = "shift_session_id")
     private Long shiftSessionId;
 
+    /** Lúc hoàn trả (null nếu chưa hoàn trả hoặc hóa đơn hoàn trả trước khi có cột này) */
+    @Column(name = "refunded_at")
+    private LocalDateTime refundedAt;
+
+    @Column(name = "refunded_by")
+    private Long refundedBy;
+
+    /**
+     * Ca có két tiền phải chi tiền hoàn trả: ca của người bấm hoàn trả, hoặc ca duy nhất đang mở
+     * ở chi nhánh. Null thì tính vào ca đã bán hóa đơn (cách tính trước đây).
+     */
+    @Column(name = "refund_shift_session_id")
+    private Long refundShiftSessionId;
+
     @Builder.Default
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();

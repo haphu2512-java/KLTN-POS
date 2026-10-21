@@ -69,6 +69,12 @@ public class JwtTokenProvider {
                 .getPayload();
     }
 
+    /** Chi nhánh của phiên đăng nhập ghi trong token; null với token cũ chưa có chi nhánh */
+    public Long getBranchId(Claims claims) {
+        Object raw = claims.get("branchId");
+        return raw instanceof Number n ? n.longValue() : null;
+    }
+
     public boolean validateToken(String token) {
         try {
             Jwts.parser()

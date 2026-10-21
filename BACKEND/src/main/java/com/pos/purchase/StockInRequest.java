@@ -11,7 +11,7 @@ import java.util.List;
 @Data
 public class StockInRequest {
 
-    @NotNull(message = "Chi nhánh không được để trống")
+    /** Không bắt buộc: luôn là chi nhánh của phiên đăng nhập; nếu gửi thì phải trùng */
     private Long branchId;
 
     private Long supplierId;

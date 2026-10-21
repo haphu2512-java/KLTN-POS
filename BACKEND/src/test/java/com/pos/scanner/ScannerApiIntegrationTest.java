@@ -1,5 +1,6 @@
 package com.pos.scanner;
 
+import com.pos.support.TestAuth;
 import com.pos.security.CustomUserDetailsService;
 import com.pos.security.JwtTokenProvider;
 import com.pos.user.User;
@@ -60,7 +61,7 @@ class ScannerApiIntegrationTest {
     private String tokenFor(String username) {
         User user = userRepository.findByUsername(username).orElseThrow();
         UserDetails details = userDetailsService.loadUserByUsername(username);
-        return "Bearer " + tokenProvider.generateToken(details, user.getBranchId(), user.getRole().name(), user.getFullName());
+        return "Bearer " + tokenProvider.generateToken(details, TestAuth.branchOf(user), user.getRole().name(), user.getFullName());
     }
 
     private String firstBarcode() throws Exception {

@@ -11,4 +11,7 @@ public class LoginRequest {
 
     @NotBlank(message = "Mật khẩu không được để trống")
     private String password;
+
+    /** Chi nhánh làm việc của phiên này; để trống khi tài khoản chỉ được gán một chi nhánh */
+    private Long branchId;
 }

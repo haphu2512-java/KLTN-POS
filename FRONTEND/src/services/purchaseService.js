@@ -1,7 +1,7 @@
 import api from './api';
 
 export const purchaseService = {
-  async getStockIns(branchId = 1) {
+  async getStockIns(branchId) {
     const res = await api.get('/stock-in', { params: { branchId } });
     return Array.isArray(res) ? res : (res?.data || []);
   },

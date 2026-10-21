@@ -8,9 +8,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -21,8 +18,7 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
 
-    private final JwtTokenProvider tokenProvider;
-    private final CustomUserDetailsService userDetailsService;
+    private final SessionAuthenticator sessionAuthenticator;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -30,30 +26,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
         String token = getJwtFromRequest(request);
 
-        if (StringUtils.hasText(token) && tokenProvider.validateToken(token)) {
-            String username = tokenProvider.getUsernameFromToken(token);
-            UserDetails userDetails = loadActiveUser(username);
-
-            // Tài khoản đã bị khóa hoặc bị xóa: bỏ qua token, request sẽ bị chặn như chưa đăng nhập
-            if (userDetails != null) {
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
+        if (StringUtils.hasText(token)) {
+            // Tài khoản bị khóa/xóa hoặc không còn quyền ở chi nhánh trong token: bỏ qua token,
+            // request sẽ bị chặn như chưa đăng nhập
+            UsernamePasswordAuthenticationToken authentication = sessionAuthenticator.authenticate(token);
+            if (authentication != null) {
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         }
 
         filterChain.doFilter(request, response);
-    }
-
-    private UserDetails loadActiveUser(String username) {
-        try {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-            return userDetails.isEnabled() ? userDetails : null;
-        } catch (UsernameNotFoundException e) {
-            return null;
-        }
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {

@@ -74,7 +74,7 @@ public class ShiftSession {
     @Column(name = "closing_cash", precision = 14, scale = 2)
     private BigDecimal closingCash;
 
-    /** Tiền đầu ca + doanh số tiền mặt của ca */
+    /** Tiền đầu ca + doanh số tiền mặt - tiền mặt hoàn trả của ca */
     @Column(name = "expected_cash", precision = 14, scale = 2)
     private BigDecimal expectedCash;
 
@@ -90,6 +90,16 @@ public class ShiftSession {
 
     @Column(name = "invoice_count")
     private Integer invoiceCount;
+
+    /** Tiền mặt chi ra từ két để hoàn trả trong ca (null với ca đóng trước khi có cột này) */
+    @Column(name = "cash_refunds", precision = 14, scale = 2)
+    private BigDecimal cashRefunds;
+
+    @Column(name = "non_cash_refunds", precision = 14, scale = 2)
+    private BigDecimal nonCashRefunds;
+
+    @Column(name = "refunded_count")
+    private Integer refundedCount;
 
     @Column(name = "handover_note", length = 500)
     private String handoverNote;

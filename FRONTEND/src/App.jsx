@@ -10,13 +10,14 @@ import ForecastPage from './pages/forecast/ForecastPage';
 import ReportPage from './pages/report/ReportPage';
 import PartnerPage from './pages/partner/PartnerPage';
 import StaffPage from './pages/admin/StaffPage';
+import ShiftsPage from './pages/shifts/ShiftsPage';
 
 /**
  * Wrapper component cung cấp navigation props cho từng page
  * thông qua React Router thay vì quản lý bằng useState.
  */
 function AppRoutes() {
-  const { user, branchId, isBackendOnline, isWsConnected, logout, isAuthenticated } = useAuth();
+  const { user, branchId, branchName, isBackendOnline, isWsConnected, logout, isAuthenticated } = useAuth();
   const [isOfflineDemo, setIsOfflineDemo] = useState(false);
   const nav = useAppNavigate();
 
@@ -29,7 +30,8 @@ function AppRoutes() {
     username: 'offline_cashier',
     fullName: 'Thu Ngân (Ngoại Tuyến)',
     role: 'CASHIER',
-    branchId: branchId || 1
+    branchId: 1,
+    branchName: 'Chi nhánh 1 (demo)'
   };
 
   const handleLogout = () => {
@@ -46,7 +48,9 @@ function AppRoutes() {
   // Shared props cho mọi page
   const sharedProps = {
     currentUser,
-    branchId,
+    // Chi nhánh của phiên đăng nhập (chế độ demo ngoại tuyến dùng chi nhánh 1)
+    branchId: branchId || currentUser.branchId,
+    branchName: branchName || currentUser.branchName,
     isOnline: isBackendOnline,
     isWsConnected,
     onLogout: handleLogout,
@@ -54,6 +58,8 @@ function AppRoutes() {
     // Ẩn nút điều hướng tới trang không có quyền
     onNavigateToForecast: canViewForecast ? nav.onNavigateToForecast : undefined,
     onNavigateToReport: canViewReports ? nav.onNavigateToReport : undefined,
+    // Ca làm cần máy chủ (lịch sử ca), không có ở chế độ demo ngoại tuyến
+    onNavigateToShifts: isOfflineDemo ? undefined : nav.onNavigateToShifts,
   };
 
   // Hàm trả về element (không phải component) để không bị mount lại mỗi lần render
@@ -95,6 +101,14 @@ function AppRoutes() {
         path="/partners"
         element={
           shell("partners", <PartnerPage {...sharedProps} />)
+        }
+      />
+      <Route
+        path="/shifts"
+        element={
+          isOfflineDemo
+            ? <Navigate to="/" replace />
+            : shell("shifts", <ShiftsPage {...sharedProps} />)
         }
       />
       <Route

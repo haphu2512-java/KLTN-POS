@@ -52,8 +52,8 @@ class InvoiceServiceTest {
     @InjectMocks
     private InvoiceService invoiceService;
 
-    private final User cashier = User.builder().id(7L).username("cashier").role(Role.CASHIER).branchId(1L).build();
-    private final User manager = User.builder().id(8L).username("manager").role(Role.MANAGER).branchId(1L).build();
+    private final User cashier = User.builder().id(7L).username("cashier").role(Role.CASHIER).currentBranchId(1L).build();
+    private final User manager = User.builder().id(8L).username("manager").role(Role.MANAGER).currentBranchId(1L).build();
 
     private Product milk() {
         return Product.builder().id(1L).name("Sữa tươi Vinamilk")
@@ -133,7 +133,7 @@ class InvoiceServiceTest {
         req.setBranchId(99L);
         req.setItems(List.of());
 
-        User admin = User.builder().id(1L).role(Role.ADMIN).build();
+        User admin = User.builder().id(1L).role(Role.ADMIN).currentBranchId(99L).build();
         assertThrows(BusinessException.class, () -> invoiceService.createInvoice(req, admin));
     }
 
@@ -204,13 +204,32 @@ class InvoiceServiceTest {
     }
 
     @Test
-    @DisplayName("Thu ngân không được bán cho chi nhánh khác")
-    void testCashierCannotSellForOtherBranch() {
+    @DisplayName("Không bán cho chi nhánh khác chi nhánh của phiên đăng nhập, kể cả ADMIN")
+    void testCannotSellForOtherBranch() {
         InvoiceRequest req = cashRequest(null, BigDecimal.ZERO, BigDecimal.valueOf(100000));
         req.setBranchId(2L);
 
         BusinessException ex = assertThrows(BusinessException.class, () -> invoiceService.createInvoice(req, cashier));
-        assertEquals("BRANCH_FORBIDDEN", ex.getCode());
+        assertEquals("BRANCH_MISMATCH", ex.getCode());
+
+        User admin = User.builder().id(1L).role(Role.ADMIN).currentBranchId(1L).build();
+        ex = assertThrows(BusinessException.class, () -> invoiceService.createInvoice(req, admin));
+        assertEquals("BRANCH_MISMATCH", ex.getCode());
+        verify(inventoryService, never()).deductStockAtomic(anyLong(), anyLong(), anyInt());
+    }
+
+    @Test
+    @DisplayName("Không gửi branchId: bán tại chi nhánh của phiên đăng nhập")
+    void testBranchTakenFromSession() {
+        when(branchRepository.findById(1L)).thenReturn(Optional.of(Branch.builder().id(1L).build()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(milk()));
+        when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        InvoiceRequest req = cashRequest(null, BigDecimal.ZERO, BigDecimal.valueOf(100000));
+        req.setBranchId(null);
+
+        assertEquals(1L, invoiceService.createInvoice(req, cashier).getBranch().getId());
+        verify(inventoryService).deductStockAtomic(1L, 1L, 2);
     }
 
     @Test
@@ -237,9 +256,14 @@ class InvoiceServiceTest {
         when(invoiceRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(invoice));
         when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Invoice refunded = invoiceService.refundInvoice(10L, "Khách đổi ý");
+        when(shiftService.resolveShiftForRefund(manager, 1L)).thenReturn(42L);
+
+        Invoice refunded = invoiceService.refundInvoice(10L, "Khách đổi ý", manager);
 
         assertEquals(InvoiceStatus.REFUNDED, refunded.getStatus());
+        assertEquals(42L, refunded.getRefundShiftSessionId());
+        assertEquals(manager.getId(), refunded.getRefundedBy());
+        assertNotNull(refunded.getRefundedAt());
         assertTrue(refunded.getNote().contains("Khách đổi ý"));
         verify(inventoryService).addStockAtomic(1L, 1L, 3);
         verify(customerRepository).addPoints(1L, -5); // 50,000 VND = 5 points
@@ -255,7 +279,19 @@ class InvoiceServiceTest {
 
         when(invoiceRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(invoice));
 
-        assertThrows(BusinessException.class, () -> invoiceService.refundInvoice(11L, "Lỗi"));
+        assertThrows(BusinessException.class, () -> invoiceService.refundInvoice(11L, "Lỗi", manager));
+    }
+
+    @Test
+    @DisplayName("Quản lý không hoàn trả được hóa đơn của chi nhánh khác chi nhánh đang đăng nhập")
+    void testManagerCannotRefundOtherBranch() {
+        Invoice invoice = Invoice.builder().id(12L).status(InvoiceStatus.PAID)
+                .branch(Branch.builder().id(2L).build()).totalAmount(BigDecimal.TEN).build();
+        when(invoiceRepository.findByIdForUpdate(12L)).thenReturn(Optional.of(invoice));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> invoiceService.refundInvoice(12L, null, manager));
+        assertEquals("BRANCH_FORBIDDEN", ex.getCode());
+        verify(inventoryService, never()).addStockAtomic(anyLong(), anyLong(), anyInt());
     }
 
     @Test

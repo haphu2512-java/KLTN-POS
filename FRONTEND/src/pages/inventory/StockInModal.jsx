@@ -7,12 +7,11 @@ export default function StockInModal({
   onClose,
   products = [],
   suppliers = [],
-  branches = [],
-  currentBranchId = 1,
+  branchId,
+  branchName,
   onSaveStockIn
 }) {
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id || 1);
-  const [branchId, setBranchId] = useState(currentBranchId);
   const [note, setNote] = useState('');
   
   // Stock-in line items
@@ -91,14 +90,13 @@ export default function StockInModal({
     }
 
     const supplier = suppliers.find((s) => s.id === Number(supplierId));
-    const branch = branches.find((b) => b.id === Number(branchId));
 
     const newStockIn = {
       id: `NK-${Date.now().toString().slice(-6)}`,
       supplierId: Number(supplierId),
       supplierName: supplier?.name || 'Nhà cung cấp',
       branchId: Number(branchId),
-      branchName: branch?.name || 'Chi nhánh',
+      branchName: branchName || 'Chi nhánh',
       createdDate: new Date().toLocaleString('vi-VN'),
       employeeName: 'Nguyễn Văn A',
       totalItems: items.reduce((sum, item) => sum + item.quantity, 0),
@@ -158,27 +156,23 @@ export default function StockInModal({
 
           <div>
             <label className="input-label" style={{ marginBottom: '4px', display: 'block' }}>
-              Chi nhánh nhập kho *
+              Chi nhánh nhập kho
             </label>
-            <select
-              className="input-control selectable"
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
+            <div
+              title="Nhập vào chi nhánh đang đăng nhập. Đăng nhập lại để nhập cho chi nhánh khác."
               style={{
-                width: '100%',
                 height: '36px',
+                display: 'flex',
+                alignItems: 'center',
                 border: '1px solid var(--border-subtle)',
                 borderRadius: 'var(--radius-sm)',
                 padding: '0 8px',
-                backgroundColor: 'var(--bg-surface)'
+                backgroundColor: 'var(--bg-subtle)',
+                fontWeight: 600
               }}
             >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
+              {branchName || `Chi nhánh ${branchId}`}
+            </div>
           </div>
         </div>
 

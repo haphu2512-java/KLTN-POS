@@ -95,6 +95,19 @@
   -webkit-box-orient: vertical;
 }
 
+.shell-user-branch {
+  max-width: 100%;
+  font-size: 10px;
+  line-height: 1.3;
+  color: #a8d5ba;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .shell-logout {
   height: 32px;
   width: 100%;
