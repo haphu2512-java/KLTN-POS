@@ -133,6 +133,10 @@ export default function PosPage({
   const [isShiftOpen, setIsShiftOpen] = useState(false);
   // Ca đang trực của tài khoản: { session, shiftRequired, suggested..., previousShift }
   const [shiftInfo, setShiftInfo] = useState(null);
+  // Lý do mở hộp ca: 'sale' khi thu ngân bán hàng lúc chưa mở ca, null khi tự bấm nút Mở ca / Đóng ca
+  const [shiftPrompt, setShiftPrompt] = useState(null);
+  // Chỉ nhắc mở ca một lần khi thêm hàng vào giỏ, các lần sau đã có dải thông báo trên màn hình
+  const shiftPromptedRef = useRef(false);
   // Quầy (máy POS) này; điện thoại ghép cặp với quầy để bắn mã vào giỏ
   const [terminal, setTerminal] = useState(null);
   const [pairedCount, setPairedCount] = useState(0);
@@ -185,10 +189,27 @@ export default function PosPage({
     [activeTabId]
   );
 
+  // Chưa mở ca thì vẫn xem, tra cứu, chuẩn bị đơn được; chỉ thanh toán mới cần ca (backend cũng chặn)
+  const needsShift = !!(isOnline && shiftInfo?.shiftRequired && !shiftInfo.session);
+
+  // Đóng ca xong rồi bán tiếp thì nhắc lại một lần nữa
+  useEffect(() => {
+    if (!needsShift) shiftPromptedRef.current = false;
+  }, [needsShift]);
+
+  const promptOpenShift = useCallback(() => {
+    setShiftPrompt('sale');
+    setIsShiftOpen(true);
+  }, []);
+
   // Add Product to Cart by Barcode or selection
   const handleAddProduct = useCallback(
     (product) => {
       if (!product) return;
+      if (needsShift && !shiftPromptedRef.current) {
+        shiftPromptedRef.current = true;
+        promptOpenShift();
+      }
       if (product.stock <= 0) {
         playBeepWarning();
         alert(`Sản phẩm "${product.name}" đã hết hàng trong kho!`);
@@ -248,7 +269,7 @@ export default function PosPage({
         };
       });
     },
-    [updateCurrentOrder]
+    [updateCurrentOrder, needsShift, promptOpenShift]
   );
 
   // Barcode scanned from hardware scanner
@@ -283,7 +304,7 @@ export default function PosPage({
     return () => window.removeEventListener('pos:barcode_scanned', handleCustomScan);
   }, [handleBarcodeScanned]);
 
-  // Tải ca đang trực; thu ngân chưa mở ca thì hiện ngay hộp mở ca
+  // Tải ca đang trực. Không tự bật hộp mở ca: thu ngân vẫn đi các màn hình khác hay đăng xuất được
   const userId = currentUser?.userId; // chế độ demo ngoại tuyến không có userId nên không gọi API ca
   const loadShift = useCallback(async () => {
     if (!isOnline || !userId) return null;
@@ -305,7 +326,6 @@ export default function PosPage({
       .then((info) => {
         if (cancelled) return;
         setShiftInfo(info);
-        if (info?.shiftRequired && !info.session) setIsShiftOpen(true);
       })
       .catch((err) => console.warn('Không tải được ca làm việc:', err.message));
     return () => {
@@ -316,6 +336,7 @@ export default function PosPage({
   const openShiftModal = async () => {
     // Lấy số liệu mới nhất của ca trước khi chốt tiền
     await loadShift();
+    setShiftPrompt(null);
     setIsShiftOpen(true);
   };
 
@@ -444,9 +465,9 @@ export default function PosPage({
   // Process Payment (F4)
   const handleProcessPayment = () => {
     if (isProcessing) return;
-    if (isOnline && shiftInfo?.shiftRequired && !shiftInfo.session) {
+    if (needsShift) {
       playBeepWarning();
-      setIsShiftOpen(true);
+      promptOpenShift();
       return;
     }
     if (finalAmount <= 0) {
@@ -646,6 +667,15 @@ export default function PosPage({
         onOpenHelp={() => setIsHelpOpen(true)}
       />
 
+      {needsShift && (
+        <div className="pos-shift-notice" role="status">
+          <span>Bạn chưa mở ca. Vẫn có thể tra cứu và chuẩn bị đơn, nhưng cần mở ca để thanh toán.</span>
+          <Button variant="primary" size="sm" onClick={openShiftModal}>
+            Mở ca
+          </Button>
+        </div>
+      )}
+
       {/* Main 2-Column POS Workspace */}
       <div className="pos-body">
         {/* Left Column: Cart & Tabs */}
@@ -722,7 +752,13 @@ export default function PosPage({
       />
 
       {isShiftOpen && (
-        <ShiftModal isOpen onClose={() => setIsShiftOpen(false)} current={shiftInfo} onChanged={loadShift} />
+        <ShiftModal
+          isOpen
+          onClose={() => setIsShiftOpen(false)}
+          current={shiftInfo}
+          reason={shiftPrompt}
+          onChanged={loadShift}
+        />
       )}
 
       {isPairingOpen && (

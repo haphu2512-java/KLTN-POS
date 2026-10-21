@@ -72,6 +72,20 @@
 .pos-status-online .pos-status-dot { background-color: var(--warning-600); }
 .pos-status-offline .pos-status-dot { background-color: var(--danger-600); }
 
+/* Dải nhắc mở ca: không chặn thao tác, chỉ báo cần mở ca để thanh toán */
+.pos-shift-notice {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 24px;
+  font-size: 13px;
+  background-color: var(--warning-50);
+  color: var(--warning-700);
+  border-bottom: 1px solid var(--warning-border);
+}
+
 /* 2-Column POS Body */
 .pos-body {
   flex: 1;
