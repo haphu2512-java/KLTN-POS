@@ -221,7 +221,7 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
         </div>
 
         {tab === 'schedule' && isAdmin ? (
-          <WorkShiftEditor />
+          <WorkShiftEditor branches={branches} />
         ) : tab === 'assign' ? (
           <AssignmentBoard canEdit={canManage} isAdmin={isAdmin} branches={branches} />
         ) : tab === 'staff' && canManage ? (

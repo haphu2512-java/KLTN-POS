@@ -3,12 +3,29 @@ import api from './api';
 const unwrap = (res) => (res?.data !== undefined ? res.data : res);
 
 export const shiftService = {
-  async getWorkShifts() {
-    return unwrap(await api.get('/shifts/work-shifts')) || [];
+  /**
+   * Lịch ca chi nhánh đang dùng (ca riêng, hoặc lịch mẫu chung nếu chi nhánh chưa cấu hình riêng).
+   * ADMIN truyền branchId để xem chi nhánh khác, template = true để xem lịch mẫu chung.
+   */
+  async getWorkShifts({ branchId, template } = {}) {
+    const params = {};
+    if (branchId) params.branchId = branchId;
+    if (template) params.template = true;
+    return unwrap(await api.get('/shifts/work-shifts', { params })) || [];
   },
 
-  async createWorkShift({ name, startTime, endTime }) {
-    return unwrap(await api.post('/shifts/work-shifts', { name, startTime, endTime }));
+  /** branchId trống: thêm vào lịch mẫu chung */
+  async createWorkShift({ name, startTime, endTime, branchId }) {
+    return unwrap(await api.post('/shifts/work-shifts', { name, startTime, endTime, branchId: branchId || null }));
+  },
+
+  async deleteWorkShift(id) {
+    return unwrap(await api.delete(`/shifts/work-shifts/${id}`));
+  },
+
+  /** Tạo lịch ca riêng cho chi nhánh bằng cách chép lịch mẫu chung */
+  async customizeBranchShifts(branchId) {
+    return unwrap(await api.post('/shifts/work-shifts/customize', null, { params: { branchId } }));
   },
 
   async updateWorkShift(id, { name, startTime, endTime, active }) {

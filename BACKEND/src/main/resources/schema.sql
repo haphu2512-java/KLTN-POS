@@ -162,6 +162,7 @@ CREATE TABLE IF NOT EXISTS scanner_pairing (
 -- 13. Bảng Ca Làm Việc Cố Định (mặc định 5 ca trong ngày; end_time < start_time là ca qua đêm)
 CREATE TABLE IF NOT EXISTS work_shift (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    branch_id BIGINT,                    -- null: lịch ca mẫu chung; có giá trị: lịch ca riêng của chi nhánh
     name VARCHAR(50) NOT NULL,
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,

@@ -38,8 +38,12 @@ export default function AssignmentBoard({ canEdit, isAdmin, branches = [] }) {
   const needBranch = isAdmin && !branchId;
 
   useEffect(() => {
-    shiftService.getWorkShifts().then((l) => setWorkShifts(l.filter((w) => w.active))).catch(() => {});
-  }, []);
+    if (needBranch) return;
+    shiftService
+      .getWorkShifts({ branchId: isAdmin ? branchId : undefined })
+      .then((l) => setWorkShifts(l.filter((w) => w.active)))
+      .catch(() => setWorkShifts([]));
+  }, [branchId, isAdmin, needBranch]);
 
   useEffect(() => {
     if (needBranch) return;

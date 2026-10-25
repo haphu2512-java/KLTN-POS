@@ -9,7 +9,9 @@ import lombok.NoArgsConstructor;
 import java.time.LocalTime;
 
 /**
- * Ca làm việc cố định trong ngày (mặc định 5 ca, ADMIN chỉnh được giờ).
+ * Ca làm việc cố định trong ngày, ADMIN tự cấu hình số ca và giờ ca.
+ * {@code branchId} null là lịch ca mẫu chung, áp dụng cho chi nhánh chưa có lịch ca riêng;
+ * chi nhánh đã có ca riêng thì chỉ dùng ca của chi nhánh đó.
  * Ca có giờ kết thúc nhỏ hơn giờ bắt đầu là ca qua đêm (vd. 22:00 - 06:00).
  */
 @Entity
@@ -23,6 +25,9 @@ public class WorkShift {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "branch_id")
+    private Long branchId;
 
     @Column(nullable = false, length = 50)
     private String name;

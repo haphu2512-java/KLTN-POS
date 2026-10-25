@@ -22,26 +22,44 @@ public class ShiftController {
 
     private final ShiftService shiftService;
     private final ShiftAssignmentService assignmentService;
+    private final WorkShiftService workShiftService;
     private final CurrentUserService currentUserService;
 
     @GetMapping("/work-shifts")
-    @Operation(summary = "Danh sách các ca cố định trong ngày")
-    public ResponseEntity<ApiResponse<List<WorkShift>>> getWorkShifts() {
-        return ResponseEntity.ok(ApiResponse.ok(shiftService.getWorkShifts()));
+    @Operation(summary = "Lịch ca trong ngày của chi nhánh (ADMIN chọn chi nhánh, hoặc template=true để xem lịch mẫu chung)")
+    public ResponseEntity<ApiResponse<List<WorkShift>>> getWorkShifts(
+            @RequestParam(required = false) Long branchId,
+            @RequestParam(defaultValue = "false") boolean template) {
+        return ResponseEntity.ok(ApiResponse.ok(workShiftService.list(branchId, template, currentUserService.getCurrentUser())));
     }
 
     @PostMapping("/work-shifts")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Thêm một ca cố định mới")
+    @Operation(summary = "Thêm ca vào lịch ca của chi nhánh (branchId trống là lịch mẫu chung)")
     public ResponseEntity<ApiResponse<WorkShift>> createWorkShift(@Valid @RequestBody WorkShiftRequest req) {
-        return ResponseEntity.ok(ApiResponse.ok("Đã thêm ca", shiftService.createWorkShift(req)));
+        return ResponseEntity.ok(ApiResponse.ok("Đã thêm ca", workShiftService.create(req)));
     }
 
     @PutMapping("/work-shifts/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Sửa tên, giờ bắt đầu/kết thúc của một ca cố định")
+    @Operation(summary = "Sửa tên, giờ bắt đầu/kết thúc, bật/ngưng một ca")
     public ResponseEntity<ApiResponse<WorkShift>> updateWorkShift(@PathVariable Long id, @Valid @RequestBody WorkShiftRequest req) {
-        return ResponseEntity.ok(ApiResponse.ok("Đã cập nhật ca", shiftService.updateWorkShift(id, req)));
+        return ResponseEntity.ok(ApiResponse.ok("Đã cập nhật ca", workShiftService.update(id, req)));
+    }
+
+    @DeleteMapping("/work-shifts/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Xoá ca chưa từng được dùng")
+    public ResponseEntity<ApiResponse<Void>> deleteWorkShift(@PathVariable Long id) {
+        workShiftService.delete(id);
+        return ResponseEntity.ok(ApiResponse.ok("Đã xoá ca", null));
+    }
+
+    @PostMapping("/work-shifts/customize")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Tạo lịch ca riêng cho chi nhánh từ lịch mẫu chung")
+    public ResponseEntity<ApiResponse<List<WorkShift>>> customizeBranchShifts(@RequestParam Long branchId) {
+        return ResponseEntity.ok(ApiResponse.ok("Đã tạo lịch ca riêng cho chi nhánh", workShiftService.customizeBranch(branchId)));
     }
 
     @GetMapping("/assignments")

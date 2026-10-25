@@ -32,7 +32,7 @@ public class ShiftAssignmentService {
     static final int MAX_RANGE_DAYS = 62;
 
     private final ShiftAssignmentRepository assignmentRepository;
-    private final WorkShiftRepository workShiftRepository;
+    private final WorkShiftService workShiftService;
     private final StaffMemberRepository staffRepository;
     private final StaffService staffService;
     private final BranchRepository branchRepository;
@@ -55,9 +55,7 @@ public class ShiftAssignmentService {
             throw new BusinessException("SHIFT_FORBIDDEN", "Chỉ quản lý được xếp ca", HttpStatus.FORBIDDEN);
         }
         Long branch = branchFor(branchId, actor);
-        if (!workShiftRepository.existsById(req.getWorkShiftId())) {
-            throw new BusinessException("WORK_SHIFT_NOT_FOUND", "Ca làm việc không tồn tại");
-        }
+        workShiftService.requireForBranch(branch, req.getWorkShiftId());
         if (req.getShiftDate().isBefore(LocalDate.now())) {
             throw new BusinessException("PAST_ASSIGNMENT", "Không xếp ca cho ngày đã qua");
         }

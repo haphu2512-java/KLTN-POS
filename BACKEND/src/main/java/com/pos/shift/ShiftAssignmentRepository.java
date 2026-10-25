@@ -12,5 +12,9 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
 
     Optional<ShiftAssignment> findByBranchIdAndWorkShiftIdAndShiftDate(Long branchId, Long workShiftId, LocalDate shiftDate);
 
+    boolean existsByWorkShiftId(Long workShiftId);
+
+    List<ShiftAssignment> findByBranchIdAndWorkShiftId(Long branchId, Long workShiftId);
+
     List<ShiftAssignment> findByBranchIdAndShiftDateBetweenOrderByShiftDateAsc(Long branchId, LocalDate from, LocalDate to);
 }

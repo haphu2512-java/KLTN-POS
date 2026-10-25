@@ -21,6 +21,8 @@ public interface ShiftSessionRepository extends JpaRepository<ShiftSession, Long
     /** Các ca của chi nhánh trong khoảng ngày ca, để gợi ý ca chưa trực */
     List<ShiftSession> findByBranchIdAndShiftDateBetween(Long branchId, LocalDate from, LocalDate to);
 
+    boolean existsByWorkShiftId(Long workShiftId);
+
     List<ShiftSession> findByBranchIdAndStatus(Long branchId, ShiftStatus status);
 
     /** Lọc ca theo khoảng ngày; chi nhánh, nhân viên, trạng thái để trống là không lọc */

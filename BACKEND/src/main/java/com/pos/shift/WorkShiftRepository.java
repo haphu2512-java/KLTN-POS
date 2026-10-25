@@ -7,6 +7,7 @@ import java.util.List;
 
 @Repository
 public interface WorkShiftRepository extends JpaRepository<WorkShift, Long> {
-    List<WorkShift> findAllByOrderBySortOrderAsc();
-    List<WorkShift> findByActiveTrueOrderBySortOrderAsc();
+    List<WorkShift> findByBranchIdOrderBySortOrderAsc(Long branchId);
+    List<WorkShift> findByBranchIdIsNullOrderBySortOrderAsc();
+    boolean existsByBranchId(Long branchId);
 }

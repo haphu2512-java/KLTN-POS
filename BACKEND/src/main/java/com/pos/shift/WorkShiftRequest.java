@@ -21,4 +21,7 @@ public class WorkShiftRequest {
     private LocalTime endTime;
 
     private Boolean active;
+
+    /** Chỉ dùng khi thêm ca: chi nhánh của ca, để trống là ca mẫu chung */
+    private Long branchId;
 }

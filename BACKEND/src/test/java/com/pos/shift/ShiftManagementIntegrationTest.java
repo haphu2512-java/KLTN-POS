@@ -84,6 +84,9 @@ class ShiftManagementIntegrationTest {
     @Autowired
     private ShiftService shiftService;
 
+    @Autowired
+    private WorkShiftService workShiftService;
+
     /** Chi nhánh mới có sẵn tồn kho sản phẩm 1 */
     private Long newBranch(String name) {
         Branch branch = branchRepository.save(Branch.builder().name(name).active(true).build());
@@ -205,7 +208,7 @@ class ShiftManagementIntegrationTest {
         String counter = newUser("window_counter", Role.CASHIER, branch);
         String manager = newUser("window_manager", Role.MANAGER, branch);
         // Ca không mở được vào giờ chạy test (5 ca mặc định không trùng giờ nên luôn có)
-        long closedSlot = shiftService.getWorkShifts().stream()
+        long closedSlot = workShiftService.activeShiftsOf(branch).stream()
                 .filter(ws -> !ShiftService.canOpenAt(ws, LocalTime.now(), 15) && !ShiftService.canOpenAt(ws, LocalTime.now().plusMinutes(1), 15))
                 .findFirst().orElseThrow().getId();
         ShiftTestData.assignNewStaff(staffRepository, assignmentRepository, branch, closedSlot, "Ngoài giờ");
@@ -478,5 +481,55 @@ class ShiftManagementIntegrationTest {
                         .content("{\"name\":\"Ca đêm\",\"startTime\":\"22:00\",\"endTime\":\"06:00\",\"active\":false}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.active").value(false));
+    }
+
+    @Test
+    @DisplayName("Mỗi chi nhánh tự cấu hình số ca: chi nhánh riêng 2 ca, chi nhánh khác vẫn dùng lịch mẫu")
+    void branchHasOwnSchedule() throws Exception {
+        Long custom = newBranch("CN 2 ca");
+        Long other = newBranch("CN lịch mẫu");
+        String admin = newUser("custom_admin", Role.ADMIN, custom);
+        String counter = newUser("custom_counter", Role.CASHIER, custom);
+        String otherCounter = newUser("other_counter", Role.CASHIER, other);
+        int templateSize = workShiftService.shiftsOf(null).size();
+
+        // Tạo lịch riêng từ lịch mẫu rồi xoá bớt cho còn 2 ca
+        String copied = mvc.perform(post("/api/shifts/work-shifts/customize").param("branchId", custom.toString())
+                        .header("Authorization", admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(templateSize))
+                .andReturn().getResponse().getContentAsString();
+        java.util.List<Integer> ids = JsonPath.parse(copied).read("$.data[*].id");
+        for (int i = 2; i < ids.size(); i++) {
+            mvc.perform(delete("/api/shifts/work-shifts/" + ids.get(i)).header("Authorization", admin))
+                    .andExpect(status().isOk());
+        }
+        mvc.perform(post("/api/shifts/work-shifts/customize").param("branchId", custom.toString())
+                        .header("Authorization", admin))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(get("/api/shifts/work-shifts").header("Authorization", counter))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].branchId").value(custom));
+        mvc.perform(get("/api/shifts/work-shifts").header("Authorization", otherCounter))
+                .andExpect(jsonPath("$.data.length()").value(templateSize));
+
+        // Ca mẫu (id 2) không thuộc lịch ca của chi nhánh đã cấu hình riêng
+        mvc.perform(put("/api/shifts/assignments").header("Authorization", admin).param("branchId", custom.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json("{'workShiftId':2,'shiftDate':'" + LocalDate.now() + "','staffMemberId':1}")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("WORK_SHIFT_NOT_FOUND"));
+
+        // Mở ca bằng ca riêng của chi nhánh; ca đã dùng thì không xoá được
+        long ownShift = ids.get(0);
+        ShiftTestData.assignNewStaff(staffRepository, assignmentRepository, custom, ownShift, "Ca riêng");
+        mvc.perform(post("/api/shifts/open").header("Authorization", counter).contentType(MediaType.APPLICATION_JSON)
+                        .content(json("{'workShiftId':" + ownShift + ",'openingCash':0}")))
+                .andExpect(status().isOk());
+        mvc.perform(delete("/api/shifts/work-shifts/" + ownShift).header("Authorization", admin))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("WORK_SHIFT_IN_USE"));
     }
 }

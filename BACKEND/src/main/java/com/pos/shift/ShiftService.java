@@ -63,7 +63,7 @@ public class ShiftService {
     static final Set<Integer> DENOMINATIONS = Set.of(500000, 200000, 100000, 50000, 20000, 10000, 5000, 2000, 1000, 500);
     private static final List<ShiftStatus> FINISHED = List.of(ShiftStatus.PENDING_REVIEW, ShiftStatus.CLOSED);
 
-    private final WorkShiftRepository workShiftRepository;
+    private final WorkShiftService workShiftService;
     private final ShiftSessionRepository shiftSessionRepository;
     private final ShiftCashMovementRepository cashMovementRepository;
     private final ShiftAssignmentRepository assignmentRepository;
@@ -100,42 +100,9 @@ public class ShiftService {
 
     // ---------- Ca cố định ----------
 
-    public List<WorkShift> getWorkShifts() {
-        return workShiftRepository.findAllByOrderBySortOrderAsc();
-    }
-
-    @Transactional
-    public WorkShift updateWorkShift(Long id, WorkShiftRequest req) {
-        WorkShift shift = workShiftRepository.findById(id)
-                .orElseThrow(() -> new BusinessException("WORK_SHIFT_NOT_FOUND", "Không tìm thấy ca làm việc", HttpStatus.NOT_FOUND));
-        applyWorkShift(shift, req);
-        return workShiftRepository.save(shift);
-    }
-
-    @Transactional
-    public WorkShift createWorkShift(WorkShiftRequest req) {
-        int nextOrder = workShiftRepository.findAllByOrderBySortOrderAsc().stream()
-                .mapToInt(WorkShift::getSortOrder).max().orElse(0) + 1;
-        WorkShift shift = WorkShift.builder().sortOrder(nextOrder).active(true).build();
-        applyWorkShift(shift, req);
-        return workShiftRepository.save(shift);
-    }
-
-    private void applyWorkShift(WorkShift shift, WorkShiftRequest req) {
-        if (req.getStartTime().equals(req.getEndTime())) {
-            throw new BusinessException("INVALID_WORK_SHIFT", "Giờ bắt đầu và kết thúc không được trùng nhau");
-        }
-        shift.setName(req.getName().trim());
-        shift.setStartTime(req.getStartTime());
-        shift.setEndTime(req.getEndTime());
-        if (req.getActive() != null) {
-            shift.setActive(req.getActive());
-        }
-    }
-
     /** Ca mở được lúc {@code time} (kể cả mở sớm), nếu giờ đó nằm ngoài mọi ca thì null */
-    WorkShift workShiftAt(LocalTime time) {
-        return workShiftRepository.findByActiveTrueOrderBySortOrderAsc().stream()
+    WorkShift workShiftAt(Long branchId, LocalTime time) {
+        return workShiftService.activeShiftsOf(branchId).stream()
                 .filter(ws -> canOpenAt(ws, time, openEarlyMinutes))
                 .findFirst()
                 .orElse(null);
@@ -184,7 +151,7 @@ public class ShiftService {
      * thì lấy ca kế tiếp chưa trực.
      */
     WorkShift suggestWorkShift(Long branchId, LocalDateTime now) {
-        List<WorkShift> active = workShiftRepository.findByActiveTrueOrderBySortOrderAsc();
+        List<WorkShift> active = workShiftService.activeShiftsOf(branchId);
         Set<String> done = shiftSessionRepository.findByBranchIdAndShiftDateBetween(branchId,
                         now.toLocalDate().minusDays(1), now.toLocalDate()).stream()
                 .filter(s -> s.getStatus() != ShiftStatus.OPEN)
@@ -226,11 +193,12 @@ public class ShiftService {
 
         WorkShift workShift;
         if (req.getWorkShiftId() != null) {
-            workShift = workShiftRepository.findById(req.getWorkShiftId())
-                    .filter(ws -> Boolean.TRUE.equals(ws.getActive()))
-                    .orElseThrow(() -> new BusinessException("WORK_SHIFT_NOT_FOUND", "Ca làm việc không tồn tại hoặc đã ngưng"));
+            workShift = workShiftService.activeShiftsOf(branchId).stream()
+                    .filter(ws -> ws.getId().equals(req.getWorkShiftId()))
+                    .findFirst()
+                    .orElseThrow(() -> new BusinessException("WORK_SHIFT_NOT_FOUND", "Ca làm việc không thuộc lịch ca của chi nhánh hoặc đã ngưng"));
         } else {
-            workShift = workShiftAt(now.toLocalTime());
+            workShift = workShiftAt(branchId, now.toLocalTime());
             if (workShift == null) {
                 throw new BusinessException("OUTSIDE_WORK_SHIFTS", "Giờ hiện tại không thuộc ca nào, vui lòng chọn ca");
             }
