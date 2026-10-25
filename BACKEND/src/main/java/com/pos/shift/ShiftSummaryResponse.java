@@ -13,6 +13,8 @@ public class ShiftSummaryResponse {
     private List<ShiftSessionResponse> shifts;
     private int totalShifts;
     private int openShifts;
+    /** Số ca đã chốt có chênh lệch đang chờ quản lý duyệt */
+    private int pendingReviewShifts;
     /** Số ca đã đóng mà tiền đếm được lệch với tiền dự kiến */
     private int mismatchedShifts;
     /** Tổng tiền thiếu (số dương) của các ca thiếu */

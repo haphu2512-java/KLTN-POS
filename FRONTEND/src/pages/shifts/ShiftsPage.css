@@ -177,3 +177,129 @@
   margin-top: 12px;
   flex-wrap: wrap;
 }
+
+/* Hộp mở / kết ca ở POS */
+.shift-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.shift-banner {
+  background: var(--bg-subtle);
+  padding: 8px 10px;
+  border-radius: 6px;
+  line-height: 1.45;
+}
+
+.shift-banner.is-warning {
+  background: var(--warning-50);
+  color: var(--warning-700);
+}
+
+.shift-error-text {
+  color: var(--danger-600);
+}
+
+.shift-denoms {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px 12px;
+}
+
+.shift-denom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.shift-denom .shift-input {
+  width: 72px;
+}
+
+.shift-denom-total {
+  grid-column: 1 / -1;
+  font-weight: 700;
+  text-align: right;
+}
+
+.shift-recon {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.shift-recon th,
+.shift-recon td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.shift-recon th {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.shift-recon .shift-input {
+  width: 120px;
+}
+
+.shift-movement-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Lịch xếp ca theo tuần */
+.shift-week {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.shift-week th,
+.shift-week td {
+  border: 1px solid var(--border-subtle);
+  padding: 6px;
+  vertical-align: top;
+}
+
+.shift-week th {
+  background: var(--bg-subtle);
+  font-weight: 600;
+}
+
+.shift-week th.is-today {
+  color: var(--brand-600, var(--text-main));
+  text-decoration: underline;
+}
+
+.shift-week select {
+  width: 100%;
+  min-width: 90px;
+}
+
+.shift-week-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .modal-dialog,
+  .modal-dialog * {
+    visibility: visible;
+  }
+}
+
+.shift-field-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

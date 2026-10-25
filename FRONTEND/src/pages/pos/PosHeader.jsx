@@ -9,6 +9,7 @@ export default function PosHeader({
   shiftName = 'Chưa mở ca',
   shiftOpen = false,
   onOpenShift,
+  onOpenCashMovement,
   isOnline = true,
   isWsConnected = false,
   terminalName,
@@ -51,14 +52,19 @@ export default function PosHeader({
           {statusText}
         </span>
         <span className="pos-time">{timeStr}</span>
+        {shiftOpen && onOpenCashMovement && (
+          <Button variant="secondary" size="sm" onClick={onOpenCashMovement} title="Chi trong ca, nộp quỹ, bổ sung tiền lẻ">
+            Thu/chi két
+          </Button>
+        )}
         {onOpenShift && (
           <Button
             variant={shiftOpen ? 'secondary' : 'primary'}
             size="sm"
             onClick={onOpenShift}
-            title={shiftOpen ? 'Chốt tiền mặt và bàn giao ca' : 'Nhập tiền đầu ca để bắt đầu bán hàng'}
+            title={shiftOpen ? 'Đối soát tiền và bàn giao ca' : 'Nhận két và mở ca cho nhân viên được xếp'}
           >
-            {shiftOpen ? 'Đóng ca' : 'Mở ca'}
+            {shiftOpen ? 'Kết ca' : 'Mở ca'}
           </Button>
         )}
         <Button

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Table } from '../../components/common';
+import { Button, Table, Badge } from '../../components/common';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { shiftService } from '../../services/shiftService';
-import { userService } from '../../services/userService';
+import { staffService } from '../../services/staffService';
 import { exportToCsv } from '../../utils/exportCsv';
 import useBranches from '../../hooks/useBranches';
 import ShiftDetailModal from './ShiftDetailModal';
 import WorkShiftEditor from './WorkShiftEditor';
+import StaffManager from './StaffManager';
+import AssignmentBoard from './AssignmentBoard';
 import DifferenceCell from './DifferenceCell';
 import { formatDay, isoDate } from './shiftUtils';
 import '../report/ReportPage.css';
@@ -24,12 +26,18 @@ const daysAgo = (n) => {
   return isoDate(d);
 };
 
+const STATUS_BADGE = {
+  OPEN: <Badge variant="brand">Đang mở</Badge>,
+  PENDING_REVIEW: <Badge variant="warning">Chờ duyệt</Badge>,
+  CLOSED: <Badge variant="success">Đã khóa sổ</Badge>
+};
+
 /**
  * Tab "Ca làm".
  * - Quản trị: xem ca mọi chi nhánh, lọc theo chi nhánh / ngày / nhân viên / trạng thái, xem tổng thiếu/dư,
- *   đóng hộ ca quên đóng và sửa lịch ca cố định.
- * - Quản lý: như trên nhưng chỉ chi nhánh đang đăng nhập (máy chủ tự giới hạn).
- * - Thu ngân và vai trò khác: chỉ ca của chính mình, mở chi tiết để dò vì sao két thiếu/dư.
+ *   duyệt ca lệch, đóng hộ ca quên đóng, xếp ca, quản lý nhân viên trực và sửa lịch ca cố định.
+ * - Quản lý: như trên nhưng chỉ chi nhánh đang đăng nhập (máy chủ tự giới hạn), không sửa ca cố định.
+ * - Tài khoản quầy và vai trò khác: xem ca và lịch xếp ca của chi nhánh mình.
  */
 export default function ShiftsPage({ currentUser, isOnline = true }) {
   const role = currentUser?.role;
@@ -38,7 +46,7 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
   const canManage = isAdmin || isManager;
 
   const branches = useBranches();
-  const [tab, setTab] = useState('history'); // 'history' | 'schedule'
+  const [tab, setTab] = useState('history'); // 'history' | 'assign' | 'staff' | 'schedule'
   const [from, setFrom] = useState(daysAgo(7));
   const [to, setTo] = useState(isoDate(new Date()));
   const [branchFilter, setBranchFilter] = useState('');
@@ -57,7 +65,7 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
     shiftService
       .listShifts({
         branchId: isAdmin ? branchFilter : undefined,
-        employeeId: isAdmin ? employeeFilter : undefined,
+        staffId: canManage ? employeeFilter : undefined,
         status: statusFilter,
         from,
         to
@@ -71,16 +79,16 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
     return () => {
       alive = false;
     };
-  }, [isAdmin, branchFilter, employeeFilter, statusFilter, from, to, isOnline, reloadKey]);
+  }, [isAdmin, canManage, branchFilter, employeeFilter, statusFilter, from, to, isOnline, reloadKey]);
 
-  // Danh sách nhân viên để lọc (API nhân viên chỉ dành cho quản trị)
+  // Danh sách nhân viên trực để lọc
   useEffect(() => {
-    if (!isAdmin) return;
-    userService
-      .getUsers()
+    if (!canManage) return;
+    staffService
+      .list(isAdmin ? branchFilter : undefined)
       .then((list) => setEmployees(list))
       .catch(() => setEmployees([]));
-  }, [isAdmin]);
+  }, [canManage, isAdmin, branchFilter]);
 
   const shifts = useMemo(() => {
     const list = summary?.shifts || [];
@@ -101,7 +109,8 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
         s.shiftDate, s.branchName, s.workShiftName, s.employeeName, formatDateTime(s.openedAt),
         s.closedAt ? formatDateTime(s.closedAt) : '', s.openingCash, s.cashSales, s.cashRefunds ?? '', s.nonCashSales,
         s.invoiceCount, s.expectedCash, s.closingCash ?? '', s.cashDifference ?? '', s.handoverNote || '',
-        s.status === 'OPEN' ? 'Đang mở' : s.closedByOther ? `Đóng hộ bởi ${s.closedByName || ''}` : 'Đã đóng'
+        s.status === 'OPEN' ? 'Đang mở' : s.status === 'PENDING_REVIEW' ? 'Chờ duyệt'
+          : s.closedByOther ? `Đóng hộ bởi ${s.closedByName || ''}` : 'Đã khóa sổ'
       ])
     );
   };
@@ -121,7 +130,7 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
         </div>
       )
     },
-    ...(canManage ? [{ key: 'employeeName', title: 'Nhân viên' }] : []),
+    { key: 'employeeName', title: 'Nhân viên trực' },
     {
       key: 'openedAt',
       title: 'Mở / đóng',
@@ -156,12 +165,22 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
       render: (val, s) => <DifferenceCell value={val} status={s.status} />
     },
     {
+      key: 'status',
+      title: 'Trạng thái',
+      render: (val, s) => (
+        <div>
+          {STATUS_BADGE[val] || val}
+          {s.overdue && <div><Badge variant="danger">Quên đóng ca</Badge></div>}
+        </div>
+      )
+    },
+    {
       key: 'actions',
       title: '',
       align: 'center',
       render: (_, s) => (
-        <Button variant={s.status === 'OPEN' && canManage ? 'primary' : 'secondary'} size="sm" onClick={() => setDetailId(s.id)}>
-          {s.status === 'OPEN' && canManage ? 'Xem / đóng hộ' : 'Chi tiết'}
+        <Button variant={s.status !== 'CLOSED' && canManage ? 'primary' : 'secondary'} size="sm" onClick={() => setDetailId(s.id)}>
+          {canManage && s.status === 'OPEN' ? 'Xem / đóng hộ' : canManage && s.status === 'PENDING_REVIEW' ? 'Duyệt' : 'Chi tiết'}
         </Button>
       )
     }
@@ -176,32 +195,37 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
             ? 'Tất cả chi nhánh'
             : isManager
               ? `Ca tại ${currentUser?.branchName || 'chi nhánh đang đăng nhập'}`
-              : 'Các ca bạn đã trực'}
+              : `Ca tại ${currentUser?.branchName || 'chi nhánh đang đăng nhập'}`}
         </span>
       </header>
 
       <main className="report-body">
-        {isAdmin && (
-          <div className="shift-tabs">
-            <button
-              type="button"
-              className={`report-period-btn ${tab === 'history' ? 'active' : ''}`}
-              onClick={() => setTab('history')}
-            >
-              Lịch sử ca & thiếu/dư
-            </button>
-            <button
-              type="button"
-              className={`report-period-btn ${tab === 'schedule' ? 'active' : ''}`}
-              onClick={() => setTab('schedule')}
-            >
-              Lịch ca cố định
-            </button>
-          </div>
-        )}
+        <div className="shift-tabs">
+          {[
+            ['history', 'Lịch sử ca & thiếu/dư', true],
+            ['assign', 'Xếp ca', true],
+            ['staff', 'Nhân viên trực', canManage],
+            ['schedule', 'Giờ các ca', isAdmin]
+          ]
+            .filter(([, , show]) => show)
+            .map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={`report-period-btn ${tab === key ? 'active' : ''}`}
+                onClick={() => setTab(key)}
+              >
+                {label}
+              </button>
+            ))}
+        </div>
 
         {tab === 'schedule' && isAdmin ? (
           <WorkShiftEditor />
+        ) : tab === 'assign' ? (
+          <AssignmentBoard canEdit={canManage} isAdmin={isAdmin} branches={branches} />
+        ) : tab === 'staff' && canManage ? (
+          <StaffManager isAdmin={isAdmin} branches={branches} />
         ) : (
           <>
             <div className="report-filter-bar shift-filter-bar">
@@ -234,18 +258,19 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
                     ))}
                   </select>
                 )}
-                {isAdmin && (
+                {canManage && (
                   <select className="report-select" value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)}>
                     <option value="">Tất cả nhân viên</option>
                     {employees.map((u) => (
-                      <option key={u.id} value={u.id}>{u.fullName || u.username}</option>
+                      <option key={u.id} value={u.id}>{u.fullName}</option>
                     ))}
                   </select>
                 )}
                 <select className="report-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                   <option value="">Mọi trạng thái</option>
                   <option value="OPEN">Đang mở</option>
-                  <option value="CLOSED">Đã đóng</option>
+                  <option value="PENDING_REVIEW">Chờ duyệt</option>
+                  <option value="CLOSED">Đã khóa sổ</option>
                 </select>
                 <label className="shift-check">
                   <input type="checkbox" checked={onlyMismatched} onChange={(e) => setOnlyMismatched(e.target.checked)} />
@@ -263,7 +288,9 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
               <div className="report-kpi-card">
                 <div className="report-kpi-title"><span>Số ca</span></div>
                 <div className="report-kpi-value">{summary?.totalShifts ?? 0}</div>
-                <div className="report-kpi-sub">{summary?.openShifts ?? 0} ca đang mở</div>
+                <div className="report-kpi-sub">
+                  {summary?.openShifts ?? 0} đang mở · {summary?.pendingReviewShifts ?? 0} chờ duyệt
+                </div>
               </div>
               <div className="report-kpi-card">
                 <div className="report-kpi-title"><span>Ca lệch tiền</span></div>
@@ -284,7 +311,7 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
 
             <div className="report-card">
               <div className="report-card-title">
-                <span>{canManage ? 'Lịch sử ca' : 'Ca của bạn'} ({shifts.length})</span>
+                <span>Lịch sử ca ({shifts.length})</span>
                 <span className="shift-muted">Bấm “Chi tiết” để xem từng hóa đơn và gợi ý dò chênh lệch</span>
               </div>
               <Table
