@@ -11,6 +11,7 @@ import ReportPage from './pages/report/ReportPage';
 import PartnerPage from './pages/partner/PartnerPage';
 import StaffPage from './pages/admin/StaffPage';
 import ShiftsPage from './pages/shifts/ShiftsPage';
+import { PERMS, permissionsFor, homePathFor } from './utils/permissions';
 
 /**
  * Wrapper component cung cấp navigation props cho từng page
@@ -39,15 +40,15 @@ function AppRoutes() {
     logout();
   };
 
-  // Phân quyền giống backend: báo cáo cho ADMIN/MANAGER, dự báo thêm WAREHOUSE.
-  // Chế độ demo ngoại tuyến dùng dữ liệu mẫu nên vẫn cho xem để trình diễn.
-  const role = currentUser?.role;
-  const canViewReports = isOfflineDemo || role === 'ADMIN' || role === 'MANAGER';
-  const canViewForecast = canViewReports || role === 'WAREHOUSE';
+  // Phân quyền theo bảng chung utils/permissions.js (khớp @PreAuthorize ở backend)
+  const perms = permissionsFor(currentUser?.role, { offlineDemo: isOfflineDemo });
+  const can = (perm) => perms.has(perm);
+  const homePath = homePathFor(perms);
 
   // Shared props cho mọi page
   const sharedProps = {
     currentUser,
+    can,
     // Chi nhánh của phiên đăng nhập (chế độ demo ngoại tuyến dùng chi nhánh 1)
     branchId: branchId || currentUser.branchId,
     branchName: branchName || currentUser.branchName,
@@ -56,71 +57,58 @@ function AppRoutes() {
     onLogout: handleLogout,
     ...nav, // onNavigateToPos, onNavigateToInventory, onNavigateToForecast, ...
     // Ẩn nút điều hướng tới trang không có quyền
-    onNavigateToForecast: canViewForecast ? nav.onNavigateToForecast : undefined,
-    onNavigateToReport: canViewReports ? nav.onNavigateToReport : undefined,
+    onNavigateToPos: can(PERMS.POS_SELL) ? nav.onNavigateToPos : undefined,
+    onNavigateToInventory: can(PERMS.INVENTORY_VIEW) ? nav.onNavigateToInventory : undefined,
+    onNavigateToForecast: can(PERMS.FORECAST_VIEW) ? nav.onNavigateToForecast : undefined,
+    onNavigateToReport: can(PERMS.REPORT_VIEW) ? nav.onNavigateToReport : undefined,
+    onNavigateToPartners:
+      can(PERMS.CUSTOMER_VIEW) || can(PERMS.SUPPLIER_VIEW) ? nav.onNavigateToPartners : undefined,
     // Ca làm cần máy chủ (lịch sử ca), không có ở chế độ demo ngoại tuyến
-    onNavigateToShifts: isOfflineDemo ? undefined : nav.onNavigateToShifts,
+    onNavigateToShifts: !isOfflineDemo && can(PERMS.SHIFTS_MANAGE) ? nav.onNavigateToShifts : undefined,
+    onNavigateToStaff: can(PERMS.ACCOUNT_MANAGE) ? nav.onNavigateToStaff : undefined,
+    onCreateStockInDraft: can(PERMS.INVENTORY_EDIT) ? nav.onCreateStockInDraft : undefined,
   };
 
-  // Hàm trả về element (không phải component) để không bị mount lại mỗi lần render
-  const shell = (active, page) => (
-    <AppShell active={active} {...sharedProps}>{page}</AppShell>
-  );
+  // Hàm trả về element (không phải component) để không bị mount lại mỗi lần render.
+  // Không đủ quyền thì về trang mở đầu của vai trò.
+  const shell = (active, allowed, page) =>
+    allowed
+      ? <AppShell active={active} {...sharedProps}>{page}</AppShell>
+      : <Navigate to={homePath} replace />;
 
   return (
     <Routes>
-      <Route
-        path="/"
-        element={
-          shell("pos", <PosPage {...sharedProps} />)
-        }
-      />
+      <Route path="/" element={shell("pos", can(PERMS.POS_SELL), <PosPage {...sharedProps} />)} />
       <Route
         path="/inventory"
-        element={
-          shell("inventory", <InventoryPage {...sharedProps} />)
-        }
+        element={shell("inventory", can(PERMS.INVENTORY_VIEW), <InventoryPage {...sharedProps} />)}
       />
       <Route
         path="/forecast"
-        element={
-          canViewForecast
-            ? shell("forecast", <ForecastPage {...sharedProps} />)
-            : <Navigate to="/" replace />
-        }
+        element={shell("forecast", can(PERMS.FORECAST_VIEW), <ForecastPage {...sharedProps} />)}
       />
       <Route
         path="/report"
-        element={
-          canViewReports
-            ? shell("report", <ReportPage {...sharedProps} />)
-            : <Navigate to="/" replace />
-        }
+        element={shell("report", can(PERMS.REPORT_VIEW), <ReportPage {...sharedProps} />)}
       />
       <Route
         path="/partners"
-        element={
-          shell("partners", <PartnerPage {...sharedProps} />)
-        }
+        element={shell(
+          "partners",
+          can(PERMS.CUSTOMER_VIEW) || can(PERMS.SUPPLIER_VIEW),
+          <PartnerPage {...sharedProps} />
+        )}
       />
       <Route
         path="/shifts"
-        element={
-          isOfflineDemo
-            ? <Navigate to="/" replace />
-            : shell("shifts", <ShiftsPage {...sharedProps} />)
-        }
+        element={shell("shifts", !isOfflineDemo && can(PERMS.SHIFTS_MANAGE), <ShiftsPage {...sharedProps} />)}
       />
       <Route
         path="/staff"
-        element={
-          currentUser?.role === 'ADMIN'
-            ? shell("staff", <StaffPage {...sharedProps} />)
-            : <Navigate to="/" replace />
-        }
+        element={shell("staff", can(PERMS.ACCOUNT_MANAGE), <StaffPage {...sharedProps} />)}
       />
-      {/* Fallback: redirect unknown routes to POS */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Fallback: đường dẫn lạ về trang mở đầu của vai trò */}
+      <Route path="*" element={<Navigate to={homePath} replace />} />
     </Routes>
   );
 }

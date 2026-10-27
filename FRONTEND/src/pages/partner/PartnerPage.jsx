@@ -3,12 +3,17 @@ import { Button, Table, Badge, Modal } from '../../components/common';
 import { customerService } from '../../services/customerService';
 import { purchaseService } from '../../services/purchaseService';
 import { formatNumber, formatDateTime } from '../../utils/formatters';
+import { PERMS } from '../../utils/permissions';
 import './PartnerPage.css';
 
 export default function PartnerPage({
-  isOnline = true
+  isOnline = true,
+  can = () => true
 }) {
-  const [activeTab, setActiveTab] = useState('customers'); // 'customers' | 'suppliers'
+  // Thu ngân chỉ có tab khách hàng, thủ kho chỉ có tab nhà cung cấp
+  const canCustomers = can(PERMS.CUSTOMER_VIEW);
+  const canSuppliers = can(PERMS.SUPPLIER_VIEW);
+  const [activeTab, setActiveTab] = useState(canCustomers ? 'customers' : 'suppliers'); // 'customers' | 'suppliers'
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -180,6 +185,7 @@ export default function PartnerPage({
       {/* Content */}
       <div className="partner-content">
         <div className="partner-nav-tabs">
+          {canCustomers && (
           <button
             className={`partner-tab-btn ${activeTab === 'customers' ? 'active' : ''}`}
             onClick={() => {
@@ -189,6 +195,8 @@ export default function PartnerPage({
           >
             Khách Hàng Thân Thiết ({customers.length})
           </button>
+          )}
+          {canSuppliers && (
           <button
             className={`partner-tab-btn ${activeTab === 'suppliers' ? 'active' : ''}`}
             onClick={() => {
@@ -198,6 +206,7 @@ export default function PartnerPage({
           >
             Nhà Cung Cấp Hàng Hóa ({suppliers.length})
           </button>
+          )}
         </div>
 
         <div className="partner-toolbar">

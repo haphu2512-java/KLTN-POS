@@ -19,12 +19,14 @@ public class SupplierController {
     private final SupplierService supplierService;
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
     @Operation(summary = "Lấy danh sách tất cả nhà cung cấp")
     public ResponseEntity<ApiResponse<List<Supplier>>> getAll() {
         return ResponseEntity.ok(ApiResponse.ok(supplierService.getAllSuppliers()));
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
     @Operation(summary = "Xem chi tiết nhà cung cấp theo ID")
     public ResponseEntity<ApiResponse<Supplier>> getById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(supplierService.getSupplierById(id)));

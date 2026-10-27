@@ -60,11 +60,7 @@ export default function AppShell({
     { key: 'shifts', label: 'Ca làm', onClick: onNavigateToShifts },
     { key: 'report', label: 'Báo cáo', onClick: onNavigateToReport },
     { key: 'partners', label: 'Đối tác', onClick: onNavigateToPartners },
-    {
-      key: 'staff',
-      label: 'Tài khoản',
-      onClick: currentUser?.role === 'ADMIN' ? onNavigateToStaff : undefined,
-    },
+    { key: 'staff', label: 'Tài khoản', onClick: onNavigateToStaff },
   ].filter((item) => item.onClick);
 
   const displayName = currentUser?.fullName || currentUser?.username || '';

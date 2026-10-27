@@ -22,6 +22,7 @@ public class StaffController {
     private final CurrentUserService currentUserService;
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
     @Operation(summary = "Nhân viên của chi nhánh (ADMIN lọc theo branchId)")
     public ResponseEntity<ApiResponse<List<StaffMember>>> list(@RequestParam(required = false) Long branchId) {
         return ResponseEntity.ok(ApiResponse.ok(staffService.list(branchId, currentUserService.getCurrentUser())));

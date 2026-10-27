@@ -587,10 +587,11 @@ public class ShiftService {
         return actor.getRole() == Role.ADMIN || actor.getRole() == Role.MANAGER;
     }
 
-    /** Xem ca: ADMIN mọi ca; người khác các ca ở chi nhánh đang đăng nhập */
+    /** Xem ca: ADMIN mọi ca; MANAGER các ca ở chi nhánh đang đăng nhập; vai trò khác chỉ ca do chính mình mở */
     private void checkCanView(ShiftSession session, User actor) {
         if (actor.getRole() == Role.ADMIN) return;
-        if (session.getBranchId().equals(actor.getCurrentBranchId())) return;
+        if (actor.getRole() == Role.MANAGER && session.getBranchId().equals(actor.getCurrentBranchId())) return;
+        if (session.getEmployeeId().equals(actor.getId())) return;
         throw new BusinessException("SHIFT_FORBIDDEN", "Bạn không có quyền với ca này", HttpStatus.FORBIDDEN);
     }
 
