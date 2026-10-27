@@ -171,7 +171,10 @@ class ShiftManagementIntegrationTest {
                         .content(json("{'workShiftId':3,'shiftDate':'" + today + "','staffMemberId':" + lan + "}")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.staffName").value("Lan"));
+        // Lịch xếp ca chỉ quản lý xem
         mvc.perform(get("/api/shifts/assignments").param("from", today).param("to", today).header("Authorization", counter))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/shifts/assignments").param("from", today).param("to", today).header("Authorization", manager))
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].staffMemberId").value(lan));
 
@@ -325,11 +328,13 @@ class ShiftManagementIntegrationTest {
     }
 
     @Test
-    @DisplayName("Tài khoản quầy xem các ca của chi nhánh kèm hóa đơn; không xem được ca chi nhánh khác")
-    void counterSeesBranchShiftsWithInvoices() throws Exception {
+    @DisplayName("Lịch sử ca chỉ quản lý xem; tài khoản quầy chỉ xem được ca do chính mình mở")
+    void counterSeesOnlyOwnShifts() throws Exception {
         Long branch = newBranch("CN ca riêng");
         Long other = newBranch("CN khác");
         String alice = newUser("alice_shift", Role.CASHIER, branch);
+        String carol = newUser("carol_shift", Role.CASHIER, branch);
+        String manager = newUser("alice_manager", Role.MANAGER, branch);
         String bob = newUser("bob_shift", Role.CASHIER, other);
 
         long aliceShift = open(alice, branch, "Alice", 200000);
@@ -339,15 +344,20 @@ class ShiftManagementIntegrationTest {
         long bobShift = open(bob, other, "Bob", 0);
         close(bob, 0);
 
-        mvc.perform(get("/api/shifts").header("Authorization", alice))
+        mvc.perform(get("/api/shifts").header("Authorization", alice)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/shifts").header("Authorization", manager))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalShifts").value(1))
                 .andExpect(jsonPath("$.data.shifts[0].id").value(aliceShift))
                 .andExpect(jsonPath("$.data.shifts[0].branchName").value("CN ca riêng"))
                 .andExpect(jsonPath("$.data.totalShortage").value(6000.0));
-        // Gửi chi nhánh khác cũng chỉ ra ca chi nhánh mình
-        mvc.perform(get("/api/shifts").param("branchId", String.valueOf(other)).header("Authorization", alice))
+        // Quản lý gửi chi nhánh khác cũng chỉ ra ca chi nhánh mình
+        mvc.perform(get("/api/shifts").param("branchId", String.valueOf(other)).header("Authorization", manager))
                 .andExpect(jsonPath("$.data.shifts[0].id").value(aliceShift));
+
+        // Thu ngân khác cùng chi nhánh không xem được ca của Alice
+        mvc.perform(get("/api/shifts/" + aliceShift).header("Authorization", carol)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/shifts/" + aliceShift + "/invoices").header("Authorization", carol)).andExpect(status().isForbidden());
 
         mvc.perform(get("/api/shifts/" + aliceShift + "/invoices").header("Authorization", alice))
                 .andExpect(status().isOk())

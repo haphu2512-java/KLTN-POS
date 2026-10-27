@@ -37,7 +37,7 @@ const STATUS_BADGE = {
  * - Quản trị: xem ca mọi chi nhánh, lọc theo chi nhánh / ngày / nhân viên / trạng thái, xem tổng thiếu/dư,
  *   duyệt ca lệch, đóng hộ ca quên đóng, xếp ca, quản lý nhân viên trực và sửa lịch ca cố định.
  * - Quản lý: như trên nhưng chỉ chi nhánh đang đăng nhập (máy chủ tự giới hạn), không sửa ca cố định.
- * - Tài khoản quầy và vai trò khác: xem ca và lịch xếp ca của chi nhánh mình.
+ * Thu ngân và thủ kho không vào trang này (xem utils/permissions.js); thu ngân mở/đóng ca ngay trong màn Bán hàng.
  */
 export default function ShiftsPage({ currentUser, isOnline = true }) {
   const role = currentUser?.role;

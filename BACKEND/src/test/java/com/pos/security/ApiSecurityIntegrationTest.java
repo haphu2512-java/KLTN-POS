@@ -91,6 +91,43 @@ class ApiSecurityIntegrationTest {
     }
 
     @Test
+    @DisplayName("Thu ngân không xem được lịch sử ca, lịch xếp ca, danh sách hóa đơn, nhà cung cấp, phiếu nhập")
+    void cashierBlockedFromBackOfficeReads() throws Exception {
+        for (String url : new String[]{"/api/shifts", "/api/invoices", "/api/suppliers", "/api/stock-in"}) {
+            mvc.perform(get(url).header("Authorization", cashierToken)).andExpect(status().isForbidden());
+        }
+        mvc.perform(get("/api/shifts/assignments").param("from", "2026-01-01").param("to", "2026-01-01")
+                        .header("Authorization", cashierToken))
+                .andExpect(status().isForbidden());
+        // Các API POS cần vẫn mở
+        for (String url : new String[]{"/api/shifts/current", "/api/staff", "/api/customers"}) {
+            mvc.perform(get(url).header("Authorization", cashierToken)).andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    @DisplayName("Thủ kho không bán hàng, không mở ca, không xem khách hàng; vẫn xem nhà cung cấp và phiếu nhập")
+    void warehouseBlockedFromSelling() throws Exception {
+        userRepository.save(User.builder().username("wh_user").password("x")
+                .fullName("Thủ kho").role(Role.WAREHOUSE).branchIds(TestAuth.branches(1L)).active(true).build());
+        String warehouse = tokenFor("wh_user");
+
+        mvc.perform(post("/api/invoices").header("Authorization", warehouse)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"branchId\":1,\"paymentMethod\":\"CARD\",\"items\":[{\"productId\":1,\"quantity\":1}]}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/shifts/open").header("Authorization", warehouse)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"workShiftId\":1,\"openingCash\":0}"))
+                .andExpect(status().isForbidden());
+        for (String url : new String[]{"/api/shifts/current", "/api/staff", "/api/customers"}) {
+            mvc.perform(get(url).header("Authorization", warehouse)).andExpect(status().isForbidden());
+        }
+        for (String url : new String[]{"/api/suppliers", "/api/stock-in"}) {
+            mvc.perform(get(url).header("Authorization", warehouse)).andExpect(status().isOk());
+        }
+    }
+
+    @Test
     @DisplayName("Admin xem được báo cáo")
     void adminCanReadReports() throws Exception {
         mvc.perform(get("/api/reports/revenue").header("Authorization", tokenFor("admin")))

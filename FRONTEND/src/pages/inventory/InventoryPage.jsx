@@ -12,10 +12,12 @@ import { purchaseService } from '../../services/purchaseService';
 import { websocketService } from '../../services/websocketService';
 import { exportToCsv } from '../../utils/exportCsv';
 import useBranches from '../../hooks/useBranches';
+import { PERMS } from '../../utils/permissions';
 import './InventoryPage.css';
 
 export default function InventoryPage({
   currentUser,
+  can = () => true,
   branchId = 1,
   branchName,
   isOnline = true
@@ -23,6 +25,8 @@ export default function InventoryPage({
   // Chi nhánh của phiên đăng nhập: nhập kho và điều chuyển luôn từ chi nhánh này.
   // Quản trị xem được tồn kho chi nhánh khác nhưng muốn nhập/xuất ở đó thì đăng nhập vào chi nhánh đó.
   const isAdmin = currentUser?.role === 'ADMIN';
+  // Thu ngân chỉ xem tồn kho; nhập kho, điều chuyển và lịch sử phiếu nhập dành cho kho/quản lý
+  const canEdit = can(PERMS.INVENTORY_EDIT);
   // State from Database
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -48,8 +52,8 @@ export default function InventoryPage({
         const [prodRes, invRes, supRes, slipRes] = await Promise.allSettled([
           productService.getProducts(),
           inventoryService.getBranchInventory(currentBranchId),
-          purchaseService.getSuppliers(),
-          purchaseService.getStockIns(currentBranchId)
+          canEdit ? purchaseService.getSuppliers() : Promise.resolve([]),
+          canEdit ? purchaseService.getStockIns(currentBranchId) : Promise.resolve([])
         ]);
 
         const prodList = prodRes.status === 'fulfilled' ? prodRes.value : [];
@@ -121,7 +125,7 @@ export default function InventoryPage({
       isMounted = false;
       unsubWs();
     };
-  }, [currentBranchId, isOnline, currentUser?.fullName]);
+  }, [currentBranchId, isOnline, currentUser?.fullName, canEdit]);
 
   // Filter states
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -594,6 +598,8 @@ export default function InventoryPage({
           <span className="page-subtitle">{branchName}</span>
         )}
         <div className="page-header-spacer" />
+        {canEdit && (
+        <>
         <Button
           variant="secondary"
           size="md"
@@ -612,6 +618,8 @@ export default function InventoryPage({
         >
           Tạo phiếu nhập (F3)
         </Button>
+        </>
+        )}
       </header>
 
       {/* Main Body */}
@@ -673,6 +681,7 @@ export default function InventoryPage({
             >
               Danh sách tồn kho ({filteredProducts.length})
             </button>
+            {canEdit && (
             <button
               type="button"
               className={`inv-tab-btn ${activeTab === 'history' ? 'active' : ''}`}
@@ -680,6 +689,7 @@ export default function InventoryPage({
             >
               Lịch sử phiếu nhập kho ({stockInHistory.length})
             </button>
+            )}
           </div>
 
           {activeTab === 'inventory' && (
@@ -762,7 +772,7 @@ export default function InventoryPage({
         {activeTab === 'inventory' ? (
           <>
             <Table
-              columns={productColumns}
+              columns={canEdit ? productColumns : productColumns.filter((col) => col.key !== 'actions')}
               data={paginatedProducts}
               loading={loading}
               loadingText="Đang tải danh sách tồn kho..."

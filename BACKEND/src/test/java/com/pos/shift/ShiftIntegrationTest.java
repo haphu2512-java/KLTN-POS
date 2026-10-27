@@ -154,7 +154,7 @@ class ShiftIntegrationTest {
     }
 
     @Test
-    @DisplayName("Quản lý chỉ đóng hộ ca trong chi nhánh của mình; tài khoản quầy thấy các ca của chi nhánh")
+    @DisplayName("Quản lý chỉ đóng hộ ca trong chi nhánh của mình; tài khoản quầy không xem lịch sử ca")
     void managerScopedToBranch() throws Exception {
         String cashier = newUser("forgetful_cashier", Role.CASHIER, 1L);
         ShiftTestData.assignNewStaff(staffRepository, assignmentRepository, 1L, 3, "Nhân viên quên đóng ca");
@@ -166,9 +166,7 @@ class ShiftIntegrationTest {
         long shiftId = com.jayway.jsonpath.JsonPath.parse(body).read("$.data.id", Long.class);
 
         mvc.perform(get("/api/shifts").param("status", "OPEN").header("Authorization", cashier))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.shifts.length()").value(1))
-                .andExpect(jsonPath("$.data.shifts[0].id").value(shiftId));
+                .andExpect(status().isForbidden());
         mvc.perform(post("/api/shifts/" + shiftId + "/close").header("Authorization", cashier)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"closingCash\":0}"))
                 .andExpect(status().isForbidden());
@@ -179,6 +177,10 @@ class ShiftIntegrationTest {
                 .andExpect(status().isForbidden());
 
         String manager = newUser("manager_b1", Role.MANAGER, 1L);
+        mvc.perform(get("/api/shifts").param("status", "OPEN").header("Authorization", manager))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.shifts.length()").value(1))
+                .andExpect(jsonPath("$.data.shifts[0].id").value(shiftId));
         mvc.perform(post("/api/shifts/" + shiftId + "/close").header("Authorization", manager)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"closingCash\":0,\"handoverNote\":\"Quản lý đóng hộ\"}"))
                 .andExpect(status().isOk())

@@ -23,12 +23,14 @@ public class StockInController {
     private final CurrentUserService currentUserService;
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
     @Operation(summary = "Lấy danh sách phiếu nhập kho (có thể lọc theo chi nhánh)")
     public ResponseEntity<ApiResponse<List<StockIn>>> getAll(@RequestParam(required = false) Long branchId) {
         return ResponseEntity.ok(ApiResponse.ok(stockInService.getAllStockIn(currentUserService.branchForRead(branchId, true))));
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
     @Operation(summary = "Xem chi tiết phiếu nhập kho theo ID")
     public ResponseEntity<ApiResponse<StockIn>> getById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(stockInService.getStockInById(id)));

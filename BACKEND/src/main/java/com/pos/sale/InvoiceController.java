@@ -26,6 +26,7 @@ public class InvoiceController {
     private final CurrentUserService currentUserService;
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Danh sách hóa đơn (phân trang hoặc tất cả). ADMIN lọc chi nhánh bất kỳ, vai trò khác chỉ chi nhánh đang đăng nhập")
     public ResponseEntity<ApiResponse<?>> getAll(
             @RequestParam(required = false) Long branchId,
@@ -46,6 +47,7 @@ public class InvoiceController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
     @Operation(summary = "Tạo hóa đơn thanh toán (tự động kiểm tra và trừ tồn kho nguyên tử)")
     public ResponseEntity<ApiResponse<Invoice>> create(@Valid @RequestBody InvoiceRequest req) {
         Invoice invoice = invoiceService.createInvoice(req, currentUserService.getCurrentUser());
