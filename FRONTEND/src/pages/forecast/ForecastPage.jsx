@@ -81,6 +81,7 @@ export default function ForecastPage({
     return () => {
       isMounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId, forecastDays, algorithm, isOnline]);
 
   // Dự báo chi tiết của sản phẩm đang chọn (có chuỗi lịch sử bán, SS, ROP, MAE/RMSE)

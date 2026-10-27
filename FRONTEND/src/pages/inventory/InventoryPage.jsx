@@ -121,7 +121,7 @@ export default function InventoryPage({
       isMounted = false;
       unsubWs();
     };
-  }, [currentBranchId, isOnline]);
+  }, [currentBranchId, isOnline, currentUser?.fullName]);
 
   // Filter states
   const [selectedCategory, setSelectedCategory] = useState('ALL');

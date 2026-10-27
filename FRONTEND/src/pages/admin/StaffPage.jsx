@@ -79,6 +79,7 @@ export default function StaffPage({
     // Tải danh sách khi mở trang / đổi trạng thái kết nối là chủ ý (hàm fetch tự bật cờ loading)
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline]);
 
   const handleCreateUser = async (e) => {

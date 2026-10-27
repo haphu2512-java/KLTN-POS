@@ -56,6 +56,7 @@ export default function PartnerPage({
     } else {
       fetchSuppliers();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isOnline]);
 
   const handleSearch = (e) => {

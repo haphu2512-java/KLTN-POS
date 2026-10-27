@@ -63,6 +63,7 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
 
   useEffect(() => {
     let alive = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     shiftService
       .listShifts({
