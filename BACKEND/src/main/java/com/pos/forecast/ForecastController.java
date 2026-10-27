@@ -32,6 +32,18 @@ public class ForecastController {
         return ResponseEntity.ok(ApiResponse.ok(results));
     }
 
+    @GetMapping("/demand/{productId}")
+    @Operation(summary = "Dự báo nhu cầu 1 sản phẩm trong 7-14 ngày tới, kèm lịch sử bán, SS, ROP và lý do đề xuất")
+    public ResponseEntity<ApiResponse<ForecastResponse>> getProductDemandForecast(
+            @PathVariable Long productId,
+            @RequestParam(required = false) Long branchId,
+            @RequestParam(defaultValue = "7") int days,
+            @RequestParam(defaultValue = "EXP_SMOOTHING") String algorithm) {
+        ForecastResponse result = forecastService.getProductForecast(
+                currentUserService.branchForRead(branchId, false), productId, days, algorithm);
+        return ResponseEntity.ok(ApiResponse.ok(result));
+    }
+
     @GetMapping("/recommendations")
     @Operation(summary = "Danh sách sản phẩm cần nhập hàng ưu tiên (lọc từ kết quả dự báo)")
     public ResponseEntity<ApiResponse<List<ForecastResponse>>> getRecommendations(

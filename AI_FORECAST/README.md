@@ -95,7 +95,7 @@ ngắt quãng (id 4) và một sản phẩm mới chưa bán (id 5).
 ## Tham số
 
 Đặt qua biến môi trường (xem `.env.example`): `AI_FORECAST_ALGORITHM`, `AI_FORECAST_ALPHA`,
-`AI_FORECAST_MA_WINDOW`, `AI_FORECAST_Z`, `AI_LEAD_TIME_DAYS`, `AI_REVIEW_PERIOD_DAYS`,
+`AI_FORECAST_MA_WINDOW`, `AI_SERVICE_LEVEL_Z`, `AI_LEAD_TIME_DAYS`, `AI_REVIEW_PERIOD_DAYS`,
 `AI_HISTORY_DAYS`, `AI_VALIDATION_DAYS`, `AI_INTERMITTENT_ZERO_RATIO`.
 
 ## Khác biệt so với backend Java hiện tại

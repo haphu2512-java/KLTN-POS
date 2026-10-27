@@ -4,6 +4,7 @@ Tên trường kết quả dùng camelCase và giữ các trường của Foreca
 (productId, dailyDemandForecast, suggestedRestockQty, urgency, ...) để backend/frontend dùng lại được.
 """
 
+import math
 from collections.abc import Sequence
 from datetime import date, timedelta
 
@@ -59,6 +60,7 @@ def forecast_series(sales: Sequence[float], current_stock: float, forecast_days:
         return {
             "algorithm": algorithm,
             "forecastDays": days,
+            "leadTimeDays": lead_time,
             "hasHistory": False,
             "currentStock": current_stock,
             "dailyDemandForecast": 0.0,
@@ -98,11 +100,12 @@ def forecast_series(sales: Sequence[float], current_stock: float, forecast_days:
     return {
         "algorithm": algorithm,
         "forecastDays": days,
+        "leadTimeDays": lead_time,
         "hasHistory": True,
         "currentStock": current_stock,
         "dailyDemandForecast": round(daily, 2),
         "movingAverage7": round(moving_average(sales, config.ma_window), 2),
-        "totalPredictedDemand": round(daily * days),
+        "totalPredictedDemand": math.floor(daily * days + 0.5),  # làm tròn nửa lên giống Math.round của Java
         "stdDev": round(sigma, 2),
         "safetyStock": round(ss, 2),
         "reorderPoint": round(rop, 2),

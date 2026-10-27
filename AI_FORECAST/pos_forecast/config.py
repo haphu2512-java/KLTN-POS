@@ -49,7 +49,7 @@ class ForecastConfig:
         return cls(
             alpha=_env_float("AI_FORECAST_ALPHA", cls.alpha),
             ma_window=_env_int("AI_FORECAST_MA_WINDOW", cls.ma_window),
-            z=_env_float("AI_FORECAST_Z", cls.z),
+            z=_env_float("AI_SERVICE_LEVEL_Z", cls.z),
             lead_time_days=_env_int("AI_LEAD_TIME_DAYS", cls.lead_time_days),
             review_period_days=_env_int("AI_REVIEW_PERIOD_DAYS", cls.review_period_days),
             history_days=_env_int("AI_HISTORY_DAYS", cls.history_days),
