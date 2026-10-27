@@ -6,20 +6,20 @@
     "@expo-google-fonts/be-vietnam-pro": "^0.4.1",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "expo": "~57.0.30",
-    "expo-asset": "~57.0.20",
-    "expo-camera": "~57.0.6",
-    "expo-constants": "~57.0.22",
-    "expo-font": "~57.0.4",
-    "expo-haptics": "~57.0.3",
-    "expo-status-bar": "~57.0.1",
-    "react": "19.2.3",
-    "react-native": "0.86.3",
-    "react-native-safe-area-context": "~5.7.0"
+    "expo": "^58",
+    "expo-asset": "~58.0.18",
+    "expo-camera": "~58.0.12",
+    "expo-constants": "~58.0.13",
+    "expo-font": "~58.0.10",
+    "expo-haptics": "~58.0.7",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-safe-area-context": "~5.10.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
-    "babel-preset-expo": "~57.0.16"
+    "babel-preset-expo": "~58.0.0"
   },
   "scripts": {
     "start": "expo start",
