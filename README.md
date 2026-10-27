@@ -1,21 +1,31 @@
 # Hệ thống POS và Quản lý Kho tích hợp AI Dự báo Tồn kho cho Cửa hàng Bán lẻ nhỏ
 
 ## Thông tin đề tài
-- **Mô tả:** Giải pháp số hóa toàn diện cho cửa hàng bán lẻ nhỏ — bán hàng tại quầy (POS), quản lý tồn kho theo thời gian thực, đồng bộ đa chi nhánh, cảnh báo & gợi ý nhập hàng thông minh dựa trên AI/thuật toán dự báo.
+- **Mô tả:** Giải pháp số hóa cho cửa hàng bán lẻ nhỏ: bán hàng tại quầy (POS), quản lý tồn kho theo thời gian thực, nhiều chi nhánh, ca làm và đối soát két, app điện thoại quét mã vạch, dự báo nhu cầu và gợi ý nhập hàng.
 - **Công nghệ sử dụng:**
   - **Backend:** Java 21 + Spring Boot 3.3.3 (REST API + WebSocket STOMP), Spring Data JPA, Spring Security (JWT HS512), Spring Scheduler
-  - **Frontend (Desktop):** Electron 44 + React 19 + Vite 8 (renderer), giao tiếp backend qua Vite Proxy `/api` + STOMP WebSocket
-  - **Database:** MySQL 8.0 — 1.949+ sản phẩm thực (scrape từ Bach Hoa Xanh), 2 chi nhánh, 10+ khách hàng, toàn bộ dữ liệu tồn kho
-  - **Realtime/đồng bộ:** Spring WebSocket STOMP broker, topic `/topic/inventory-updates` push kho realtime sau mỗi giao dịch POS
-  - **Phần cứng:** In hóa đơn nhiệt K80 qua Electron silent print (ESC/POS), máy quét mã vạch HID < 50ms buffer
-  - **Dự báo AI:** Exponential Smoothing (α=0.35) + Moving Average 7 ngày chạy phía Spring Boot, `@Scheduled` job chạy định kỳ hàng đêm
+  - **Frontend (Desktop):** Electron 44 + React 19 + Vite 8, giao tiếp backend qua Vite Proxy `/api` + STOMP WebSocket
+  - **Mobile:** React Native + Expo 58, máy quét mã vạch không dây và tra cứu giá/tồn kho (`MOBILE/`)
+  - **Database:** MySQL 8.0 (dữ liệu mẫu 1.949 sản phẩm thực tế lấy từ Bách Hóa Xanh, 2 chi nhánh)
+  - **Realtime:** Spring WebSocket STOMP, kênh `/topic/inventory-updates` (tồn kho) và `/topic/terminals/{id}/scans` (mã quét từ điện thoại)
+  - **Phần cứng:** In hóa đơn nhiệt K80 qua Electron silent print, máy quét mã vạch HID (buffer < 50ms)
+  - **Dự báo AI:** Exponential Smoothing (α = 0.35) + Moving Average 7 ngày, tồn kho an toàn, điểm đặt hàng lại (ROP), đánh giá MAE/RMSE, chạy trong Spring Boot với job hằng đêm; bản Python trong `AI_FORECAST/` dùng để kiểm chứng (xem [`AI_for_POS.md`](AI_for_POS.md))
 - **Chuẩn đầu ra:** Phần mềm POS + quản lý kho hoàn chỉnh, thử nghiệm thực tế tại ít nhất 1 cửa hàng.
+
+## Tài liệu trong repo
+
+| File | Nội dung |
+|------|----------|
+| `README.md` | Tổng quan, cách chạy, kiến trúc, danh sách API |
+| [`AI_for_POS.md`](AI_for_POS.md) | Bài toán, công thức và kiến trúc module dự báo AI |
+| [`AI_FORECAST/README.md`](AI_FORECAST/README.md) | Bản Python kiểm chứng mô hình dự báo |
+| [`FRONTEND/README.md`](FRONTEND/README.md) | Ứng dụng desktop Electron |
+| [`MOBILE/README.md`](MOBILE/README.md) | App điện thoại quét mã vạch, API ghép cặp với quầy |
+| `.agents/`, `skills/`, `MOBILE/AGENTS.md` | Hướng dẫn cho trợ lý AI khi lập trình (không phải tài liệu người dùng) |
 
 ---
 
-## Trạng thái dự án (Cập nhật: 15/10/2026)
-
-> **Hoàn thành 6/8 giai đoạn** — Hệ thống đã đủ chức năng cho thử nghiệm thực tế.
+## Trạng thái dự án (Cập nhật: 27/10/2026)
 
 ```
 ✅ XONG   Giai đoạn 0 — Chuẩn bị & Lập kế hoạch
@@ -24,18 +34,21 @@
 ✅ XONG   Giai đoạn 3 — Module Quản lý Kho
 ✅ XONG   Giai đoạn 4 — Đồng bộ đa chi nhánh (WebSocket STOMP)
 ✅ XONG   Giai đoạn 5 — Báo cáo & Dự báo AI
-✅ XONG   Giai đoạn 6 — Kiểm thử & Mở rộng nghiệp vụ
+✅ XONG   Giai đoạn 6 — Kiểm thử & Mở rộng nghiệp vụ (ca làm, app quét mã, tài khoản)
 ⏳ CẦN   Giai đoạn 7 — Triển khai thử nghiệm thực tế
 ⏳ CẦN   Giai đoạn 8 — Hoàn thiện báo cáo đề tài
 ```
+
+CI (`.github/workflows/ci.yml`) chạy trên mọi PR: `mvn test` cho backend, `lint + build` cho frontend, `expo export` cho mobile và `pytest` cho `AI_FORECAST`.
 
 ---
 
 ## Hướng dẫn chạy hệ thống nhanh
 
 ### Yêu cầu
-- Docker Desktop (Windows)
+- Docker Desktop (hoặc JDK 21 + Maven + MySQL 8)
 - Node.js 18+
+- Python 3.10+ (chỉ khi dùng `AI_FORECAST`)
 
 ### Cấu hình môi trường (`.env`)
 Mọi cấu hình và bí mật đều lấy từ file `.env`, không có giá trị bí mật nào viết sẵn trong code. Mỗi phần có một file mẫu:
@@ -46,7 +59,7 @@ Mọi cấu hình và bí mật đều lấy từ file `.env`, không có giá t
 | `FRONTEND/.env` | Vite dev server, React, Electron | `cp FRONTEND/.env.example FRONTEND/.env` |
 | `MOBILE/.env` | App quét mã Expo | `cp MOBILE/.env.example MOBILE/.env` |
 
-Biến bắt buộc trong `.env` gốc: `DB_PASSWORD`, `JWT_SECRET` (tối thiểu 32 ký tự, ví dụ `openssl rand -hex 32`), `SEED_DEFAULT_PASSWORD` (lần chạy đầu), và `DB_ROOT_PASSWORD` khi chạy bằng Docker. Thiếu biến bắt buộc thì backend hoặc Docker Compose dừng ngay và báo tên biến còn thiếu.
+Biến bắt buộc trong `.env` gốc: `DB_PASSWORD`, `JWT_SECRET` (tối thiểu 32 ký tự, ví dụ `openssl rand -hex 32`), `SEED_DEFAULT_PASSWORD` (lần chạy đầu), và `DB_ROOT_PASSWORD` khi chạy bằng Docker. Thiếu biến bắt buộc thì backend hoặc Docker Compose dừng ngay và báo tên biến còn thiếu. Các tham số dự báo (`AI_LEAD_TIME_DAYS`, `AI_SERVICE_LEVEL_Z`, `AI_HISTORY_DAYS`...) có giá trị mặc định theo `AI_for_POS.md`.
 
 ### Khởi động Backend + MySQL
 ```bash
@@ -57,7 +70,6 @@ docker compose up -d
 cd BACKEND && mvn spring-boot:run
 
 # Swagger UI: http://localhost:8080/swagger-ui/index.html
-# API Login: POST http://localhost:8080/api/auth/login
 ```
 
 ### Tài khoản mặc định
@@ -68,12 +80,16 @@ Tạo tự động khi database còn trống, mật khẩu là giá trị `SEED_
 | `admin` | ADMIN (toàn quyền, chọn được mọi chi nhánh) |
 | `cashier` | CASHIER (chỉ bán hàng, được phân công Chi nhánh Quận 1) |
 
+Bốn vai trò: `ADMIN`, `MANAGER`, `CASHIER`, `WAREHOUSE`. Báo cáo dành cho ADMIN/MANAGER; Dự báo dành cho ADMIN/MANAGER/WAREHOUSE.
+
 ### Chi nhánh và ca làm
-- Chi nhánh được chọn ở bước đăng nhập. Nhân viên chỉ chọn được chi nhánh quản trị đã phân công (trang Nhân viên, một người có thể được phân công nhiều chi nhánh); được phân công một chi nhánh thì vào thẳng. Quản trị chọn được mọi chi nhánh.
+- Chi nhánh được chọn ở bước đăng nhập. Tài khoản chỉ chọn được chi nhánh quản trị đã phân công (trang Tài khoản, một người có thể được phân công nhiều chi nhánh); được phân công một chi nhánh thì vào thẳng. Quản trị chọn được mọi chi nhánh.
 - Chi nhánh nằm trong token: bán hàng, nhập kho, điều chuyển, mở ca đều ghi vào chi nhánh đó. Muốn đổi chi nhánh thì đăng xuất và đăng nhập lại.
-- Đang có ca chưa đóng ở chi nhánh A thì không đăng nhập vào chi nhánh B được: phải vào A đóng ca (đếm két), hoặc nhờ quản trị đóng hộ ở tab Ca làm.
-- Tab **Ca làm**: quản trị xem ca mọi chi nhánh, lọc theo chi nhánh/ngày/nhân viên/trạng thái, xem tổng thiếu/dư, đóng hộ ca quên đóng, sửa lịch ca cố định. Thu ngân chỉ xem ca của mình, mở chi tiết để thấy cách tính tiền két, từng hóa đơn và gợi ý dò chênh lệch.
-- Tiền mặt dự kiến của ca = tiền đầu ca + bán tiền mặt − tiền mặt hoàn trả chi từ két của ca. Hoàn trả hóa đơn của ca đã đóng thì tính vào ca đang mở lúc hoàn trả.
+- Đang có ca chưa đóng ở chi nhánh A thì không đăng nhập vào chi nhánh B được: phải vào A đóng ca (đếm két), hoặc nhờ quản lý đóng hộ ở tab Ca làm.
+- **Lịch ca:** mỗi chi nhánh có thể có số ca và giờ ca riêng; chi nhánh chưa cấu hình thì dùng lịch ca mẫu chung. Quản lý xếp nhân viên vào từng ca theo ngày.
+- **Mở/đóng ca:** mở ca cho nhân viên được xếp (quản lý chọn được người trực thay) với tiền mặt đầu ca. Trong ca ghi được các khoản chi, nộp quỹ giữa ca, bổ sung tiền lẻ. Đóng ca đối soát tiền mặt, VietQR và thẻ; ca lệch tiền được quản lý duyệt và khóa sổ.
+- Tiền mặt dự kiến của ca = tiền đầu ca + bán tiền mặt − hoàn trả tiền mặt − chi trong ca − nộp quỹ + bổ sung tiền lẻ. Hoàn trả hóa đơn của ca đã đóng thì tính vào ca đang mở lúc hoàn trả.
+- Thu ngân phải có ca đang mở mới tạo được hóa đơn (tắt bằng `POS_REQUIRE_OPEN_SHIFT=false`). Màn hình POS không khóa khi chưa mở ca: chỉ khi thêm hàng lần đầu hoặc thanh toán mới hiện hộp nhắc mở ca.
 
 ### Khởi động Frontend
 ```bash
@@ -83,129 +99,135 @@ npm run dev          # Giao diện web: http://localhost:5173
 npm run dev:electron # Chạy Electron desktop app (cần backend đã chạy)
 ```
 
-> **Lưu ý quan trọng:** Khi chạy `npm run dev`, frontend dùng Vite Proxy (`/api`, `/ws` → `DEV_PROXY_TARGET`, mặc định `http://localhost:8080`) nên không gặp lỗi CORS. Khi build Electron phải đặt `VITE_API_BASE_URL` và `VITE_WS_URL` trong `FRONTEND/.env`.
+> Khi chạy `npm run dev`, frontend dùng Vite Proxy (`/api`, `/ws` → `DEV_PROXY_TARGET`, mặc định `http://localhost:8080`) nên không gặp lỗi CORS. Khi build Electron phải đặt `VITE_API_BASE_URL` và `VITE_WS_URL` trong `FRONTEND/.env`.
+
+### Khởi động app điện thoại và AI_FORECAST
+```bash
+cd MOBILE && npm install && npx expo start          # xem MOBILE/README.md
+cd AI_FORECAST && pip install -r requirements-dev.txt && python -m pytest   # xem AI_FORECAST/README.md
+```
 
 ---
 
 ## Giai đoạn 0 — Chuẩn bị & Lập kế hoạch
-- [x] Khảo sát thực tế quy trình bán hàng, nhập/xuất kho tại cửa hàng bán lẻ nhỏ
+- [x] Khảo sát quy trình bán hàng, nhập/xuất kho tại cửa hàng bán lẻ nhỏ
 - [x] Xác định phạm vi MVP
 - [x] Khởi tạo dự án Spring Boot (Maven, Modular Monolith theo tính năng)
 - [x] Khởi tạo dự án Electron + React 19 + Vite 8
 - [x] Thiết kế kiến trúc hệ thống tổng thể
-- [x] Lập sơ đồ ERD Database
 
 ## Giai đoạn 1 — Thiết kế hệ thống
-- [x] Thiết kế database MySQL 8.x (branch, users, product, inventory, invoice, stock_in, customer, supplier)
+- [x] Thiết kế database MySQL 8 (bảng do Hibernate tạo/cập nhật từ entity, `ddl-auto=update`)
 - [x] Thiết kế REST API chuẩn hoá theo `ApiResponse<T>` wrapper
-- [x] Thiết kế Spring Security + JWT HS512 (24h expiration)
-- [x] Thiết kế UI/UX POS keyboard-first (F1–F9, Esc hotkeys)
-- [x] Thiết kế tích hợp phần cứng (ESC/POS printer, HID barcode scanner)
+- [x] Spring Security + JWT HS512, chi nhánh đăng nhập lưu trong token
+- [x] Thiết kế UI/UX POS keyboard-first (F1–F9, Esc)
+- [x] Thiết kế tích hợp phần cứng (máy in K80, máy quét HID, điện thoại làm máy quét)
 
-## Giai đoạn 2 — Module POS (Electron) ✅
-- [x] API bán hàng Spring Boot: `POST /api/invoices` — tạo hóa đơn, trừ kho nguyên tử chống race condition
-- [x] Giao diện bán hàng: quét mã vạch HID < 50ms (`useBarcodeScanner.js`), thêm/sửa/xóa sản phẩm giỏ hàng
-- [x] Modal tra cứu sản phẩm F2 — tra cứu trong 1.949 sản phẩm từ database, giới hạn 100 kết quả/lần
-- [x] Tính tổng tiền, giảm giá, quản lý nhiều đơn song song (Tabs F8)
-- [x] In hóa đơn K80 nhiệt qua Electron silent print + Web print (`receiptPrinter.js`)
-- [x] Thanh toán: Tiền mặt, Thẻ/Chuyển khoản, VietQR Napas247 động (`VietQRModal.jsx`)
-- [x] Đăng nhập JWT, phân quyền ADMIN/CASHIER/MANAGER/WAREHOUSE, đăng xuất
-- [x] Offline-first demo mode khi backend không có sẵn
+## Giai đoạn 2 — Module POS ✅
+- [x] `POST /api/invoices`: tạo hóa đơn, trừ kho nguyên tử chống race condition, chống gửi trùng bằng `clientRequestId`
+- [x] Quét mã vạch HID < 50ms (`useBarcodeScanner.js`), thêm/sửa/xóa sản phẩm trong giỏ
+- [x] Tra cứu sản phẩm F2, chọn khách hàng F3, nhiều đơn song song F8
+- [x] In hóa đơn K80 qua Electron silent print + Web print (`receiptPrinter.js`)
+- [x] Thanh toán: Tiền mặt, Thẻ, VietQR Napas247 động (`VietQRModal.jsx`)
+- [x] Ghép điện thoại làm máy quét không dây bằng mã QR (`ScannerPairingModal.jsx`)
+- [x] Chế độ demo ngoại tuyến khi không có backend
 
 ## Giai đoạn 3 — Module Quản lý Kho ✅
-- [x] API + giao diện quản lý sản phẩm (mã vạch, danh mục, giá vốn, giá bán, đơn vị tính, ảnh)
-- [x] API + giao diện nhập kho: `POST /api/stock-in` — phiếu nhập nhiều mặt hàng, cộng tồn kho tự động
-- [x] Cập nhật tồn kho realtime khi bán hàng (`deductStockAtomic` — atomic UPDATE chống âm kho)
-- [x] Xem lịch sử nhập kho và chi tiết từng phiếu (`StockInDetailModal.jsx`)
+- [x] Quản lý sản phẩm (mã vạch, danh mục, giá vốn, giá bán, đơn vị tính, ảnh), in tem mã vạch
+- [x] Nhập kho `POST /api/stock-in`: phiếu nhập nhiều mặt hàng, cộng tồn kho tự động
+- [x] Lịch sử nhập kho và chi tiết từng phiếu (`StockInDetailModal.jsx`)
 - [x] Điều chuyển hàng giữa chi nhánh (`StockTransferModal.jsx` + `POST /api/inventory/transfer`)
-- [x] Cảnh báo hàng tồn thấp: filter `quantity <= min_threshold`, badge đỏ/vàng/xanh
-- [x] Bộ lọc sản phẩm theo danh mục, tìm kiếm nhanh theo tên/mã vạch
-- [x] Xuất tồn kho ra CSV chuẩn UTF-8 BOM (hiển thị tiếng Việt trên Excel)
+- [x] Cảnh báo hàng tồn thấp theo `min_threshold`, lọc theo danh mục và trạng thái tồn
+- [x] Xuất tồn kho ra CSV UTF-8 BOM (mở đúng tiếng Việt trên Excel)
 
 ## Giai đoạn 4 — Đồng bộ đa chi nhánh ✅
-- [x] Spring WebSocket STOMP — endpoint `/ws`, broker topic `/topic/inventory-updates` và `/topic/sales-updates`
-- [x] Atomic deductStock (`InventoryRepository.deductStock` với `quantity >= :qty` guard)
-- [x] Push notification realtime sau mỗi giao dịch POS (tồn kho cập nhật ngay màn hình các quầy khác)
-- [x] Frontend STOMP client (`websocketService.js`) tự động reconnect khi ngắt kết nối
-- [x] Điều chuyển kho giữa 2 chi nhánh trong 1 `@Transactional` nguyên tử
-- [x] Badge trạng thái kết nối `🟢 Máy chủ & WS` / `🟢 API Online` / `⚪ Ngoại tuyến`
+- [x] WebSocket STOMP: endpoint `/ws`, kênh `/topic/inventory-updates` đẩy tồn kho sau mỗi giao dịch
+- [x] Frontend STOMP client (`websocketService.js`) tự kết nối lại khi mất kết nối
+- [x] Điều chuyển kho giữa 2 chi nhánh trong 1 `@Transactional`
+- [x] Badge trạng thái kết nối máy chủ / WebSocket / ngoại tuyến
 
 ## Giai đoạn 5 — Báo cáo & Dự báo AI ✅
-- [x] API báo cáo doanh thu theo ngày/tuần/tháng/chi nhánh (`ReportController` + `ReportService`)
-- [x] Giao diện báo cáo: biểu đồ SVG doanh thu & lợi nhuận (`ReportPage.jsx`)
-- [x] Top sản phẩm bán chạy nhất kèm tỷ trọng doanh thu
-- [x] Lịch sử hóa đơn, xem chi tiết, thực hiện trả hàng & hoàn tiền (`REFUNDED` status)
-- [x] Xuất báo cáo doanh thu & danh sách hóa đơn ra CSV/Excel (`exportCsv.js`)
-- [x] Thuật toán dự báo kép: **Exponential Smoothing (α=0.35)** + **Moving Average 7 ngày** (`ForecastService.java`)
-- [x] `@Scheduled` nightly job tự động tính toán dự báo nhu cầu toàn bộ chi nhánh
-- [x] API `GET /api/forecast/demand` + `GET /api/forecast/recommendations` (gợi ý nhập hàng ưu tiên)
-- [x] Giao diện dự báo AI (`ForecastPage.jsx`): biểu đồ SVG thực tế vs dự báo, MAE, bảng đề xuất nhập hàng
-- [x] Đánh giá độ chính xác MAE (Mean Absolute Error)
+- [x] Báo cáo doanh thu theo ngày/chi nhánh, biểu đồ SVG doanh thu & lợi nhuận (`ReportPage.jsx`)
+- [x] Top sản phẩm bán chạy kèm tỷ trọng doanh thu
+- [x] Lịch sử hóa đơn, xem chi tiết, trả hàng & hoàn tiền (`REFUNDED`)
+- [x] Xuất báo cáo doanh thu & danh sách hóa đơn ra CSV
+- [x] Dự báo theo `AI_for_POS.md`: Exponential Smoothing α = 0.35, Moving Average 7 ngày, tồn kho an toàn, ROP, số lượng đề xuất, MAE/RMSE (`ForecastCalculator.java`)
+- [x] Job `@Scheduled` 02:00 hằng đêm tính dự báo mọi chi nhánh, lưu bảng `forecast_result`
+- [x] Trang Dự báo (`ForecastPage.jsx`): biểu đồ thực tế 30 ngày và dự báo, MAE/RMSE, bảng đề xuất kèm lý do, nút mở phiếu nhập điền sẵn
+- [x] Bản Python `AI_FORECAST/` cho cùng kết quả với Java, kiểm tra bằng `ForecastParityTest`
 
 ## Giai đoạn 6 — Kiểm thử & Mở rộng nghiệp vụ ✅
-- [x] Unit test JUnit 5 + Mockito: **16/16 tests PASS** (`UserServiceTest`, `ForecastServiceTest`, `InventoryServiceTest`, `InvoiceServiceTest`, `ReportServiceTest`)
-- [x] Kiểm thử giao diện tự động qua Browser Subagent + Vite Build (0 errors, 131 modules)
-- [x] Sửa 9 vấn đề kỹ thuật & bảo mật (xem `docs/fix.md`): bảo mật endpoint, CORS, atomic points, pagination, forecast fallback, WS logging, H2 test scope, Dockerfile
-- [x] **Sửa lỗi CORS preflight (2026-10-13):** Thêm `HttpMethod.OPTIONS` permit all, `CorsConfigurationSource` bean, Vite dev proxy `/api` → `http://localhost:8080`
-- [x] **Kết nối database thực tế:** 1.949 sản phẩm từ BachHoaXanh, tồn kho đầy đủ hai chi nhánh
+- [x] Unit test JUnit 5 + Mockito và test tích hợp (`mvn test`), pytest cho `AI_FORECAST`, chạy tự động trên CI
 - [x] Dockerfile đa giai đoạn (`maven:3.9-eclipse-temurin-21-alpine` → JRE 21) + `docker-compose.yml`
-- [x] Module Quản lý Nhân viên (StaffPage.jsx): CRUD tài khoản, phân quyền 4 vai trò, khóa/mở tài khoản
-- [x] Module Đối tác (PartnerPage.jsx): Khách hàng thân thiết + tích điểm, Nhà cung cấp
-- [x] Trả hàng & Hoàn tiền: `InvoiceStatus.REFUNDED`, hoàn kho nguyên tử, thu hồi điểm thưởng
-- [x] Xuất dữ liệu CSV/Excel (UTF-8 BOM) cho báo cáo, hóa đơn và tồn kho
+- [x] Trang Tài khoản (`StaffPage.jsx`): tạo tài khoản, phân quyền 4 vai trò, phân công chi nhánh, khóa/mở, đổi mật khẩu
+- [x] Ca làm (`ShiftsPage.jsx`): lịch ca theo chi nhánh, xếp ca, mở/đóng ca, thu chi két, đối soát và duyệt ca lệch tiền
+- [x] Đối tác (`PartnerPage.jsx`): khách hàng thân thiết + tích điểm, nhà cung cấp
+- [x] App điện thoại (`MOBILE/`): quét mã gửi vào giỏ của quầy đã ghép, tra giá/tồn kho, hàng đợi ngoại tuyến, gán mã vạch cho sản phẩm
 
 ## Giai đoạn 7 — Triển khai thử nghiệm thực tế
 - [ ] Cài đặt & triển khai tại 1 cửa hàng bán lẻ thực tế
-- [ ] Test máy in nhiệt K80 thực tế (silent print qua Electron)
-- [ ] Test máy quét mã vạch HID thực tế (< 50ms response)
+- [ ] Test máy in nhiệt K80 và máy quét mã vạch HID thực tế
 - [ ] Đào tạo nhân viên cửa hàng sử dụng hệ thống
-- [ ] Thu thập phản hồi, ghi nhận lỗi phát sinh
-- [ ] Sửa lỗi & tối ưu dựa trên phản hồi thực tế
+- [ ] Thu thập phản hồi, sửa lỗi & tối ưu
 
 ## Giai đoạn 8 — Hoàn thiện & Báo cáo đề tài
 - [ ] Vẽ ERD hoàn chỉnh → lưu vào `docs/erd.png`
-- [ ] Hoàn thiện tài liệu kỹ thuật (kiến trúc, API, database schema)
+- [ ] Xuất số liệu MAE/RMSE của mô hình dự báo trên dữ liệu thật (dùng `AI_FORECAST`)
 - [ ] Hoàn thiện tài liệu hướng dẫn sử dụng (user manual)
 - [ ] Viết báo cáo khóa luận (SRS, thiết kế, cài đặt, kiểm thử, kết quả)
 - [ ] Chuẩn bị slide & demo bảo vệ đề tài
-- [ ] Đánh giá khả năng thương mại hóa (mô hình bán license / SaaS theo chi nhánh)
 
 ---
 
 ## Kiến trúc hệ thống
 
 ```
-[Electron Desktop App (React 19 + Vite 8)]
-         │   axios/proxy  │  @stomp/stompjs
-         ▼               ▼
-[Vite Dev Proxy]──────[Spring Boot 3.3.3 :8080]
-  /api → :8080               │  REST API
-  /ws  → :8080          [Spring Security JWT]
-                              │
-                        [Spring Data JPA]
-                              │
-                       [MySQL 8.0 :3306]
-                    (pos_inventory database)
-                    1.949 sản phẩm thực tế
+[Electron Desktop App (React 19 + Vite 8)]      [App điện thoại Expo]
+         │  axios /api      │  STOMP /ws               │  REST /api/scanner
+         ▼                  ▼                          ▼
+              [Spring Boot 3.3.3 :8080]
+               REST API + WebSocket STOMP
+               Spring Security JWT
+               ForecastCalculator + job 02:00
+                          │
+                   [Spring Data JPA]
+                          │
+                  [MySQL 8.0 :3306]
+                (pos_inventory database)
+
+[AI_FORECAST (Python)] ── đọc CSV hoặc MySQL, kiểm chứng công thức, xuất số liệu báo cáo
+```
+
+### Cấu trúc thư mục
+```
+├── BACKEND/        # Spring Boot (Maven)
+├── FRONTEND/       # Electron + React + Vite
+├── MOBILE/         # Expo / React Native
+├── AI_FORECAST/    # Python: kiểm chứng mô hình dự báo
+├── AI_for_POS.md   # Tài liệu module dự báo AI
+└── docker-compose.yml, .env.example
 ```
 
 ### Cấu trúc thư mục Backend
 ```
 BACKEND/src/main/java/com/pos/
 ├── PosBackendApplication.java
-├── auth/         # AuthController, LoginRequest, AuthResponse, UserProfileResponse
-├── branch/       # Branch entity, BranchRepository, BranchService
+├── auth/         # AuthController, LoginService (chọn chi nhánh khi đăng nhập), UserProfileResponse
+├── branch/       # Branch, BranchController, BranchService, BranchAccessService
 ├── common/       # ApiResponse<T>, BusinessException, GlobalExceptionHandler
 ├── config/       # CorsConfig, DatabaseInitializer, OpenApiConfig, WebSocketConfig
-├── customer/     # Customer, CustomerController, CustomerService, CustomerRepository
-├── forecast/     # ForecastController, ForecastService (EXP_SMOOTH + MA7), ForecastResponse
-├── inventory/    # Inventory, InventoryController, InventoryService (atomic deduct/add), InventoryRepository
-├── product/      # Product, ProductController, ProductService, ProductRequest
-├── purchase/     # StockIn, StockInService, Supplier, SupplierController, SupplierService
-├── report/       # ReportController, ReportService, RevenueSummaryResponse, TopProductResponse
-├── sale/         # Invoice, InvoiceDetail, InvoiceController, InvoiceService (atomic + refund), InvoiceRepository
-├── security/     # JwtTokenProvider, JwtAuthFilter, SecurityConfig, CustomUserDetailsService
-└── user/         # User, Role, UserController, UserService, UserResponse
+├── customer/     # Customer, CustomerController, CustomerService
+├── forecast/     # ForecastCalculator (công thức), ForecastService (job đêm, cache), ForecastController
+├── inventory/    # Inventory, InventoryController, InventoryService (trừ/cộng kho nguyên tử, điều chuyển)
+├── product/      # Product, ProductController, ProductService
+├── purchase/     # StockIn, StockInService, Supplier, SupplierService
+├── report/       # ReportController, ReportService
+├── sale/         # Invoice, InvoiceDetail, InvoiceService (bán + hoàn trả)
+├── scanner/      # Ghép cặp điện thoại với quầy (PosTerminal, ScannerPairing), tra cứu, gửi mã quét
+├── security/     # JwtTokenProvider, JwtAuthFilter, SecurityConfig, CurrentUserService, BranchSession
+├── shift/        # WorkShift (lịch ca), ShiftAssignment (xếp ca), ShiftSession (mở/đóng ca), ShiftCashMovement
+├── staff/        # StaffMember: nhân viên được xếp ca
+└── user/         # User, Role, UserController, UserService (tài khoản đăng nhập)
 ```
 
 ### Cấu trúc thư mục Frontend
@@ -216,135 +238,139 @@ FRONTEND/
 │   └── preload.cjs       # ContextBridge (contextIsolation: true)
 └── src/
     ├── components/
-    │   ├── common/       # Button, Input, Table, Badge, Modal, Tabs (+ CSS)
-    │   └── forecast/     # SalesTrendChart (SVG interactive)
-    ├── context/
-    │   └── AuthContext.jsx   # AuthProvider, useAuth, JWT + WS state
-    ├── hooks/
-    │   ├── useBarcodeScanner.js   # HID scanner < 50ms buffer
-    │   └── useHotkeys.js          # F1-F9, Esc global hotkeys
+    │   ├── common/       # Button, Input, Table, Badge, Modal, Tabs, BarcodeView
+    │   ├── forecast/     # SalesTrendChart (SVG)
+    │   └── layout/       # AppShell (thanh điều hướng bên trái)
+    ├── context/          # AuthContext (JWT, chi nhánh, trạng thái WS)
+    ├── hooks/            # useBarcodeScanner, useHotkeys, useAppNavigate, useBranches
     ├── pages/
-    │   ├── auth/         # LoginPage.jsx
-    │   ├── pos/          # PosPage, PosHeader, PosCart, PosPayment, ProductSearchModal, CustomerModal, VietQRModal
-    │   ├── inventory/    # InventoryPage, StockInModal, StockInDetailModal, StockTransferModal
-    │   ├── forecast/     # ForecastPage (AI demand forecast + recommendations)
-    │   ├── report/       # ReportPage (revenue chart, invoice history, refund)
-    │   ├── partner/      # PartnerPage (customers + suppliers)
-    │   └── admin/        # StaffPage (staff management + roles)
-    ├── services/
-    │   ├── api.js              # axios + JWT interceptor (baseURL: /api proxy)
-    │   ├── authService.js      # login, getCurrentUser, getToken, logout
-    │   ├── productService.js   # getProducts, getProductByBarcode, searchProducts
-    │   ├── inventoryService.js # getBranchInventory, getLowStock
-    │   ├── customerService.js  # getCustomers, getCustomerByPhone, createCustomer
-    │   ├── saleService.js      # createInvoice, getInvoices, refundInvoice
-    │   ├── purchaseService.js  # getStockIns, createStockIn, getSuppliers
-    │   ├── forecastService.js  # getDemandForecast
-    │   ├── reportService.js    # getRevenueReport, getTopProducts
-    │   ├── userService.js      # getUsers, createUser, updateUser, toggleStatus
-    │   └── websocketService.js # @stomp/stompjs STOMP client, auto-reconnect
-    └── utils/
-        ├── audio.js          # Web Audio API: beep 800Hz (success), buzz 220Hz (error)
-        ├── exportCsv.js      # CSV export UTF-8 BOM (Excel compatible)
-        ├── forecasting.js    # Client-side EXP_SMOOTH + MA (fallback khi offline)
-        ├── formatters.js     # formatCurrency, formatDate, formatDateTime
-        └── receiptPrinter.js # K80 receipt print (Electron IPC + window.print fallback)
+    │   ├── auth/         # LoginPage
+    │   ├── pos/          # PosPage, giỏ hàng, thanh toán, VietQR, khách hàng, ca, ghép điện thoại
+    │   ├── inventory/    # InventoryPage, nhập kho, điều chuyển, in tem mã vạch
+    │   ├── forecast/     # ForecastPage (dự báo + đề xuất nhập hàng)
+    │   ├── shifts/       # ShiftsPage (lịch ca, xếp ca, lịch sử ca, đối soát)
+    │   ├── report/       # ReportPage (doanh thu, hóa đơn, hoàn trả)
+    │   ├── partner/      # PartnerPage (khách hàng + nhà cung cấp)
+    │   └── admin/        # StaffPage (tab Tài khoản)
+    ├── services/         # api, auth, branch, customer, forecast, inventory, product, purchase,
+    │                     # report, sale, scannerPairing, shift, staff, user, websocket
+    └── utils/            # audio, exportCsv, forecasting (công thức khi ngoại tuyến), formatters, receiptPrinter
 ```
 
 ---
 
 ## API Endpoints
 
+Mọi API (trừ đăng nhập và `/api/scanner/ping`) cần header `Authorization: Bearer <JWT>`. Chi tiết tham số xem Swagger UI.
+
 ### Authentication
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| POST | `/api/auth/login` | Đăng nhập, trả về JWT token |
-| GET | `/api/auth/me` | Lấy thông tin user hiện tại (cần JWT) |
+| POST | `/api/auth/login` | Đăng nhập (kèm chi nhánh), trả về JWT |
+| GET | `/api/auth/me` | Thông tin tài khoản hiện tại |
+
+### Branches
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| GET | `/api/branches`, `/api/branches/active` | Danh sách chi nhánh |
+| GET | `/api/branches/{id}` | Chi tiết chi nhánh |
+| POST / PUT | `/api/branches`, `/api/branches/{id}` | ADMIN tạo/sửa chi nhánh |
 
 ### Products
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| GET | `/api/products` | Danh sách sản phẩm (tìm kiếm theo `search`, `category`) |
+| GET | `/api/products` | Danh sách sản phẩm |
 | GET | `/api/products/{id}` | Chi tiết sản phẩm |
-| GET | `/api/products/barcode/{barcode}` | Tra cứu theo mã vạch (POS scanner) |
-| POST | `/api/products` | Tạo sản phẩm mới |
+| GET | `/api/products/barcode/{barcode}` | Tra cứu theo mã vạch |
+| POST | `/api/products` | Tạo sản phẩm |
 | PUT | `/api/products/{id}` | Cập nhật sản phẩm |
 | DELETE | `/api/products/{id}` | Xóa mềm sản phẩm |
 
 ### Inventory
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| GET | `/api/inventory?branchId=` | Tồn kho theo chi nhánh |
-| GET | `/api/inventory/low-stock?branchId=` | Hàng tồn dưới ngưỡng an toàn |
-| POST | `/api/inventory/transfer` | Điều chuyển hàng giữa chi nhánh |
+| GET | `/api/inventory?branchId=` | Tồn kho theo chi nhánh (mặc định chi nhánh đăng nhập) |
+| GET | `/api/inventory/branch/{branchId}` | Tồn kho theo chi nhánh |
+| GET | `/api/inventory/low-stock` | Hàng dưới ngưỡng an toàn |
+| GET | `/api/inventory/product` | Tồn kho của 1 sản phẩm tại chi nhánh |
+| POST | `/api/inventory/transfer` | Điều chuyển hàng sang chi nhánh khác |
 
 ### Sales & Invoices
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| GET | `/api/invoices?branchId=&page=&size=` | Danh sách hóa đơn (có phân trang) |
+| GET | `/api/invoices?branchId=&page=&size=` | Danh sách hóa đơn (phân trang) |
 | GET | `/api/invoices/{id}` | Chi tiết hóa đơn |
-| POST | `/api/invoices` | Tạo hóa đơn bán hàng (trừ kho nguyên tử) |
+| POST | `/api/invoices` | Tạo hóa đơn (trừ kho nguyên tử, cần ca đang mở) |
 | POST | `/api/invoices/{id}/refund` | Hoàn trả hóa đơn (cộng kho, thu hồi điểm) |
 
 ### Stock-In & Suppliers
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| GET | `/api/stock-in?branchId=` | Danh sách phiếu nhập kho |
-| POST | `/api/stock-in` | Tạo phiếu nhập kho (cộng tồn kho tự động) |
-| GET | `/api/suppliers` | Danh sách nhà cung cấp |
-| POST | `/api/suppliers` | Tạo nhà cung cấp mới |
+| GET | `/api/stock-in?branchId=`, `/api/stock-in/{id}` | Phiếu nhập kho |
+| POST | `/api/stock-in` | Tạo phiếu nhập (cộng tồn kho) |
+| GET | `/api/suppliers`, `/api/suppliers/{id}` | Nhà cung cấp |
+| POST | `/api/suppliers` | Tạo nhà cung cấp |
 
 ### Customers
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| GET | `/api/customers` | Danh sách khách hàng |
-| GET | `/api/customers/phone/{phone}` | Tìm khách hàng theo SĐT (F3 POS) |
-| POST | `/api/customers` | Tạo khách hàng mới |
+| GET | `/api/customers`, `/api/customers/{id}` | Khách hàng |
+| GET | `/api/customers/phone/{phone}` | Tìm khách theo SĐT (F3 trên POS) |
+| POST | `/api/customers` | Tạo khách hàng |
 
 ### Reports
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| GET | `/api/reports/revenue?branchId=&days=` | Báo cáo doanh thu theo ngày |
+| GET | `/api/reports/revenue?branchId=&days=` | Doanh thu theo ngày |
 | GET | `/api/reports/top-products?branchId=&days=&limit=` | Top sản phẩm bán chạy |
 
 ### Forecast AI
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| GET | `/api/forecast/demand?branchId=&days=&algorithm=` | Dự báo nhu cầu (EXP_SMOOTH hoặc MOVING_AVG) |
-| GET | `/api/forecast/recommendations?branchId=` | Danh sách gợi ý nhập hàng ưu tiên |
+| GET | `/api/forecast/demand?branchId=&days=&algorithm=` | Dự báo mọi sản phẩm (`EXP_SMOOTH` hoặc `MOVING_AVG`) |
+| GET | `/api/forecast/demand/{productId}?branchId=&days=` | Dự báo 1 sản phẩm kèm lịch sử 30 ngày, SS, ROP, MAE/RMSE, lý do |
+| GET | `/api/forecast/recommendations?branchId=` | Sản phẩm cần nhập, sắp theo mức Khẩn cấp / Cao / Bình thường |
 
 ### Shifts (Ca làm việc)
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| GET | `/api/shifts/work-shifts` | 5 ca cố định trong ngày (mặc định 06–09, 09–12, 12–15, 15–18, 18–22) |
-| PUT | `/api/shifts/work-shifts/{id}` | ADMIN sửa tên/giờ ca |
-| GET | `/api/shifts/current` | Ca đang mở của tài khoản, hoặc gợi ý tiền và ghi chú bàn giao từ ca trước |
+| GET | `/api/shifts/work-shifts` | Lịch ca của chi nhánh (hoặc lịch mẫu chung) |
+| POST / PUT / DELETE | `/api/shifts/work-shifts[/{id}]` | ADMIN thêm, sửa, xóa ca |
+| POST | `/api/shifts/work-shifts/customize` | ADMIN tạo lịch ca riêng cho chi nhánh từ lịch mẫu |
+| GET / PUT | `/api/shifts/assignments` | Xem / xếp nhân viên vào ca theo ngày |
+| GET | `/api/shifts/current` | Ca đang mở ở chi nhánh, hoặc gợi ý ca, người được xếp, tiền ca trước để lại |
 | POST | `/api/shifts/open` | Mở ca với tiền mặt đầu ca |
-| POST | `/api/shifts/current/close` | Đóng ca: nhập tiền mặt đếm được, hệ thống tính chênh lệch so với tiền đầu ca + doanh số tiền mặt |
-| GET | `/api/shifts?branchId=&from=&to=` | ADMIN/MANAGER xem lịch sử ca (MANAGER chỉ chi nhánh mình) |
-| POST | `/api/shifts/{id}/close` | ADMIN/MANAGER đóng hộ ca nhân viên quên đóng |
+| POST | `/api/shifts/current/close` | Đóng ca: đối soát tiền mặt, VietQR, thẻ |
+| GET / POST | `/api/shifts/current/cash-movements` | Thu/chi két của ca đang mở |
+| PUT / DELETE | `/api/shifts/cash-movements/{id}` | Sửa / xóa khoản thu chi khi ca còn mở |
+| GET | `/api/shifts` | Lịch sử ca kèm tổng thiếu/dư |
+| GET | `/api/shifts/{id}`, `/{id}/invoices`, `/{id}/cash-movements` | Chi tiết ca, hóa đơn và thu chi của ca |
+| POST | `/api/shifts/{id}/review` | Quản lý duyệt ca lệch tiền |
+| POST | `/api/shifts/{id}/close` | Quản lý đóng hộ ca quên đóng |
 
-Thu ngân phải mở ca mới tạo được hóa đơn (tắt bằng `POS_REQUIRE_OPEN_SHIFT=false`). Mỗi hóa đơn lưu `shift_session_id` của ca đang mở. Màn hình POS không khóa khi chưa mở ca: thu ngân vẫn điều hướng, tra cứu, chuẩn bị đơn và đăng xuất được; chỉ khi thêm hàng lần đầu hoặc thanh toán mới hiện hộp nhắc mở ca.
-
-### Users (Admin only)
+### Staff & Users
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| GET | `/api/users` | Danh sách nhân viên |
-| POST | `/api/users` | Tạo tài khoản nhân viên |
-| PUT | `/api/users/{id}` | Cập nhật thông tin |
-| PUT | `/api/users/{id}/toggle-status` | Khóa/mở khóa tài khoản |
+| GET / POST / PUT | `/api/staff[/{id}]` | Nhân viên của chi nhánh (dùng để xếp ca) |
+| GET / POST | `/api/users` | ADMIN xem / tạo tài khoản |
+| GET / PUT | `/api/users/{id}` | Xem / sửa tài khoản (vai trò, chi nhánh) |
+| PATCH | `/api/users/{id}/toggle-status` | Khóa / mở khóa tài khoản |
+| POST | `/api/users/{id}/change-password` | Đổi mật khẩu |
+
+### Scanner (app điện thoại)
+Danh sách đầy đủ ở [`MOBILE/README.md`](MOBILE/README.md): ghép cặp quầy (`/api/scanner/terminals/...`, `/api/scanner/pair`), gửi mã quét (`/api/scanner/broadcast`, `/api/scanner/sync-batch`), tra cứu (`/api/scanner/lookup`, `/api/scanner/products/...`) và gán mã vạch (`PUT /api/scanner/products/{id}/barcode`).
 
 ### WebSocket
 | Endpoint | Mô tả |
 |----------|-------|
-| `/ws` (SockJS) | Kết nối WebSocket STOMP |
-| `/topic/inventory-updates` | Thông báo thay đổi tồn kho realtime |
+| `/ws` (SockJS) | Kết nối STOMP, bắt buộc JWT khi CONNECT |
+| `/topic/inventory-updates` | Thay đổi tồn kho realtime |
+| `/topic/terminals/{id}/scans` | Mã quét từ điện thoại đã ghép với quầy |
 
 ---
 
 ## Rủi ro cần lưu ý
-- Tích hợp phần cứng (máy in/máy quét) qua Electron/Node.js có thể phát sinh vấn đề driver/tương thích trên Windows — nên test sớm trên máy thật.
-- Đóng gói & phân phối ứng dụng Electron (`electron-builder`) cho nhiều máy cần cấu hình auto-update hoặc quy trình cài đặt rõ ràng.
-- Độ chính xác mô hình dự báo phụ thuộc nhiều vào lượng dữ liệu lịch sử — với cửa hàng mới ít lịch sử, kết quả dự báo cần được diễn giải thận trọng.
-- Đồng bộ đa chi nhánh qua WebSocket khi mất mạng — cần offline-first (SQLite local) và hàng đợi đồng bộ (giai đoạn mở rộng).
-- Bảo mật API: Spring Security/JWT đã cấu hình đúng, CORS giới hạn origin an toàn, preflight OPTIONS được permit.
+- Tích hợp phần cứng (máy in/máy quét) qua Electron có thể phát sinh vấn đề driver trên Windows, nên test sớm trên máy thật.
+- Đóng gói & phân phối Electron (`electron-builder`) cho nhiều máy cần quy trình cài đặt hoặc auto-update rõ ràng.
+- Độ chính xác dự báo phụ thuộc lượng dữ liệu lịch sử; với cửa hàng mới, kết quả cần diễn giải thận trọng (trang Dự báo hiện độ tin cậy cho từng sản phẩm).
+- Mất mạng giữa chi nhánh và máy chủ: POS chưa có hàng đợi đồng bộ hóa đơn ngoại tuyến (hướng mở rộng).

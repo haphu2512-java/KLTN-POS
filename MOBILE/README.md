@@ -17,7 +17,7 @@
    - Tự động lưu cache danh mục sản phẩm vào bộ nhớ máy (`AsyncStorage`).
    - Khi mất sóng Wi-Fi hoặc kiểm kê trong kho sâu, vẫn tra cứu được giá & tồn kho bình thường.
    - Các mã quét khi offline được lưu an toàn trong **Hàng đợi Offline (Offline Scan Queue)**. Khi có mạng lại, nhấn **Đồng bộ ngay** để đẩy toàn bộ vào hệ thống POS.
-4. **Mock Scanner & Nhập tay (Theo chuẩn SKILL.md)**:
+4. **Mock Scanner & Nhập tay**:
    - Cho phép nhập mã vạch bằng bàn phím ảo.
    - Có sẵn các chip mã vạch mẫu (Mì Hảo Hảo, Coca-Cola, Snack Sriracha, Bánh gạo Poca,...) để test tức thì ngay trên máy tính mà không cần in mã vạch ra giấy.
 5. **Trải nghiệm phần cứng chuyên nghiệp**:
@@ -47,7 +47,7 @@ npm start
 1. Tải ứng dụng **Expo Go** trên App Store (iOS) hoặc Google Play (Android).
 2. Đảm bảo điện thoại và máy tính kết nối **cùng một mạng Wi-Fi**.
 3. Dùng ứng dụng Camera của điện thoại (hoặc tính năng Scan QR trong app Expo Go) quét mã QR hiển thị trên màn hình terminal.
-4. Ở màn hình **Đăng nhập máy quét**, điền IP máy tính (`http://<IP_WIFI_CUA_BAN>:8080`) và **đăng nhập bằng đúng tài khoản đang dùng trên máy POS**. Mã quét chỉ được gửi tới máy POS của tài khoản đó.
+4. Ở màn hình **Đăng nhập máy quét**, điền IP máy tính (`http://<IP_WIFI_CUA_BAN>:8080`) và đăng nhập bằng tài khoản thuộc cùng chi nhánh với quầy. Sau đó ghép với quầy bằng mã QR (xem tính năng 1); mã quét chỉ đi vào giỏ của quầy đã ghép.
 5. Vào biểu tượng **⚙️ Cài đặt** trên app điện thoại:
    - Nhấn **⚡ Kiểm tra kết nối máy chủ** -> Báo `✓ Kết nối thành công`.
    - Nhấn **📥 Tải danh mục sản phẩm về máy (Offline)**.
