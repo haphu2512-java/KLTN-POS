@@ -11,6 +11,7 @@ import { inventoryService } from '../../services/inventoryService';
 import { purchaseService } from '../../services/purchaseService';
 import { websocketService } from '../../services/websocketService';
 import { exportToCsv } from '../../utils/exportCsv';
+import { newRequestId } from '../../utils/requestId';
 import useBranches from '../../hooks/useBranches';
 import './InventoryPage.css';
 
@@ -241,6 +242,7 @@ export default function InventoryPage({
         const payload = {
           supplierId: Number(newStockIn.supplierId) || 1,
           note: newStockIn.note || '',
+          clientRequestId: newStockIn.requestId || newRequestId(),
           items: newStockIn.items.map(it => ({
             productId: it.productId,
             quantity: it.quantity,
@@ -255,9 +257,11 @@ export default function InventoryPage({
         // Server từ chối (ví dụ tài khoản thu ngân không có quyền nhập kho): không cộng kho giả trên giao diện
         if (err.response) {
           alert(`Không thể nhập kho: ${err.response.data?.message || 'Máy chủ từ chối phiếu nhập'}`);
-          return;
+          return false;
         }
-        console.warn('Backend createStockIn failed, saved locally:', err.message);
+        // Mất phản hồi: phiếu có thể đã được lưu. Giữ form để bấm lại với cùng mã, máy chủ sẽ không cộng kho lần hai
+        alert(`Chưa nhận được phản hồi từ máy chủ (${err.message}). Hãy bấm lại "Hoàn tất & Nhập Kho" để thử lại, phiếu sẽ không bị nhập trùng.`);
+        return false;
       }
     }
 
@@ -281,16 +285,18 @@ export default function InventoryPage({
     // 3. Append to history
     setStockInHistory([newStockIn, ...stockInHistory]);
     alert(`Đã hoàn tất nhập kho phiếu: ${newStockIn.id}! Tồn kho đã được cộng tự động.`);
+    return true;
   };
 
   // Điều chuyển từ chi nhánh đang đăng nhập sang chi nhánh khác
-  const handleTransfer = async ({ productId, quantity, toBranchId, note }) => {
+  const handleTransfer = async ({ productId, quantity, toBranchId, note, requestId }) => {
     if (isOnline) {
       try {
-        await inventoryService.transfer({ productId, quantity, toBranchId, note });
+        await inventoryService.transfer({ productId, quantity, toBranchId, note, clientRequestId: requestId });
       } catch (err) {
-        alert(`Không thể điều chuyển: ${err.response?.data?.message || err.message}`);
-        return;
+        const hint = err.response ? '' : ' Bấm xác nhận lại để thử, hàng sẽ không bị chuyển hai lần.';
+        alert(`Không thể điều chuyển: ${err.response?.data?.message || err.message}.${hint}`);
+        return false;
       }
     }
     setProducts((prev) =>
@@ -305,6 +311,7 @@ export default function InventoryPage({
     alert(
       `Đã chuyển thành công ${quantity} sản phẩm sang ${targetBranch?.name}!`
     );
+    return true;
   };
 
   // Quick action: Stock-in single product
@@ -337,7 +344,8 @@ export default function InventoryPage({
           unitCost: product.costPrice
         }
       ],
-      note: 'Nhập nhanh trực tiếp từ bảng tồn kho'
+      note: 'Nhập nhanh trực tiếp từ bảng tồn kho',
+      requestId: newRequestId()
     };
 
     handleSaveStockIn(quickSlip);

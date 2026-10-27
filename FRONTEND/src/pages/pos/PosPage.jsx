@@ -21,15 +21,9 @@ import { saleService } from '../../services/saleService';
 import { websocketService } from '../../services/websocketService';
 import { scannerPairingService } from '../../services/scannerPairingService';
 import { shiftService } from '../../services/shiftService';
+import { newRequestId } from '../../utils/requestId';
 import './PosPage.css';
 
-// Mã chống trùng cho mỗi đơn: bấm thanh toán lại sau khi mất phản hồi sẽ không tạo hóa đơn thứ hai
-function newRequestId() {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-}
 
 function emptyOrder() {
   return {

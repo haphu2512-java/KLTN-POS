@@ -7,12 +7,14 @@ import com.pos.product.Product;
 import com.pos.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +24,7 @@ public class InventoryService {
     private final InventoryRepository inventoryRepository;
     private final ProductRepository productRepository;
     private final BranchRepository branchRepository;
+    private final StockTransferRepository stockTransferRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     public List<Inventory> getInventoryByBranch(Long branchId) {
@@ -75,11 +78,36 @@ public class InventoryService {
             throw new BusinessException("INVALID_TRANSFER", "Chi nhánh xuất và chi nhánh nhận không được trùng nhau");
         }
 
+        String clientRequestId = req.getClientRequestId() != null && !req.getClientRequestId().isBlank()
+                ? req.getClientRequestId().trim() : null;
+        if (clientRequestId != null) {
+            // Gửi lại sau khi mất phản hồi hoặc bấm 2 lần: lần trước đã điều chuyển xong, không trừ/cộng kho nữa
+            StockTransfer existing = stockTransferRepository.findByClientRequestId(clientRequestId).orElse(null);
+            if (existing != null) {
+                if (!Objects.equals(existing.getEmployeeId(), req.getEmployeeId())) {
+                    throw new BusinessException("DUPLICATE_REQUEST",
+                            "Mã yêu cầu đã được dùng cho lần điều chuyển khác", HttpStatus.CONFLICT);
+                }
+                return;
+            }
+        }
+
         // 1. Deduct from source branch
         deductStockAtomic(req.getProductId(), req.getFromBranchId(), req.getQuantity());
 
         // 2. Add to destination branch
         addStockAtomic(req.getProductId(), req.getToBranchId(), req.getQuantity());
+
+        // 3. Lưu phiếu điều chuyển; ràng buộc unique chặn 2 yêu cầu cùng mã tới gần như đồng thời
+        stockTransferRepository.save(StockTransfer.builder()
+                .productId(req.getProductId())
+                .fromBranchId(req.getFromBranchId())
+                .toBranchId(req.getToBranchId())
+                .quantity(req.getQuantity())
+                .employeeId(req.getEmployeeId())
+                .note(req.getNote())
+                .clientRequestId(clientRequestId)
+                .build());
     }
 
     private void notifyInventoryUpdate(Long branchId, Long productId) {

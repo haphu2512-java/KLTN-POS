@@ -17,8 +17,9 @@ export const inventoryService = {
   },
 
   // Chi nhánh xuất là chi nhánh của phiên đăng nhập (máy chủ tự lấy)
-  async transfer({ productId, quantity, toBranchId, note }) {
-    const res = await api.post('/inventory/transfer', { productId, quantity, toBranchId, note });
+  // clientRequestId: gửi lại cùng mã (sau timeout) thì máy chủ không điều chuyển lần hai
+  async transfer({ productId, quantity, toBranchId, note, clientRequestId }) {
+    const res = await api.post('/inventory/transfer', { productId, quantity, toBranchId, note, clientRequestId });
     return res?.data !== undefined ? res.data : res;
   },
 };
