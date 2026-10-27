@@ -19,6 +19,16 @@ export class NotPairedError extends Error {
   }
 }
 
+// Điện thoại không cùng mạng (Wi-Fi) với máy POS, hoặc máy POS chưa kết nối: server không nhận mã.
+// Không đăng xuất, không xếp hàng đợi (đồng bộ sau cũng bị chặn nếu vẫn khác mạng).
+export class NetworkCheckError extends Error {
+  constructor(message = 'Điện thoại không cùng mạng với máy POS. Hãy kết nối Wi-Fi của cửa hàng rồi quét lại.') {
+    super(message);
+    this.name = 'NetworkCheckError';
+  }
+}
+const NETWORK_CHECK_CODES = ['NOT_SAME_NETWORK', 'POS_NOT_CONNECTED'];
+
 // Nội dung QR trên máy POS: "POS-PAIR:123456"
 export const PAIRING_QR_PREFIX = 'POS-PAIR:';
 export const parsePairingQr = (data) => {
@@ -64,6 +74,12 @@ const authFetch = async (path, options = {}, timeoutMs = 3000) => {
   );
   if (response.status === 401) {
     throw new AuthError();
+  }
+  if (response.status === 403 || response.status === 409) {
+    const json = await response.clone().json().catch(() => null);
+    if (NETWORK_CHECK_CODES.includes(json?.code)) {
+      throw new NetworkCheckError(json.message || undefined);
+    }
   }
   if (response.status === 403) {
     throw new AuthError('Tài khoản này không có quyền dùng chức năng quét mã.');
@@ -228,7 +244,7 @@ export const ScannerApi = {
           : `Đã gửi mã ${cleanBarcode} tới ${pairing.terminalName || 'quầy POS'} (chưa có trong kho)`
       };
     } catch (err) {
-      if (err instanceof AuthError || err instanceof NotPairedError) throw err;
+      if (err instanceof AuthError || err instanceof NotPairedError || err instanceof NetworkCheckError) throw err;
       console.log('Không thể kết nối máy chủ, kích hoạt Offline-First:', err.message);
 
       const localProduct = await OfflineStorage.lookupProductOffline(cleanBarcode);

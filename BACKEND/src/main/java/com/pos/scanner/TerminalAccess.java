@@ -26,6 +26,16 @@ public class TerminalAccess {
         return TOPIC_PREFIX + terminalId + TOPIC_SUFFIX;
     }
 
+    /** id quầy trong "/topic/terminals/{id}/scans", null nếu không đúng dạng */
+    public static String terminalIdOf(String destination) {
+        if (destination == null || !destination.startsWith(TOPIC_PREFIX) || !destination.endsWith(TOPIC_SUFFIX)
+                || destination.length() < TOPIC_PREFIX.length() + TOPIC_SUFFIX.length()) {
+            return null;
+        }
+        String terminalId = destination.substring(TOPIC_PREFIX.length(), destination.length() - TOPIC_SUFFIX.length());
+        return terminalId.isEmpty() || terminalId.contains("/") ? null : terminalId;
+    }
+
     public static boolean canUse(User user, PosTerminal terminal) {
         return canUse(user.getRole(), user.getCurrentBranchId(), terminal);
     }
@@ -36,11 +46,8 @@ public class TerminalAccess {
 
     /** POS chỉ được nghe kênh của quầy tồn tại và cùng chi nhánh với phiên đăng nhập */
     public boolean canSubscribe(String username, Long sessionBranchId, String destination) {
-        if (username == null || !destination.startsWith(TOPIC_PREFIX) || !destination.endsWith(TOPIC_SUFFIX)) {
-            return false;
-        }
-        String terminalId = destination.substring(TOPIC_PREFIX.length(), destination.length() - TOPIC_SUFFIX.length());
-        if (terminalId.isEmpty() || terminalId.contains("/")) {
+        String terminalId = terminalIdOf(destination);
+        if (username == null || terminalId == null) {
             return false;
         }
         return userRepository.findByUsername(username)

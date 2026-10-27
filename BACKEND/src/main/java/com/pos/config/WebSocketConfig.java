@@ -1,5 +1,6 @@
 package com.pos.config;
 
+import com.pos.scanner.ScannerNetworkGuard;
 import com.pos.scanner.TerminalAccess;
 import com.pos.security.BranchSession;
 import com.pos.security.SessionAuthenticator;
@@ -16,12 +17,17 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.http.server.ServerHttpRequest;
+import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.server.HandshakeInterceptor;
 
 import java.security.Principal;
 import java.util.Arrays;
+import java.util.Map;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -30,6 +36,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final SessionAuthenticator sessionAuthenticator;
     private final TerminalAccess terminalAccess;
+    private final ScannerNetworkGuard networkGuard;
 
     // Dùng chung danh sách origin với CORS thay vì cho phép mọi origin ("*")
     @Value("${cors.allowed-origins}")
@@ -44,10 +51,32 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns(origins)
+                .addInterceptors(rememberClientIp())
                 .withSockJS();
 
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns(origins);
+                .setAllowedOriginPatterns(origins)
+                .addInterceptors(rememberClientIp());
+    }
+
+    /** Lưu IP của máy POS lúc bắt tay để biết quầy đang ở mạng nào (điện thoại phải cùng mạng mới bắn mã được) */
+    private HandshakeInterceptor rememberClientIp() {
+        return new HandshakeInterceptor() {
+            @Override
+            public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
+                                           WebSocketHandler wsHandler, Map<String, Object> attributes) {
+                String ip = networkGuard.clientIp(request);
+                if (ip != null) {
+                    attributes.put(ScannerNetworkGuard.SESSION_IP_ATTRIBUTE, ip);
+                }
+                return true;
+            }
+
+            @Override
+            public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response,
+                                       WebSocketHandler wsHandler, Exception exception) {
+            }
+        };
     }
 
     @Override
@@ -77,6 +106,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                     checkSendDestination(accessor.getDestination());
                 } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
                     checkSubscribeDestination(accessor.getDestination(), accessor.getUser());
+                    rememberTerminalSubscription(accessor);
+                } else if (StompCommand.UNSUBSCRIBE.equals(accessor.getCommand())) {
+                    networkGuard.removeSubscription(accessor.getSessionId(), accessor.getSubscriptionId());
+                } else if (StompCommand.DISCONNECT.equals(accessor.getCommand())) {
+                    networkGuard.removeSession(accessor.getSessionId());
                 }
                 return message;
             }
@@ -112,6 +146,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         if (destination.startsWith(TerminalAccess.TOPIC_PREFIX)
                 && !terminalAccess.canSubscribe(username, branchId, destination)) {
             throw new MessagingException("Không được nghe mã quét của quầy này");
+        }
+    }
+
+    /** Máy POS vừa nghe kênh quầy (đã qua kiểm tra quyền): ghi lại IP của phiên này cho quầy đó */
+    private void rememberTerminalSubscription(StompHeaderAccessor accessor) {
+        String terminalId = TerminalAccess.terminalIdOf(accessor.getDestination());
+        Map<String, Object> attributes = accessor.getSessionAttributes();
+        if (terminalId != null && attributes != null
+                && attributes.get(ScannerNetworkGuard.SESSION_IP_ATTRIBUTE) instanceof String ip) {
+            networkGuard.recordSubscription(accessor.getSessionId(), accessor.getSubscriptionId(), terminalId, ip);
         }
     }
 

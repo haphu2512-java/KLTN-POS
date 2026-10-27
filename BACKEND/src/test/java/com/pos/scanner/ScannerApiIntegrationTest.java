@@ -15,6 +15,9 @@ import org.springframework.http.MediaType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
+
+import com.jayway.jsonpath.JsonPath;
 
 import java.util.List;
 import java.util.Map;
@@ -196,6 +199,67 @@ class ScannerApiIntegrationTest {
         verify(messagingTemplate, times(2)).convertAndSend(eq(TerminalAccess.topicOf(terminalId)), captor.capture());
         assertThat(captor.getAllValues()).extracting(p -> (Object) ((Map<?, ?>) p).get("type")).containsExactly("PAIRED", "SCAN");
         verify(messagingTemplate, never()).convertAndSendToUser(anyString(), anyString(), any(Object.class));
+    }
+
+    /** Giả lập request tới từ thiết bị có IP này */
+    private static RequestPostProcessor from(String ip) {
+        return request -> {
+            request.setRemoteAddr(ip);
+            return request;
+        };
+    }
+
+    @Test
+    @DisplayName("Điện thoại khác mạng với máy POS: không ghép cặp, không bắn mã, không đồng bộ được (403 NOT_SAME_NETWORK)")
+    void phoneMustBeOnSameNetworkAsPos() throws Exception {
+        String posIp = "192.168.77.10";
+        String terminalId = JsonPath.read(mvc.perform(post("/api/scanner/terminals").with(from(posIp))
+                        .header("Authorization", tokenFor("admin"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Quầy LAN\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(), "$.data.id");
+
+        // Ghép cặp từ 4G (IP công cộng): bị chặn, mã đã dùng không dùng lại được
+        String code = JsonPath.read(mvc.perform(post("/api/scanner/terminals/" + terminalId + "/pairing-code")
+                        .with(from(posIp)).header("Authorization", tokenFor("admin")))
+                .andReturn().getResponse().getContentAsString(), "$.data.code");
+        mvc.perform(post("/api/scanner/pair").with(from("113.161.5.6")).header("Authorization", tokenFor("cashier"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + code + "\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("NOT_SAME_NETWORK"));
+
+        // Cùng Wi-Fi cửa hàng (cùng dải 192.168.77.x): ghép được
+        code = JsonPath.read(mvc.perform(post("/api/scanner/terminals/" + terminalId + "/pairing-code")
+                        .with(from(posIp)).header("Authorization", tokenFor("admin")))
+                .andReturn().getResponse().getContentAsString(), "$.data.code");
+        String pairingId = JsonPath.read(mvc.perform(post("/api/scanner/pair").with(from("192.168.77.23"))
+                        .header("Authorization", tokenFor("cashier"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + code + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(), "$.data.pairingId");
+        verify(messagingTemplate, times(1)).convertAndSend(eq(TerminalAccess.topicOf(terminalId)), any(Object.class));
+
+        String scan = "{\"barcode\":\"123\",\"clientScanId\":\"net-1\",\"pairingId\":\"" + pairingId + "\"}";
+        // Mang điện thoại đã ghép về nhà (mạng khác, kể cả mạng nội bộ khác dải) hoặc dùng 4G: bị chặn
+        for (String elsewhere : List.of("113.161.5.6", "192.168.1.23", "10.0.0.5")) {
+            mvc.perform(post("/api/scanner/broadcast").with(from(elsewhere)).header("Authorization", tokenFor("cashier"))
+                            .contentType(MediaType.APPLICATION_JSON).content(scan))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("NOT_SAME_NETWORK"));
+        }
+        mvc.perform(post("/api/scanner/sync-batch").with(from("113.161.5.6")).header("Authorization", tokenFor("cashier"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pairingId\":\"" + pairingId + "\",\"scans\":[{\"barcode\":\"123\",\"clientScanId\":\"net-2\"}]}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("NOT_SAME_NETWORK"));
+        verify(messagingTemplate, times(1)).convertAndSend(eq(TerminalAccess.topicOf(terminalId)), any(Object.class));
+
+        // Quay lại Wi-Fi cửa hàng: bắn mã bình thường
+        mvc.perform(post("/api/scanner/broadcast").with(from("192.168.77.23")).header("Authorization", tokenFor("cashier"))
+                        .contentType(MediaType.APPLICATION_JSON).content(scan))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.duplicate").doesNotExist());
+        verify(messagingTemplate, times(2)).convertAndSend(eq(TerminalAccess.topicOf(terminalId)), any(Object.class));
     }
 
     @Test
