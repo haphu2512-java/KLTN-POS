@@ -5,7 +5,7 @@
 - **Công nghệ sử dụng:**
   - **Backend:** Java 21 + Spring Boot 3.3.3 (REST API + WebSocket STOMP), Spring Data JPA, Spring Security (JWT HS512), Spring Scheduler
   - **Frontend (Desktop):** Electron 44 + React 19 + Vite 8, giao tiếp backend qua Vite Proxy `/api` + STOMP WebSocket
-  - **Mobile:** React Native + Expo 57, máy quét mã vạch không dây và tra cứu giá/tồn kho (`MOBILE/`)
+  - **Mobile:** React Native + Expo 58, máy quét mã vạch không dây và tra cứu giá/tồn kho (`MOBILE/`)
   - **Database:** MySQL 8.0 (dữ liệu mẫu 1.949 sản phẩm thực tế lấy từ Bách Hóa Xanh, 2 chi nhánh)
   - **Realtime:** Spring WebSocket STOMP, kênh `/topic/inventory-updates` (tồn kho) và `/topic/terminals/{id}/scans` (mã quét từ điện thoại)
   - **Phần cứng:** In hóa đơn nhiệt K80 qua Electron silent print, máy quét mã vạch HID (buffer < 50ms)
