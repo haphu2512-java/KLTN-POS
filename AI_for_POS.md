@@ -85,6 +85,15 @@ $$Q_{order} = \max\left(0, \lceil ROP + (\bar{d} \times T) - Q_{current} \rceil\
 
 2. **Sản phẩm có chu kỳ bán ngắt quãng (Intermittent Demand):**
    - Khi các ngày không có giao dịch xen kẽ, hệ thống tính toán $\sigma_d$ hiệu chỉnh để tránh tính sai lệch phương sai.
+   - Cách hiệu chỉnh: chuỗi bán hàng được điền 0 cho mọi ngày không có giao dịch trong cửa sổ 30 ngày, và $\sigma_d$ là độ lệch chuẩn mẫu tính trên cả các ngày 0 đó (nếu bỏ qua ngày 0, $\sigma_d$ sẽ thấp hơn thực tế và tồn kho an toàn bị thiếu).
+   - Sản phẩm có trên 50% số ngày không bán được gắn cờ `intermittent = true` và ghi chú trong lý do đề xuất để quản lý biết dự báo kém chắc chắn hơn.
+
+3. **Phân loại mức độ khẩn cấp:**
+   - **Khẩn cấp (`HIGH`):** hết hàng, hoặc tồn kho $\le \bar{d} \times L$ (sẽ hết trước khi hàng về).
+   - **Cao (`MEDIUM`):** tồn kho $\le ROP$.
+   - **Bình thường (`LOW`):** còn lại.
+
+4. **Độ tin cậy dự báo:** giữ 7 ngày cuối làm tập kiểm định, mô hình chỉ học từ các ngày trước đó rồi tính MAE/RMSE (mục 6). Sai số tương đối MAE / trung bình bán thực tế $\le 30\%$ là `GOOD`, $\le 60\%$ là `FAIR`, còn lại `LOW`; dưới 14 ngày dữ liệu là `INSUFFICIENT_DATA`.
 
 ---
 
@@ -98,11 +107,14 @@ $$Q_{order} = \max\left(0, \lceil ROP + (\bar{d} \times T) - Q_{current} \rceil\
            │
            ▼
 [Spring Boot: ForecastService.java]
-   ├── getSalesHistory(productId, days=30)
-   ├── calculateExponentialSmoothing(sales, alpha=0.35)
-   ├── calculateSafetyStock(stdDev, leadTime=2)
-   ├── calculateReorderPoint(avgDaily, leadTime=2, ss)
-   └── @Scheduled(cron = "0 0 2 * * ?") runNightlyForecastJob()
+   ├── loadDailySales(branchId, days=30)          (điền 0 cho ngày không bán, bỏ hóa đơn hoàn trả)
+   ├── ForecastCalculator.java                     (toàn bộ công thức mục 3, 4, 6)
+   │     ├── exponentialSmoothing(sales, alpha=0.35) / movingAverage(sales, 7)
+   │     ├── safetyStock(stdDev, leadTime=2, z=1.65)
+   │     ├── reorderPoint(avgDaily, leadTime=2, ss)
+   │     ├── orderQuantity(rop, avgDaily, T, currentStock)
+   │     └── MAE / RMSE trên 7 ngày kiểm định
+   └── @Scheduled(cron = "0 0 2 * * ?") runNightlyForecastJob()  → lưu bảng forecast_result
            │
            ├── REST API: /api/forecast/demand/{id}?days=7
            └── REST API: /api/forecast/recommendations?branchId={id}
@@ -113,6 +125,12 @@ $$Q_{order} = \max\left(0, \lceil ROP + (\bar{d} \times T) - Q_{current} \rceil\
    ├── Thẻ cảnh báo: Khẩn cấp / Cần bổ sung / Ổn định
    └── Nút "Tạo đơn nhập hàng nhanh" (chuyển sang Stock-In chỉ với 1 click)
 ```
+
+### Kiểm chứng bằng Python (`AI_FORECAST/`)
+
+Thư mục `AI_FORECAST/` là bản cài đặt Python của cùng các công thức, dùng để kiểm chứng và lấy số liệu cho báo cáo (thử α, thử dữ liệu CSV, xuất kết quả JSON). Python không chạy trong luồng bán hàng. `python -m pos_forecast.parity` sinh bộ ca `AI_FORECAST/tests/fixtures/parity_cases.json`, và JUnit `ForecastParityTest` kiểm tra `ForecastCalculator.java` cho cùng kết quả trên từng ca, nên hai bản không thể lệch nhau mà CI không báo.
+
+Tham số cấu hình qua biến môi trường: `AI_FORECAST_ALPHA`, `AI_FORECAST_MA_WINDOW`, `AI_SERVICE_LEVEL_Z`, `AI_LEAD_TIME_DAYS`, `AI_HISTORY_DAYS`, `AI_VALIDATION_DAYS`.
 
 ---
 

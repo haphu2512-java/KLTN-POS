@@ -1,7 +1,12 @@
 # AI_FORECAST: Dự báo nhu cầu & đề xuất nhập hàng (Python)
 
-Bản cài đặt Python của module dự báo mô tả trong [`AI_for_POS.md`](../AI_for_POS.md). Chạy độc lập,
-không thay đổi backend Java hay frontend.
+Bản cài đặt Python của module dự báo mô tả trong [`AI_for_POS.md`](../AI_for_POS.md). Theo quyết định
+kiến trúc ở mục 2 của tài liệu, hệ thống thật chạy dự báo nhúng trong Spring Boot (`ForecastCalculator.java`);
+bản Python dùng để kiểm chứng công thức, thử tham số trên dữ liệu CSV/MySQL và xuất số liệu cho báo cáo.
+
+Hai bản được giữ khớp nhau: `python -m pos_forecast.parity` sinh `tests/fixtures/parity_cases.json`, pytest
+kiểm tra file này khớp code Python, còn JUnit `ForecastParityTest` kiểm tra Java ra cùng kết quả trên từng ca.
+Khi đổi công thức ở một bên, phải đổi bên kia và chạy lại lệnh trên.
 
 ## Công thức (theo AI_for_POS.md mục 3)
 
@@ -97,9 +102,3 @@ ngắt quãng (id 4) và một sản phẩm mới chưa bán (id 5).
 Đặt qua biến môi trường (xem `.env.example`): `AI_FORECAST_ALGORITHM`, `AI_FORECAST_ALPHA`,
 `AI_FORECAST_MA_WINDOW`, `AI_SERVICE_LEVEL_Z`, `AI_LEAD_TIME_DAYS`, `AI_REVIEW_PERIOD_DAYS`,
 `AI_HISTORY_DAYS`, `AI_VALIDATION_DAYS`, `AI_INTERMITTENT_ZERO_RATIO`.
-
-## Khác biệt so với backend Java hiện tại
-
-`ForecastService.java` đang dùng 14 ngày lịch sử và `nhu cầu × hệ số an toàn 1.10 − tồn kho`. Bản Python
-theo đúng tài liệu: 30 ngày lịch sử, SS/ROP/Q như bảng trên, L = 2 ngày (file `application.properties`
-đang để `AI_LEAD_TIME_DAYS=3`, có thể đổi bằng biến môi trường cùng tên).

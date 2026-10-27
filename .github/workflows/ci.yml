@@ -55,3 +55,19 @@ jobs:
           cache-dependency-path: MOBILE/package-lock.json
       - run: npm ci
       - run: npx expo export --platform android --output-dir dist
+
+  ai-forecast:
+    name: AI Forecast (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: AI_FORECAST
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: AI_FORECAST/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
