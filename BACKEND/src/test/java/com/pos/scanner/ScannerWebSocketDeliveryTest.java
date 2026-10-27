@@ -65,6 +65,9 @@ class ScannerWebSocketDeliveryTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private ScannerNetworkGuard networkGuard;
+
     private String tokenFor(String username) {
         User user = userRepository.findByUsername(username).orElseThrow();
         return "Bearer " + tokenProvider.generateToken(userDetailsService.loadUserByUsername(username),
@@ -170,5 +173,19 @@ class ScannerWebSocketDeliveryTest {
         assertThat(pos.poll(5, TimeUnit.SECONDS)).isNotNull();
         assertThat(otherBranchSnoop.poll(1, TimeUnit.SECONDS)).isNull();
         assertThat(wildcardSnoop.poll(1, TimeUnit.SECONDS)).isNull();
+    }
+
+    @Test
+    @DisplayName("Máy POS nghe kênh quầy qua WebSocket: server ghi lại IP của máy POS, ngắt kết nối thì xóa")
+    void terminalSubscriptionRecordsPosAddress() throws Exception {
+        String quay = registerTerminal("cashier", "Quầy mạng");
+        StompSession session = connect("cashier");
+        session.subscribe(TerminalAccess.topicOf(quay), new StompSessionHandlerAdapter() {});
+        Thread.sleep(300);
+        assertThat(networkGuard.liveAddresses(quay)).containsExactly("127.0.0.1");
+
+        session.disconnect();
+        Thread.sleep(300);
+        assertThat(networkGuard.liveAddresses(quay)).isEmpty();
     }
 }

@@ -20,7 +20,7 @@ import HistoryScreen from './src/screens/HistoryScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import { colors } from './src/theme';
 import { AppConfig } from './src/api/config';
-import { ScannerApi, AuthError, NotPairedError, parsePairingQr } from './src/api/scannerApi';
+import { ScannerApi, AuthError, NotPairedError, NetworkCheckError, parsePairingQr } from './src/api/scannerApi';
 import { OfflineStorage } from './src/storage/offlineStorage';
 import { triggerScanFeedback } from './src/utils/feedback';
 
@@ -245,6 +245,9 @@ function AppContent() {
           handleAuthError(err);
         } else if (err instanceof NotPairedError) {
           notifyNotPaired(err);
+        } else if (err instanceof NetworkCheckError) {
+          await triggerScanFeedback(false);
+          Alert.alert('Không gửi được tới quầy POS', err.message);
         } else {
           Alert.alert('Lỗi quét mã', err.message);
         }
@@ -291,6 +294,8 @@ function AppContent() {
         handleAuthError(e);
       } else if (e instanceof NotPairedError) {
         notifyNotPaired(e);
+      } else if (e instanceof NetworkCheckError) {
+        Alert.alert('Không gửi được tới quầy POS', e.message);
       } else {
         Alert.alert('Lỗi', e.message);
       }

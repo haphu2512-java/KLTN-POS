@@ -30,6 +30,7 @@ public class TerminalService {
     private final PosTerminalRepository terminalRepository;
     private final ScannerPairingRepository pairingRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final ScannerNetworkGuard networkGuard;
 
     private final SecureRandom random = new SecureRandom();
 
@@ -47,7 +48,9 @@ public class TerminalService {
                 .branchId(user.getCurrentBranchId())
                 .createdBy(user.getUsername())
                 .build();
-        return terminalRepository.save(terminal);
+        terminal = terminalRepository.save(terminal);
+        networkGuard.recordTerminalHttp(terminal.getId());
+        return terminal;
     }
 
     @Transactional(readOnly = true)
@@ -58,6 +61,8 @@ public class TerminalService {
             // Không tiết lộ quầy của chi nhánh khác
             throw new BusinessException("TERMINAL_NOT_FOUND", "Không tìm thấy quầy POS", HttpStatus.NOT_FOUND);
         }
+        // Chỉ máy POS gọi các API theo id quầy (id không in lên QR): ghi lại mạng của máy POS
+        networkGuard.recordTerminalHttp(terminal.getId());
         return terminal;
     }
 
@@ -102,6 +107,8 @@ public class TerminalService {
             throw new BusinessException("TERMINAL_OTHER_BRANCH",
                     "Quầy POS này thuộc chi nhánh khác với tài khoản của bạn", HttpStatus.FORBIDDEN);
         }
+        // Ghép cặp cũng phải đứng cùng mạng với máy POS (mã đã bị dùng: lỗi thì tạo mã mới)
+        networkGuard.requireSameNetwork(terminal);
 
         ScannerPairing pairing = pairingRepository.save(ScannerPairing.builder()
                 .id(UUID.randomUUID().toString())
@@ -120,6 +127,7 @@ public class TerminalService {
     /**
      * Quầy mà điện thoại này đang ghép cặp. Ghép cặp gắn với tài khoản đã quét QR:
      * đăng nhập tài khoản khác trên điện thoại thì phải ghép lại.
+     * Điện thoại phải đang ở cùng mạng với máy POS của quầy (xem {@link ScannerNetworkGuard}).
      */
     @Transactional
     public PosTerminal resolvePairing(String pairingId, User user) {
@@ -131,6 +139,7 @@ public class TerminalService {
             throw new BusinessException("NOT_PAIRED",
                     "Điện thoại chưa ghép cặp với quầy POS nào. Hãy quét mã QR trên máy POS.", HttpStatus.CONFLICT);
         }
+        networkGuard.requireSameNetwork(pairing.getTerminal());
         pairing.setLastUsedAt(LocalDateTime.now());
         pairingRepository.save(pairing);
         return pairing.getTerminal();
