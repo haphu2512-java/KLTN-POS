@@ -15,19 +15,18 @@ Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
 ```bash
 npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
 npx expo start              # start the dev server
-npx expo lint               # lint
-npx tsc --noEmit            # typecheck
+npx expo export --platform android --output-dir dist   # bundle check (CI runs this)
 npx expo-doctor             # diagnose dependency and config issues
 npx expo install --fix      # fix incompatible package versions
 ```
 
-Run lint and typecheck before declaring any task done.
+The project is plain JavaScript (no TypeScript, no ESLint config). Run the bundle check above before declaring any task done.
 
-## Navigation & Routing
+## Project layout & navigation
 
-- Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
-- Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
-- Docs: https://docs.expo.dev/router/introduction.md
+- No Expo Router. `App.js` holds login state and switches between screens with the custom bottom bar in `src/components/TabBar.jsx`.
+- Screens live in `src/screens/` (Scan, Lookup, History, Settings); shared UI in `src/components/`; REST calls in `src/api/scannerApi.js`; offline cache and scan queue in `src/storage/offlineStorage.js`.
+- Backend contract (pairing, broadcast, lookup, sync-batch) is documented in `MOBILE/README.md`.
 
 ## Building with EAS
 
