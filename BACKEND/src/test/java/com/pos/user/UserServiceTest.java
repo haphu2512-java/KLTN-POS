@@ -74,6 +74,24 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("Tạo tài khoản không cần họ tên: tên hiển thị lấy theo tên đăng nhập")
+    void testCreateUserWithoutFullName() {
+        CreateUserRequest req = CreateUserRequest.builder()
+                .username("quay1")
+                .password("plain123")
+                .role(Role.CASHIER)
+                .branchIds(Set.of(1L))
+                .build();
+
+        when(userRepository.existsByUsername("quay1")).thenReturn(false);
+        when(branchRepository.existsById(anyLong())).thenReturn(true);
+        when(passwordEncoder.encode("plain123")).thenReturn("hashed123");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertEquals("quay1", userService.createUser(req).getFullName());
+    }
+
+    @Test
     @DisplayName("Ném BusinessException khi username đã tồn tại")
     void testCreateUserDuplicateUsername() {
         CreateUserRequest req = CreateUserRequest.builder()

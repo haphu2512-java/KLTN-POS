@@ -24,7 +24,8 @@ public class CreateUserRequest {
     @Size(min = 6, max = 100, message = "Mật khẩu phải từ 6 ký tự trở lên")
     private String password;
 
-    @NotBlank(message = "Họ tên không được để trống")
+    /** Tên hiển thị (không bắt buộc, tài khoản chỉ để phân quyền); để trống thì dùng tên đăng nhập */
+    @Size(max = 100, message = "Tên hiển thị tối đa 100 ký tự")
     private String fullName;
 
     @NotNull(message = "Vai trò không được để trống")
