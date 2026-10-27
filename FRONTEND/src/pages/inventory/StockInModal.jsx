@@ -9,13 +9,14 @@ export default function StockInModal({
   suppliers = [],
   branchId,
   branchName,
-  onSaveStockIn
+  onSaveStockIn,
+  initialItems
 }) {
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id || 1);
   const [note, setNote] = useState('');
   
-  // Stock-in line items
-  const [items, setItems] = useState([
+  // Stock-in line items (điền sẵn khi mở từ đề xuất nhập hàng của trang Dự báo)
+  const [items, setItems] = useState(() => initialItems?.length ? initialItems : [
     {
       productId: products[0]?.id || 1,
       productName: products[0]?.name || '',
