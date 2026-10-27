@@ -146,6 +146,53 @@ class ScannerApiIntegrationTest {
         verifyNoInteractions(messagingTemplate);
     }
 
+    /** Điện thoại gửi mã từ QR mới của quầy, kèm deviceId (null: app cũ); trả pairingId */
+    private String pairDevice(String terminalId, String phoneUser, String deviceId) throws Exception {
+        String code = JsonPath.read(mvc.perform(post("/api/scanner/terminals/" + terminalId + "/pairing-code")
+                        .header("Authorization", tokenFor("admin")))
+                .andReturn().getResponse().getContentAsString(), "$.data.code");
+        String body = deviceId == null ? "{\"code\":\"" + code + "\"}"
+                : "{\"code\":\"" + code + "\",\"deviceId\":\"" + deviceId + "\"}";
+        return JsonPath.read(mvc.perform(post("/api/scanner/pair").header("Authorization", tokenFor(phoneUser))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(), "$.data.pairingId");
+    }
+
+    private int pairingCount(String terminalId) throws Exception {
+        List<?> list = JsonPath.read(mvc.perform(get("/api/scanner/terminals/" + terminalId + "/pairings")
+                        .header("Authorization", tokenFor("admin")))
+                .andReturn().getResponse().getContentAsString(), "$.data");
+        return list.size();
+    }
+
+    @Test
+    @DisplayName("Một điện thoại ghép lại nhiều lần chỉ giữ một ghép cặp; ghép cặp cũ hết hiệu lực")
+    void repairingSameDeviceReplacesOldPairing() throws Exception {
+        String terminalA = registerTerminal("admin");
+        String terminalB = registerTerminal("admin");
+
+        String first = pairDevice(terminalA, "cashier", "phone-1");
+        String second = pairDevice(terminalA, "cashier", "phone-1");
+        pairDevice(terminalA, "cashier", "phone-2");
+        assertThat(pairingCount(terminalA)).isEqualTo(2);
+        mvc.perform(get("/api/scanner/pairings/" + first).header("Authorization", tokenFor("cashier")))
+                .andExpect(status().isNotFound());
+
+        // Cùng điện thoại chuyển sang quầy khác: quầy cũ mất dòng của nó
+        pairDevice(terminalB, "cashier", "phone-1");
+        assertThat(pairingCount(terminalA)).isEqualTo(1);
+        assertThat(pairingCount(terminalB)).isEqualTo(1);
+        mvc.perform(get("/api/scanner/pairings/" + second).header("Authorization", tokenFor("cashier")))
+                .andExpect(status().isNotFound());
+
+        // App cũ không gửi deviceId: thay theo tài khoản + quầy
+        String terminalC = registerTerminal("admin");
+        pairDevice(terminalC, "cashier", null);
+        pairDevice(terminalC, "cashier", null);
+        assertThat(pairingCount(terminalC)).isEqualTo(1);
+    }
+
     @Test
     @DisplayName("Mã ghép cặp chỉ dùng một lần; ghép cặp gắn với tài khoản đã quét QR")
     void pairingCodeSingleUseAndBoundToAccount() throws Exception {

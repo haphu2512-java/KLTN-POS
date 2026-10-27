@@ -9,4 +9,10 @@ import java.util.List;
 public interface ScannerPairingRepository extends JpaRepository<ScannerPairing, String> {
 
     List<ScannerPairing> findByTerminalIdOrderByCreatedAtDesc(String terminalId);
+
+    List<ScannerPairing> findByDeviceId(String deviceId);
+
+    List<ScannerPairing> findByTerminalIdAndUsernameAndDeviceIdIsNull(String terminalId, String username);
+
+    List<ScannerPairing> findByDeviceIdIsNullOrderByCreatedAtDesc();
 }

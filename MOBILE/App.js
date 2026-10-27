@@ -211,7 +211,19 @@ function AppContent() {
       if (pairCode) {
         if (pairCode !== lastPairCode.current) {
           lastPairCode.current = pairCode;
-          await handlePairCode(pairCode);
+          if (pairing) {
+            // Đang ghép rồi: camera lướt qua QR trên máy POS thì không tự ghép lại, hỏi trước
+            Alert.alert(
+              'Ghép lại quầy POS?',
+              `Điện thoại đang ghép với ${pairing.terminalName}. Ghép lại sẽ thay ghép cặp hiện tại.`,
+              [
+                { text: 'Không', style: 'cancel' },
+                { text: 'Ghép lại', onPress: () => handlePairCode(pairCode) }
+              ]
+            );
+          } else {
+            await handlePairCode(pairCode);
+          }
         }
         return;
       }
@@ -255,7 +267,7 @@ function AppContent() {
         setIsProcessing(false);
       }
     },
-    [scanMode, handleAuthError, handlePairCode, notifyNotPaired]
+    [scanMode, pairing, handleAuthError, handlePairCode, notifyNotPaired]
   );
 
   // Tra giá một mã (từ Lịch sử, Tra cứu): không gửi gì tới POS

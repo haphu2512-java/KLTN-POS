@@ -153,6 +153,7 @@ CREATE TABLE IF NOT EXISTS scanner_pairing (
     id VARCHAR(36) PRIMARY KEY,
     terminal_id VARCHAR(36) NOT NULL,
     username VARCHAR(50) NOT NULL,
+    device_id VARCHAR(64),
     device_name VARCHAR(100),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_used_at DATETIME,

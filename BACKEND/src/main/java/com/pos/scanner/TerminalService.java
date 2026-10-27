@@ -4,6 +4,8 @@ import com.pos.common.BusinessException;
 import com.pos.user.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -92,9 +94,13 @@ public class TerminalService {
         return result;
     }
 
-    /** Điện thoại gửi mã đọc từ QR; mã chỉ dùng được một lần */
+    /**
+     * Điện thoại gửi mã đọc từ QR; mã chỉ dùng được một lần.
+     * Ghép lại thì thay ghép cặp cũ của điện thoại đó (theo deviceId; app cũ không gửi deviceId thì
+     * theo tài khoản + quầy), để một điện thoại không hiện nhiều dòng và mã ghép cũ hết hiệu lực.
+     */
     @Transactional
-    public ScannerPairing pair(String code, String deviceName, User user) {
+    public ScannerPairing pair(String code, String deviceName, String deviceId, User user) {
         String clean = code == null ? "" : code.trim();
         PendingCode pending = pendingCodes.remove(clean);
         if (pending == null || pending.expiresAt().isBefore(Instant.now())) {
@@ -110,10 +116,17 @@ public class TerminalService {
         // Ghép cặp cũng phải đứng cùng mạng với máy POS (mã đã bị dùng: lỗi thì tạo mã mới)
         networkGuard.requireSameNetwork(terminal);
 
+        String cleanDeviceId = deviceId == null || deviceId.isBlank() ? null : deviceId.trim();
+        List<ScannerPairing> previous = cleanDeviceId != null
+                ? pairingRepository.findByDeviceId(cleanDeviceId)
+                : pairingRepository.findByTerminalIdAndUsernameAndDeviceIdIsNull(terminal.getId(), user.getUsername());
+        previous.forEach(this::delete);
+
         ScannerPairing pairing = pairingRepository.save(ScannerPairing.builder()
                 .id(UUID.randomUUID().toString())
                 .terminal(terminal)
                 .username(user.getUsername())
+                .deviceId(cleanDeviceId)
                 .deviceName(deviceName == null || deviceName.isBlank() ? "Điện thoại quét mã" : deviceName.trim())
                 .build());
 
@@ -187,6 +200,23 @@ public class TerminalService {
         dto.put("createdAt", Objects.toString(p.getCreatedAt(), null));
         dto.put("lastUsedAt", Objects.toString(p.getLastUsedAt(), null));
         return dto;
+    }
+
+    /**
+     * Dọn ghép cặp trùng từ trước khi có deviceId: mỗi tài khoản trên một quầy chỉ giữ bản mới nhất.
+     * Chạy lúc khởi động; dữ liệu đã sạch thì không xóa gì.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void removeLegacyDuplicatePairings() {
+        Set<String> seen = new HashSet<>();
+        List<ScannerPairing> duplicates = pairingRepository.findByDeviceIdIsNullOrderByCreatedAtDesc().stream()
+                .filter(p -> !seen.add(p.getTerminal().getId() + "|" + p.getUsername()))
+                .toList();
+        if (!duplicates.isEmpty()) {
+            pairingRepository.deleteAll(duplicates);
+            log.info("Đã xóa {} ghép cặp điện thoại trùng", duplicates.size());
+        }
     }
 
     private void delete(ScannerPairing pairing) {

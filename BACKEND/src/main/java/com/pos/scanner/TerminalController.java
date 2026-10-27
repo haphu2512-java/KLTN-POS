@@ -29,7 +29,8 @@ public class TerminalController {
     }
 
     public record PairRequest(@NotBlank(message = "Thiếu mã ghép cặp") @Size(max = 20) String code,
-                              @Size(max = 100) String deviceName) {
+                              @Size(max = 100) String deviceName,
+                              @Size(max = 64) String deviceId) {
     }
 
     // ===== Phía máy POS =====
@@ -86,7 +87,7 @@ public class TerminalController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
     @Operation(summary = "Điện thoại gửi mã đọc từ QR để ghép cặp với quầy")
     public ResponseEntity<ApiResponse<Map<String, Object>>> pair(@Valid @RequestBody PairRequest req) {
-        ScannerPairing p = terminalService.pair(req.code(), req.deviceName(), currentUserService.getCurrentUser());
+        ScannerPairing p = terminalService.pair(req.code(), req.deviceName(), req.deviceId(), currentUserService.getCurrentUser());
         return ResponseEntity.ok(ApiResponse.ok("Đã ghép cặp với " + p.getTerminal().getName(), TerminalService.toDto(p)));
     }
 
