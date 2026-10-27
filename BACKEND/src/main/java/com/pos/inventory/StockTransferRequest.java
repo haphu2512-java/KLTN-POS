@@ -2,6 +2,7 @@ package com.pos.inventory;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
@@ -21,4 +22,11 @@ public class StockTransferRequest {
     private Integer quantity;
 
     private String note;
+
+    /** Không nhận từ client: server gán theo tài khoản đang đăng nhập */
+    private Long employeeId;
+
+    /** Mã chống trùng do màn hình điều chuyển tạo cho mỗi lần gửi (UUID); tùy chọn */
+    @Size(max = 64, message = "Mã yêu cầu tối đa 64 ký tự")
+    private String clientRequestId;
 }

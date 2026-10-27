@@ -42,6 +42,10 @@ public class StockIn {
     @Column(length = 255)
     private String note;
 
+    /** Mã do màn hình nhập kho tạo cho mỗi phiếu; gửi lại cùng mã (sau khi timeout) sẽ không cộng kho lần nữa */
+    @Column(name = "client_request_id", length = 64, unique = true)
+    private String clientRequestId;
+
     @Builder.Default
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();

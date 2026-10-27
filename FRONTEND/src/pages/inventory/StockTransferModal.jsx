@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Modal, Button, Input } from '../../components/common';
+import { newRequestId } from '../../utils/requestId';
 
 export default function StockTransferModal({
   isOpen,
@@ -19,11 +20,17 @@ export default function StockTransferModal({
   const [productId, setProductId] = useState(products[0]?.id || 1);
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState('');
+  // Giữ nguyên mã khi bấm lại sau lỗi mạng; chỉ đổi mã sau khi điều chuyển thành công
+  const [requestId, setRequestId] = useState(newRequestId);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const selectedProduct = products.find((p) => p.id === Number(productId));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    // Chặn bấm 2 lần liên tiếp trước khi React kịp vẽ lại nút
+    if (savingRef.current) return;
     if (!toBranchId || fromBranchId === Number(toBranchId)) {
       alert('Chọn chi nhánh nhận khác chi nhánh đang đăng nhập!');
       return;
@@ -34,15 +41,26 @@ export default function StockTransferModal({
       return;
     }
 
-    onTransfer({
-      fromBranchId: Number(fromBranchId),
-      toBranchId: Number(toBranchId),
-      productId: Number(productId),
-      quantity: Number(quantity),
-      note
-    });
-
-    onClose();
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const ok = await onTransfer({
+        fromBranchId: Number(fromBranchId),
+        toBranchId: Number(toBranchId),
+        productId: Number(productId),
+        quantity: Number(quantity),
+        note,
+        requestId
+      });
+      // Lỗi thì giữ form mở để bấm lại với cùng mã
+      if (ok !== false) {
+        setRequestId(newRequestId());
+        onClose();
+      }
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   };
 
   return (
@@ -56,8 +74,8 @@ export default function StockTransferModal({
           <Button variant="secondary" onClick={onClose}>
             Hủy (Esc)
           </Button>
-          <Button variant="primary" onClick={handleSubmit}>
-            Xác nhận điều chuyển
+          <Button variant="primary" onClick={handleSubmit} disabled={saving}>
+            {saving ? 'Đang chuyển...' : 'Xác nhận điều chuyển'}
           </Button>
         </>
       }
