@@ -103,7 +103,7 @@ $$Q_{order} = \max\left(0, \lceil ROP + (\bar{d} \times T) - Q_{current} \rceil\
 [Giao dịch POS / Nhập kho]
            │
            ▼
-[MySQL: invoice_detail / stock_in]
+[MySQL: invoice + invoice_detail (doanh số), inventory (tồn kho)]
            │
            ▼
 [Spring Boot: ForecastService.java]
@@ -116,14 +116,15 @@ $$Q_{order} = \max\left(0, \lceil ROP + (\bar{d} \times T) - Q_{current} \rceil\
    │     └── MAE / RMSE trên 7 ngày kiểm định
    └── @Scheduled(cron = "0 0 2 * * ?") runNightlyForecastJob()  → lưu bảng forecast_result
            │
-           ├── REST API: /api/forecast/demand/{id}?days=7
+           ├── REST API: /api/forecast/demand?branchId={id}&days=7      (mọi sản phẩm)
+           ├── REST API: /api/forecast/demand/{id}?days=7              (1 sản phẩm, kèm lịch sử)
            └── REST API: /api/forecast/recommendations?branchId={id}
            │
            ▼
 [Frontend: ForecastPage.jsx]
    ├── Biểu đồ trực quan SalesTrendChart.jsx (SVG tương tác)
-   ├── Thẻ cảnh báo: Khẩn cấp / Cần bổ sung / Ổn định
-   └── Nút "Tạo đơn nhập hàng nhanh" (chuyển sang Stock-In chỉ với 1 click)
+   ├── Bảng đề xuất: Khẩn cấp / Cao / Bình thường, kèm ROP, tồn kho an toàn, lý do
+   └── Nút "Lên phiếu nhập" / "Tạo phiếu nhập tổng hợp": mở phiếu nhập điền sẵn ở trang Kho, quản lý kiểm tra rồi mới lưu
 ```
 
 ### Kiểm chứng bằng Python (`AI_FORECAST/`)

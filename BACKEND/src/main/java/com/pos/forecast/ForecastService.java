@@ -79,14 +79,14 @@ public class ForecastService {
     }
 
     /**
-     * Moving Average forecasting algorithm (Bước 7.1 trong StepByStep_Implementation.md)
+     * Moving Average forecasting algorithm (AI_for_POS.md mục 3)
      */
     public double predictNextDemandMovingAverage(List<Double> sales, int window) {
         return ForecastCalculator.round(ForecastCalculator.movingAverage(sales, window), 1);
     }
 
     /**
-     * Exponential Smoothing forecasting algorithm (Bước 7.1 trong StepByStep_Implementation.md)
+     * Exponential Smoothing forecasting algorithm (AI_for_POS.md mục 3)
      */
     public double predictNextDemandExponentialSmoothing(List<Double> sales, double alpha) {
         return ForecastCalculator.round(ForecastCalculator.exponentialSmoothing(sales, alpha, maWindow), 1);

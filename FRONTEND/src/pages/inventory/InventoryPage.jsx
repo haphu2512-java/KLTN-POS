@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, Input, Table, Badge, BarcodeView } from '../../components/common';
 import StockInModal from './StockInModal';
 import StockTransferModal from './StockTransferModal';
@@ -125,6 +126,40 @@ export default function InventoryPage({
 
   // Modals state
   const [isStockInOpen, setIsStockInOpen] = useState(false);
+  const [stockInModalKey, setStockInModalKey] = useState(0);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Phiếu nhập điền sẵn từ trang Dự báo: mở modal để người dùng kiểm tra, chỉnh rồi mới lưu
+  const draftItems = useMemo(() => {
+    const draft = location.state?.stockInDraft;
+    if (!Array.isArray(draft) || products.length === 0) return [];
+    return draft
+      .map(({ productId, quantity }) => {
+        const p = products.find((prod) => prod.id === Number(productId));
+        return p && {
+          productId: p.id,
+          productName: p.name,
+          barcode: p.barcode,
+          unit: p.unit,
+          quantity: Math.max(1, Number(quantity) || 1),
+          unitCost: p.costPrice || 0
+        };
+      })
+      .filter(Boolean);
+  }, [location.state, products]);
+  const showDraft = draftItems.length > 0;
+
+  const closeStockIn = () => {
+    setIsStockInOpen(false);
+    // Bỏ phiếu điền sẵn khỏi lịch sử điều hướng để không mở lại khi quay về trang
+    if (location.state?.stockInDraft) navigate('/inventory', { replace: true, state: null });
+  };
+
+  const openEmptyStockIn = () => {
+    setStockInModalKey((k) => k + 1);
+    setIsStockInOpen(true);
+  };
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [selectedSlip, setSelectedSlip] = useState(null);
 
@@ -567,7 +602,7 @@ export default function InventoryPage({
         <Button
           variant="primary"
           size="md"
-          onClick={() => setIsStockInOpen(true)}
+          onClick={openEmptyStockIn}
           disabled={!viewingSessionBranch}
           title={viewingSessionBranch ? 'Tạo phiếu nhập hàng mới từ nhà cung cấp' : otherBranchHint}
         >
@@ -767,8 +802,10 @@ export default function InventoryPage({
 
       {/* Modals */}
       <StockInModal
-        isOpen={isStockInOpen}
-        onClose={() => setIsStockInOpen(false)}
+        key={showDraft ? `draft-${location.key}` : `empty-${stockInModalKey}`}
+        initialItems={showDraft ? draftItems : null}
+        isOpen={isStockInOpen || showDraft}
+        onClose={closeStockIn}
         products={products}
         suppliers={suppliers}
         branchId={branchId}

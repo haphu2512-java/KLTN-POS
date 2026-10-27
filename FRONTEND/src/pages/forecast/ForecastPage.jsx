@@ -15,7 +15,7 @@ import './ForecastPage.css';
 export default function ForecastPage({
   branchId = 1,
   isOnline = true,
-  onQuickStockIn
+  onCreateStockInDraft
 }) {
   const [products, setProducts] = useState([]);
   const [algorithm, setAlgorithm] = useState('EXP_SMOOTHING'); // 'EXP_SMOOTHING' | 'MOVING_AVG'
@@ -194,7 +194,8 @@ export default function ForecastPage({
       }));
     }
     return products.map((prod) => {
-      const restockInfo = calculateReplenishment(prod.stock || 0, 0, forecastDays);
+      // Ngoại tuyến: không có lịch sử bán nên không đề xuất nhập, chỉ cảnh báo hàng đã hết
+      const restockInfo = calculateReplenishment(prod.stock || 0, [], forecastDays, algorithm);
       return {
         id: prod.id,
         name: prod.name,
@@ -202,23 +203,35 @@ export default function ForecastPage({
         unit: prod.unit,
         currentStock: prod.stock || 0,
         costPrice: prod.costPrice || 0,
-        dailyRate: 0,
+        dailyRate: restockInfo.dailyRate,
         totalDemand: restockInfo.totalDemand,
         suggestedQty: restockInfo.suggestedQty,
         urgency: restockInfo.urgency,
+        safetyStock: restockInfo.safetyStock,
+        reorderPoint: restockInfo.reorderPoint,
         supplierName: 'Nhà cung cấp đối tác'
       };
     });
-  }, [backendForecasts, products, forecastDays]);
+  }, [backendForecasts, products, forecastDays, algorithm]);
 
-  // Action: Trigger restock
-  const handleRestockClick = (item) => {
-    const qty = item.suggestedQty > 0 ? item.suggestedQty : 10;
-    if (onQuickStockIn) {
-      onQuickStockIn(item, qty);
-    } else {
-      alert(`Đã khởi tạo đề xuất nhập kho: +${qty} ${item.unit} "${item.name}"!`);
+  // Mở phiếu nhập điền sẵn ở trang Kho. Dự báo chỉ đề xuất, quản lý xem lại và quyết định lưu phiếu.
+  const openStockInDraft = (rows) => {
+    if (!onCreateStockInDraft) {
+      alert('Không mở được phiếu nhập từ trang này.');
+      return;
     }
+    onCreateStockInDraft(rows.map((r) => ({ productId: r.id, quantity: r.suggestedQty > 0 ? r.suggestedQty : 1 })));
+  };
+
+  const handleRestockClick = (item) => openStockInDraft([item]);
+
+  const restockRows = replenishmentList.filter((r) => r.suggestedQty > 0);
+  const handleBulkRestockClick = () => {
+    if (restockRows.length === 0) {
+      alert('Hiện chưa có mặt hàng nào cần nhập thêm.');
+      return;
+    }
+    openStockInDraft(restockRows);
   };
 
   // Restock Table Columns
@@ -482,14 +495,10 @@ export default function ForecastPage({
             <Button
               variant="success"
               size="sm"
-              onClick={() => {
-                const totalUrgent = replenishmentList
-                  .filter((r) => r.suggestedQty > 0)
-                  .reduce((sum, r) => sum + r.suggestedQty * r.costPrice, 0);
-                alert(`Đã tổng hợp phiếu nhập đề xuất cho ${replenishmentList.filter((r) => r.suggestedQty > 0).length} mặt hàng! Tổng vốn ước tính: ${formatCurrency(totalUrgent)}.`);
-              }}
+              onClick={handleBulkRestockClick}
+              title={`Tổng vốn ước tính: ${formatCurrency(restockRows.reduce((sum, r) => sum + r.suggestedQty * (r.costPrice || 0), 0))}`}
             >
-              + Tạo phiếu nhập tổng hợp tự động
+              + Tạo phiếu nhập tổng hợp ({restockRows.length} mặt hàng)
             </Button>
           </div>
 
