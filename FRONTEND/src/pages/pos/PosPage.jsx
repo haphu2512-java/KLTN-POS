@@ -7,6 +7,7 @@ import CustomerModal from './CustomerModal';
 import VietQRModal from './VietQRModal';
 import ScannerPairingModal from './ScannerPairingModal';
 import ShiftModal from './ShiftModal';
+import CashMovementModal from './CashMovementModal';
 import { Modal, Button } from '../../components/common';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { useHotkeys } from '../../hooks/useHotkeys';
@@ -133,6 +134,7 @@ export default function PosPage({
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isPairingOpen, setIsPairingOpen] = useState(false);
   const [isShiftOpen, setIsShiftOpen] = useState(false);
+  const [isCashOpen, setIsCashOpen] = useState(false);
   // Ca đang trực của tài khoản: { session, shiftRequired, suggested..., previousShift }
   const [shiftInfo, setShiftInfo] = useState(null);
   // Lý do mở hộp ca: 'sale' khi thu ngân bán hàng lúc chưa mở ca, null khi tự bấm nút Mở ca / Đóng ca
@@ -292,7 +294,7 @@ export default function PosPage({
 
   // Hook Barcode scanner
   useBarcodeScanner(handleBarcodeScanned, {
-    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !isPairingOpen && !isShiftOpen && !remoteBatch
+    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !isPairingOpen && !isShiftOpen && !isCashOpen && !remoteBatch
   });
 
   // Listen to simulated scan events (e.g. from BarcodePrintModal or mock tester)
@@ -659,9 +661,14 @@ export default function PosPage({
         branchName={branchLabel}
         cashierName={currentUser?.fullName || currentUser?.username || 'Thu ngân'}
         role={currentUser?.role || 'CASHIER'}
-        shiftName={shiftInfo?.session ? shiftInfo.session.workShiftName : 'Chưa mở ca'}
+        shiftName={
+          shiftInfo?.session
+            ? `${shiftInfo.session.workShiftName} · ${shiftInfo.session.employeeName}`
+            : 'Chưa mở ca'
+        }
         shiftOpen={!!shiftInfo?.session}
         onOpenShift={isOnline && userId ? openShiftModal : undefined}
+        onOpenCashMovement={isOnline && userId ? () => loadShift().then(() => setIsCashOpen(true)) : undefined}
         isOnline={isOnline}
         isWsConnected={isWsConnected}
         terminalName={terminal?.name}
@@ -760,6 +767,17 @@ export default function PosPage({
           onClose={() => setIsShiftOpen(false)}
           current={shiftInfo}
           reason={shiftPrompt}
+          onChanged={loadShift}
+          role={currentUser?.role}
+        />
+      )}
+
+      {isCashOpen && shiftInfo?.session && (
+        <CashMovementModal
+          isOpen
+          onClose={() => setIsCashOpen(false)}
+          session={shiftInfo.session}
+          drawerLimit={shiftInfo.drawerLimit}
           onChanged={loadShift}
         />
       )}

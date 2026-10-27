@@ -5,6 +5,9 @@ import com.pos.user.Role;
 import com.pos.user.User;
 import com.pos.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
+import com.pos.shift.ShiftAssignmentRepository;
+import com.pos.staff.StaffMemberRepository;
+import com.pos.support.ShiftTestData;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +36,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class ApiSecurityIntegrationTest {
+
+    @Autowired
+    private StaffMemberRepository staffRepository;
+
+    @Autowired
+    private ShiftAssignmentRepository assignmentRepository;
 
     @Autowired
     private MockMvc mvc;
@@ -91,9 +100,10 @@ class ApiSecurityIntegrationTest {
     @Test
     @DisplayName("Thu ngân bán sai giá niêm yết bị từ chối; đúng giá thì thành công và ghi đúng nhân viên")
     void cashierSaleUsesListPrice() throws Exception {
-        // Thu ngân phải mở ca trước khi bán (409 nếu ca đã mở từ test khác)
+        // Chi nhánh phải có ca mở trước khi thu ngân bán (409 nếu ca đã mở từ test khác)
+        ShiftTestData.assignNewStaff(staffRepository, assignmentRepository, 1L, 1, "NV bán hàng");
         mvc.perform(post("/api/shifts/open").header("Authorization", cashierToken)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"workShiftId\":1,\"openingCash\":0}"));
+                .contentType(MediaType.APPLICATION_JSON).content("{\"workShiftId\":1,\"openingCash\":0,\"handoverReason\":\"test\"}"));
 
         String tampered = "{\"branchId\":1,\"paymentMethod\":\"CARD\",\"items\":[{\"productId\":1,\"quantity\":1,\"unitPrice\":1}]}";
         mvc.perform(post("/api/invoices").header("Authorization", cashierToken)

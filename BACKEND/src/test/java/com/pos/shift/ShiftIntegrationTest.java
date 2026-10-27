@@ -1,5 +1,7 @@
 package com.pos.shift;
 
+import com.pos.staff.StaffMemberRepository;
+import com.pos.support.ShiftTestData;
 import com.pos.support.TestAuth;
 import com.pos.security.CustomUserDetailsService;
 import com.pos.security.JwtTokenProvider;
@@ -21,8 +23,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Luồng ca làm việc trên H2 riêng: chưa mở ca thì không bán được, mở ca → bán → đóng ca
- * tính đúng tiền mặt dự kiến và chênh lệch, ca sau nhận gợi ý bàn giao.
+ * Luồng ca làm việc trên H2 riêng: chưa mở ca thì không bán được, mở ca cho nhân viên được xếp → bán →
+ * đóng ca tính đúng tiền mặt dự kiến và chênh lệch, ca sau nhận gợi ý bàn giao.
  */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:shiftdb;MODE=MySQL;DB_CLOSE_DELAY=-1",
@@ -52,6 +54,12 @@ class ShiftIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private StaffMemberRepository staffRepository;
+
+    @Autowired
+    private ShiftAssignmentRepository assignmentRepository;
 
     private String tokenFor(String username) {
         User user = userRepository.findByUsername(username).orElseThrow();
@@ -86,12 +94,15 @@ class ShiftIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SHIFT_NOT_OPEN"));
 
+        ShiftTestData.assignNewStaff(staffRepository, assignmentRepository, 1L, 2, "Nguyễn Văn Trực");
         mvc.perform(post("/api/shifts/open").header("Authorization", cashier)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"workShiftId\":2,\"openingCash\":500000,\"note\":\"Nhận két từ ca 1\"}"))
+                        .content("{\"workShiftId\":2,\"openingCash\":500000,\"note\":\"Nhận két từ ca 1\",\"handoverReason\":\"test\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("OPEN"))
-                .andExpect(jsonPath("$.data.workShiftName").value("Ca 2 (sáng)"));
+                .andExpect(jsonPath("$.data.workShiftName").value("Ca 2 (sáng)"))
+                .andExpect(jsonPath("$.data.employeeName").value("Nguyễn Văn Trực"))
+                .andExpect(jsonPath("$.data.openedByName").value("shift_cashier"));
 
         // Mở ca lần hai bị chặn
         mvc.perform(post("/api/shifts/open").header("Authorization", cashier)
@@ -114,12 +125,17 @@ class ShiftIntegrationTest {
                 .andExpect(jsonPath("$.data.session.invoiceCount").value(2))
                 .andExpect(jsonPath("$.data.session.expectedCash").value(536000.0));
 
-        // Đếm được thiếu 1.000đ
+        // Đếm được thiếu 1.000đ: phải ghi lý do, ca chờ quản lý duyệt
         mvc.perform(post("/api/shifts/current/close").header("Authorization", cashier)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"closingCash\":535000,\"handoverNote\":\"Hết túi nilon\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("DIFFERENCE_REASON_REQUIRED"));
+        mvc.perform(post("/api/shifts/current/close").header("Authorization", cashier)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"closingCash\":535000,\"differenceReason\":\"Thối nhầm\",\"handoverNote\":\"Hết túi nilon\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("CLOSED"))
+                .andExpect(jsonPath("$.data.status").value("PENDING_REVIEW"))
                 .andExpect(jsonPath("$.data.expectedCash").value(536000.0))
                 .andExpect(jsonPath("$.data.cashDifference").value(-1000.0));
 
@@ -138,16 +154,18 @@ class ShiftIntegrationTest {
     }
 
     @Test
-    @DisplayName("Quản lý chỉ xem và đóng hộ ca trong chi nhánh của mình; thu ngân chỉ thấy ca của chính mình")
+    @DisplayName("Quản lý chỉ đóng hộ ca trong chi nhánh của mình; tài khoản quầy thấy các ca của chi nhánh")
     void managerScopedToBranch() throws Exception {
         String cashier = newUser("forgetful_cashier", Role.CASHIER, 1L);
+        ShiftTestData.assignNewStaff(staffRepository, assignmentRepository, 1L, 3, "Nhân viên quên đóng ca");
         String body = mvc.perform(post("/api/shifts/open").header("Authorization", cashier)
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"workShiftId\":3,\"openingCash\":0}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workShiftId\":3,\"openingCash\":0,\"handoverReason\":\"test\"}"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         long shiftId = com.jayway.jsonpath.JsonPath.parse(body).read("$.data.id", Long.class);
 
-        mvc.perform(get("/api/shifts").header("Authorization", cashier))
+        mvc.perform(get("/api/shifts").param("status", "OPEN").header("Authorization", cashier))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.shifts.length()").value(1))
                 .andExpect(jsonPath("$.data.shifts[0].id").value(shiftId));

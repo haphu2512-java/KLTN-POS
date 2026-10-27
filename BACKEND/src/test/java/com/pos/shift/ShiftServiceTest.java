@@ -41,4 +41,20 @@ class ShiftServiceTest {
         assertEquals(LocalDate.of(2026, 10, 20),
                 ShiftService.shiftDateOf(shift("06:00", "09:00"), LocalDateTime.of(2026, 10, 20, 7, 0)));
     }
+
+    @Test
+    @DisplayName("Mở ca được từ 15 phút trước giờ bắt đầu tới trước giờ kết thúc, kể cả ca qua đêm")
+    void openWindow() {
+        WorkShift day = shift("09:00", "12:00");
+        assertFalse(ShiftService.canOpenAt(day, LocalTime.parse("08:44"), 15));
+        assertTrue(ShiftService.canOpenAt(day, LocalTime.parse("08:45"), 15));
+        assertTrue(ShiftService.canOpenAt(day, LocalTime.parse("11:59"), 15));
+        assertFalse(ShiftService.canOpenAt(day, LocalTime.parse("12:00"), 15));
+
+        WorkShift night = shift("22:00", "06:00");
+        assertTrue(ShiftService.canOpenAt(night, LocalTime.parse("21:50"), 15));
+        assertTrue(ShiftService.canOpenAt(night, LocalTime.parse("03:00"), 15));
+        assertFalse(ShiftService.canOpenAt(night, LocalTime.parse("06:30"), 15));
+        assertEquals(LocalDateTime.of(2026, 10, 21, 6, 0), ShiftService.scheduledEnd(night, LocalDate.of(2026, 10, 20)));
+    }
 }

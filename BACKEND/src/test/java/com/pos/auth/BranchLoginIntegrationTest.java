@@ -7,6 +7,9 @@ import com.pos.support.TestAuth;
 import com.pos.user.Role;
 import com.pos.user.User;
 import com.pos.user.UserRepository;
+import com.pos.shift.ShiftAssignmentRepository;
+import com.pos.staff.StaffMemberRepository;
+import com.pos.support.ShiftTestData;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +45,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class BranchLoginIntegrationTest {
 
     private static final String PASSWORD = "matkhau123";
+
+    @Autowired
+    private StaffMemberRepository staffRepository;
+
+    @Autowired
+    private ShiftAssignmentRepository assignmentRepository;
 
     @Autowired
     private MockMvc mvc;
@@ -132,8 +141,10 @@ class BranchLoginIntegrationTest {
     void openShiftPinsLoginToItsBranch() throws Exception {
         newUser("busy_cashier", Role.CASHIER, 1L, 2L);
         String atFirst = tokenOf(login("busy_cashier", PASSWORD, 1L).andExpect(status().isOk()));
+        ShiftTestData.assignNewStaff(staffRepository, assignmentRepository, 1L, 1, "NV ca 1");
         mvc.perform(post("/api/shifts/open").header("Authorization", atFirst)
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"workShiftId\":1,\"openingCash\":100000}"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workShiftId\":1,\"openingCash\":100000,\"handoverReason\":\"test\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.branchId").value(1));
 

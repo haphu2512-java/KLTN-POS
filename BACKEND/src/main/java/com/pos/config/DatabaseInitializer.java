@@ -153,7 +153,7 @@ public class DatabaseInitializer implements CommandLineRunner {
         }
     }
 
-    /** 5 ca cố định trong ngày; chạy cả với database cũ chưa có bảng ca. ADMIN sửa giờ qua /api/shifts/work-shifts */
+    /** Lịch ca mẫu chung ban đầu (5 ca) khi chưa có ca nào; ADMIN tự đổi số ca, giờ ca hoặc tạo lịch riêng từng chi nhánh qua /api/shifts/work-shifts */
     private void seedWorkShifts() {
         if (workShiftRepository.count() > 0) return;
         String[][] shifts = {
