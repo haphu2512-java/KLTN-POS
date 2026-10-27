@@ -141,12 +141,17 @@ export const ScannerApi = {
 
   // Gửi mã 6 số đọc từ QR trên máy POS để ghép điện thoại với quầy đó
   async pair(code) {
+    const deviceId = await AppConfig.getDeviceId();
     const response = await authFetch(
       '/api/scanner/pair',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: String(code || '').trim(), deviceName: 'Expo Mobile App' })
+        body: JSON.stringify({
+          code: String(code || '').trim(),
+          deviceId,
+          deviceName: AppConfig.getDeviceName()
+        })
       },
       8000
     );

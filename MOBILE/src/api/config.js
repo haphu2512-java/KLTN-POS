@@ -9,7 +9,8 @@ const STORAGE_KEYS = {
   HAPTIC_ENABLED: '@pos_scanner_haptic',
   SOUND_ENABLED: '@pos_scanner_sound',
   AUTH_SESSION: '@pos_scanner_session', // { token, username, fullName, role, branchId }
-  PAIRING: '@pos_scanner_pairing' // { pairingId, terminalName }
+  PAIRING: '@pos_scanner_pairing', // { pairingId, terminalName }
+  DEVICE_ID: '@pos_scanner_device_id' // mã cố định của điện thoại, sinh một lần
 };
 
 // Tự động phát hiện IP của máy tính host thông qua Expo Metro bundler
@@ -47,7 +48,28 @@ const getDefaultServerUrl = () => {
   return 'http://localhost:8080';
 };
 
+const newDeviceId = () =>
+  `${Date.now().toString(36)}-${Array.from({ length: 4 }, () => Math.random().toString(36).substring(2, 10)).join('')}`;
+
 export const AppConfig = {
+  // Mã cố định của điện thoại: server dùng để ghép lại thì thay ghép cặp cũ, không tạo thêm dòng mới
+  async getDeviceId() {
+    try {
+      const saved = await AsyncStorage.getItem(STORAGE_KEYS.DEVICE_ID);
+      if (saved) return saved;
+    } catch {}
+    const id = newDeviceId();
+    await AsyncStorage.setItem(STORAGE_KEYS.DEVICE_ID, id).catch(() => {});
+    return id;
+  },
+
+  // Tên hiện trên máy POS để thu ngân phân biệt các điện thoại
+  getDeviceName() {
+    const name = String(Constants.deviceName || '').trim();
+    if (name) return name.substring(0, 100);
+    return Platform.OS === 'ios' ? 'iPhone' : 'Điện thoại Android';
+  },
+
   // Quầy POS đã ghép cặp (quét QR trên máy POS); mã quét được bắn vào giỏ của quầy này
   async getPairing() {
     try {

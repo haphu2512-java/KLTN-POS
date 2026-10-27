@@ -11,9 +11,10 @@ import java.time.LocalDateTime;
 /**
  * Điện thoại (của một tài khoản) đã ghép cặp với một quầy POS bằng mã QR.
  * id là mã bí mật điện thoại gửi kèm mỗi lần bắn mã.
+ * deviceId là mã cố định của điện thoại (app tự sinh một lần): mỗi điện thoại chỉ giữ một ghép cặp.
  */
 @Entity
-@Table(name = "scanner_pairing")
+@Table(name = "scanner_pairing", indexes = @Index(name = "idx_scanner_pairing_device", columnList = "device_id"))
 @Data
 @Builder
 @NoArgsConstructor
@@ -30,6 +31,10 @@ public class ScannerPairing {
 
     @Column(nullable = false, length = 50)
     private String username;
+
+    /** null: ghép từ app cũ chưa gửi mã thiết bị */
+    @Column(name = "device_id", length = 64)
+    private String deviceId;
 
     @Column(name = "device_name", length = 100)
     private String deviceName;

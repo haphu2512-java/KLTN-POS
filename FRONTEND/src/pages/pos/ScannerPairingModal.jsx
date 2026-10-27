@@ -66,13 +66,16 @@ export default function ScannerPairingModal({ isOpen, onClose, terminal, onTermi
     return () => clearInterval(timer);
   }, [isOpen, code, refreshCode]);
 
-  // Điện thoại vừa ghép hoặc bị gỡ: cập nhật danh sách; mã đã dùng thì tạo mã mới
+  // Điện thoại vừa ghép hoặc bị gỡ: cập nhật danh sách. Ghép xong thì ẩn QR (không tự tạo mã mới),
+  // nếu không camera điện thoại vẫn hướng vào màn hình sẽ quét mã mới và ghép lại liên tục.
   useEffect(() => {
     if (!isOpen) return;
     return websocketService.on('scanner-pairing', (event) => {
       if (event.type === 'PAIRED') {
         setNotice(`Đã ghép với ${event.deviceName || 'điện thoại'} (${event.fullName || event.username}).`);
-        refreshCode();
+        setCode(null);
+        setQrDataUrl('');
+        setSecondsLeft(0);
       }
       refreshPairings();
     });
@@ -126,6 +129,14 @@ export default function ScannerPairingModal({ isOpen, onClose, terminal, onTermi
               onKeyDown={(e) => e.key === 'Enter' && handleRename()}
             />
 
+            {!code && notice ? (
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ color: 'var(--success, #16a34a)' }}>{notice}</div>
+                <Button variant="secondary" onClick={() => { setNotice(''); refreshCode(); }}>
+                  Ghép thêm điện thoại
+                </Button>
+              </div>
+            ) : (
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
               <div style={{ background: '#ffffff', padding: '8px', borderRadius: '8px', lineHeight: 0 }}>
                 {qrDataUrl ? (
@@ -145,8 +156,9 @@ export default function ScannerPairingModal({ isOpen, onClose, terminal, onTermi
                 </div>
               </div>
             </div>
+            )}
 
-            {notice && <div style={{ color: 'var(--success, #16a34a)' }}>{notice}</div>}
+            {code && notice && <div style={{ color: 'var(--success, #16a34a)' }}>{notice}</div>}
             {error && <div style={{ color: 'var(--danger, #dc2626)' }}>{error}</div>}
 
             <div>
