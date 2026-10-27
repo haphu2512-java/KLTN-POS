@@ -110,13 +110,13 @@ class ForecastServiceTest {
     }
 
     @Test
-    @DisplayName("Ngày không bán được tính là 0: chuỗi lịch sử đủ 14 ngày, trung bình không bị thổi phồng")
+    @DisplayName("Ngày không bán được tính là 0: chuỗi lịch sử đủ 30 ngày, trung bình không bị thổi phồng")
     void testZeroSalesDaysAreFilled() {
         Product product = Product.builder().id(3L).name("Nước mắm").active(true).build();
 
         LocalDate today = LocalDate.now();
         when(productRepository.findByActiveTrue()).thenReturn(List.of(product));
-        // Chỉ bán 2 ngày trong 14 ngày, mỗi ngày 7 chai
+        // Chỉ bán 2 ngày trong 30 ngày, mỗi ngày 7 chai
         when(invoiceRepository.getBranchDailyProductSales(eq(1L), any(LocalDateTime.class)))
                 .thenReturn(List.of(
                         new Object[]{3L, java.sql.Date.valueOf(today.minusDays(10)), 7L},
@@ -184,10 +184,12 @@ class ForecastServiceTest {
     @DisplayName("Cache ban đêm cùng thuật toán: dùng cache nhưng tồn kho lấy theo thời gian thực")
     void testCacheUsesLiveStock() {
         Product product = Product.builder().id(5L).name("Dầu ăn").active(true).build();
+        // d̄ = 2, σ = 0 → SS = 0, ROP = 2 × 2 = 4
         ForecastResult cachedRow = ForecastResult.builder()
                 .product(product).algorithm("EXP_SMOOTH").forecastDays(7)
-                .dailyDemandForecast(2.0).totalPredictedDemand(16).currentStock(0)
-                .suggestedRestockQty(16).hasHistory(true).build();
+                .dailyDemandForecast(2.0).totalPredictedDemand(14).currentStock(0)
+                .stdDev(0.0).safetyStock(0.0).reorderPoint(4.0)
+                .suggestedRestockQty(18).hasHistory(true).build();
 
         when(forecastResultRepository.findByBranchIdOrderByUrgencyAscProductNameAsc(1L))
                 .thenReturn(List.of(cachedRow));
@@ -197,7 +199,66 @@ class ForecastServiceTest {
         ForecastResponse resp = forecastService.getCachedOrComputeForecast(1L, 7, "EXP_SMOOTHING").get(0);
 
         assertEquals(10, resp.getCurrentStock());
-        assertEquals(6, resp.getSuggestedRestockQty());
-        assertEquals("MEDIUM", resp.getUrgency());
+        // Q = ⌈ROP + d̄ × T − tồn⌉ = ⌈4 + 14 − 10⌉ = 8
+        assertEquals(8, resp.getSuggestedRestockQty());
+        assertEquals("LOW", resp.getUrgency());
+        assertEquals(4.0, resp.getReorderPoint());
+        assertNotNull(resp.getReason());
+    }
+
+    @Test
+    @DisplayName("Cache cũ chưa có cột ROP thì bỏ qua và tính realtime")
+    void testOldCacheWithoutReorderPointIsRecomputed() {
+        Product product = Product.builder().id(6L).name("Đường").active(true).build();
+        ForecastResult oldRow = ForecastResult.builder()
+                .product(product).algorithm("EXP_SMOOTH").forecastDays(7)
+                .dailyDemandForecast(50.0).totalPredictedDemand(350).hasHistory(true).build();
+
+        when(forecastResultRepository.findByBranchIdOrderByUrgencyAscProductNameAsc(1L))
+                .thenReturn(List.of(oldRow));
+        when(productRepository.findByActiveTrue()).thenReturn(List.of(product));
+        when(invoiceRepository.getBranchDailyProductSales(eq(1L), any(LocalDateTime.class))).thenReturn(List.of());
+        when(inventoryRepository.findByBranchId(1L)).thenReturn(List.of());
+
+        ForecastResponse resp = forecastService.getCachedOrComputeForecast(1L, 7, "EXP_SMOOTH").get(0);
+
+        assertEquals(0.0, resp.getDailyDemandForecast());
+    }
+
+    @Test
+    @DisplayName("Dự báo 1 sản phẩm: trả chuỗi lịch sử đủ số ngày và các chỉ số SS, ROP, MAE")
+    void testGetProductForecast() {
+        Product product = Product.builder().id(7L).name("Mì gói").active(true).build();
+        LocalDate today = LocalDate.now();
+        List<Object[]> rows = new ArrayList<>();
+        for (int i = 0; i < ForecastService.HISTORY_DAYS; i++) {
+            rows.add(new Object[]{7L, java.sql.Date.valueOf(today.minusDays(i)), 10L});
+        }
+        when(productRepository.findById(7L)).thenReturn(java.util.Optional.of(product));
+        when(invoiceRepository.getBranchDailyProductSales(eq(1L), any(LocalDateTime.class))).thenReturn(rows);
+        when(inventoryRepository.findByBranchId(1L))
+                .thenReturn(List.of(Inventory.builder().product(product).quantity(20).build()));
+
+        ForecastResponse resp = forecastService.getProductForecast(1L, 7L, 7, "EXP_SMOOTH");
+
+        assertEquals(ForecastService.HISTORY_DAYS, resp.getHistoricalDailySales().size());
+        assertEquals(10.0, resp.getDailyDemandForecast(), 0.001);
+        assertEquals(0.0, resp.getSafetyStock());
+        assertEquals(20.0, resp.getReorderPoint(), 0.001);
+        assertEquals(70, resp.getSuggestedRestockQty());
+        assertEquals("HIGH", resp.getUrgency());
+        assertEquals("Khẩn cấp", resp.getUrgencyLabel());
+        assertEquals(0.0, resp.getMae());
+        assertEquals("GOOD", resp.getQuality());
+    }
+
+    @Test
+    @DisplayName("Dự báo 1 sản phẩm không tồn tại: lỗi 404")
+    void testGetProductForecastNotFound() {
+        when(productRepository.findById(99L)).thenReturn(java.util.Optional.empty());
+
+        com.pos.common.BusinessException ex = assertThrows(com.pos.common.BusinessException.class,
+                () -> forecastService.getProductForecast(1L, 99L, 7, "EXP_SMOOTH"));
+        assertEquals(org.springframework.http.HttpStatus.NOT_FOUND, ex.getStatus());
     }
 }

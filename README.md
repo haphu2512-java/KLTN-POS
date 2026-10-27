@@ -8,7 +8,7 @@
   - **Database:** MySQL 8.0 — 1.949+ sản phẩm thực (scrape từ Bach Hoa Xanh), 2 chi nhánh, 10+ khách hàng, toàn bộ dữ liệu tồn kho
   - **Realtime/đồng bộ:** Spring WebSocket STOMP broker, topic `/topic/inventory-updates` push kho realtime sau mỗi giao dịch POS
   - **Phần cứng:** In hóa đơn nhiệt K80 qua Electron silent print (ESC/POS), máy quét mã vạch HID < 50ms buffer
-  - **Dự báo AI:** Exponential Smoothing (α=0.35) + Moving Average 7 ngày chạy phía Spring Boot, `@Scheduled` job chạy định kỳ hàng đêm
+  - **Dự báo AI:** Exponential Smoothing (α=0.35) + Moving Average 7 ngày, tồn kho an toàn, điểm đặt hàng lại (ROP) và đánh giá MAE/RMSE chạy phía Spring Boot, `@Scheduled` job chạy định kỳ hàng đêm; bản Python trong `AI_FORECAST/` dùng để kiểm chứng (xem `AI_for_POS.md`)
 - **Chuẩn đầu ra:** Phần mềm POS + quản lý kho hoàn chỉnh, thử nghiệm thực tế tại ít nhất 1 cửa hàng.
 
 ---
@@ -138,7 +138,8 @@ npm run dev:electron # Chạy Electron desktop app (cần backend đã chạy)
 - [x] Xuất báo cáo doanh thu & danh sách hóa đơn ra CSV/Excel (`exportCsv.js`)
 - [x] Thuật toán dự báo kép: **Exponential Smoothing (α=0.35)** + **Moving Average 7 ngày** (`ForecastService.java`)
 - [x] `@Scheduled` nightly job tự động tính toán dự báo nhu cầu toàn bộ chi nhánh
-- [x] API `GET /api/forecast/demand` + `GET /api/forecast/recommendations` (gợi ý nhập hàng ưu tiên)
+- [x] API `GET /api/forecast/demand`, `GET /api/forecast/demand/{productId}` + `GET /api/forecast/recommendations` (gợi ý nhập hàng ưu tiên)
+- [x] Công thức tồn kho an toàn, ROP, số lượng đề xuất và MAE/RMSE theo `AI_for_POS.md`, đối chiếu với bản Python `AI_FORECAST/` bằng `ForecastParityTest`
 - [x] Giao diện dự báo AI (`ForecastPage.jsx`): biểu đồ SVG thực tế vs dự báo, MAE, bảng đề xuất nhập hàng
 - [x] Đánh giá độ chính xác MAE (Mean Absolute Error)
 

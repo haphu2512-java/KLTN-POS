@@ -4,7 +4,6 @@ import SalesTrendChart from '../../components/forecast/SalesTrendChart';
 import {
   predictMovingAverage,
   predictExponentialSmoothing,
-  calculateMAE,
   calculateReplenishment
 } from '../../utils/forecasting';
 import { formatCurrency } from '../../utils/formatters';
@@ -23,6 +22,7 @@ export default function ForecastPage({
   const [forecastDays, setForecastDays] = useState(7); // 7 | 14 | 30
   const [selectedProductId, setSelectedProductId] = useState(null);
   const [backendForecasts, setBackendForecasts] = useState([]);
+  const [productForecast, setProductForecast] = useState(null);
   const [revenueSummary, setRevenueSummary] = useState({
     totalRevenue: 0,
     totalOrders: 0,
@@ -79,6 +79,19 @@ export default function ForecastPage({
     };
   }, [branchId, forecastDays, algorithm, isOnline]);
 
+  // Dự báo chi tiết của sản phẩm đang chọn (có chuỗi lịch sử bán, SS, ROP, MAE/RMSE)
+  useEffect(() => {
+    if (!selectedProductId) return undefined;
+    let isMounted = true;
+    forecastService
+      .getProductForecast(selectedProductId, branchId, forecastDays, algorithm)
+      .then((fc) => { if (isMounted) setProductForecast(fc); })
+      .catch(() => { if (isMounted) setProductForecast(null); });
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedProductId, branchId, forecastDays, algorithm, isOnline]);
+
   // Selected product details
   const selectedProduct = useMemo(() => {
     return products.find((p) => p.id === Number(selectedProductId)) || products[0] || {
@@ -90,20 +103,28 @@ export default function ForecastPage({
     };
   }, [products, selectedProductId]);
 
+  // Kết quả dự báo của sản phẩm đang chọn: ưu tiên bản chi tiết, sau đó tới danh sách chung
+  const selectedForecast = useMemo(() => {
+    if (productForecast && productForecast.productId === Number(selectedProductId)) {
+      return productForecast;
+    }
+    return backendForecasts.find(f => f.productId === Number(selectedProductId)) || null;
+  }, [productForecast, backendForecasts, selectedProductId]);
+
   // Actual sales for selected product from DB
   const actualSales = useMemo(() => {
-    const fc = backendForecasts.find(f => f.productId === Number(selectedProductId));
-    if (fc && Array.isArray(fc.historicalDailySales) && fc.historicalDailySales.length > 0) {
-      return fc.historicalDailySales;
+    const history = selectedForecast?.historicalDailySales;
+    if (Array.isArray(history) && history.length > 0) {
+      return history;
     }
-    return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-  }, [backendForecasts, selectedProductId]);
+    return new Array(30).fill(0);
+  }, [selectedForecast]);
 
-  // Past 14 days labels
-  const past14DaysLabels = useMemo(() => {
+  // Nhãn ngày cho phần lịch sử (ngày cuối là hôm nay)
+  const historyLabels = useMemo(() => {
     const labels = [];
     const today = new Date();
-    for (let i = 13; i >= 0; i--) {
+    for (let i = actualSales.length - 1; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
       const dd = String(d.getDate()).padStart(2, '0');
@@ -111,19 +132,18 @@ export default function ForecastPage({
       labels.push(`${dd}/${mm}`);
     }
     return labels;
-  }, []);
+  }, [actualSales.length]);
 
   // Compute Daily Forecast rate based on chosen algorithm
   const dailyForecast = useMemo(() => {
-    const fc = backendForecasts.find(f => f.productId === Number(selectedProductId));
-    if (fc && fc.dailyDemandForecast !== undefined) {
-      return fc.dailyDemandForecast;
+    if (selectedForecast && selectedForecast.dailyDemandForecast !== undefined) {
+      return selectedForecast.dailyDemandForecast;
     }
     if (algorithm === 'MOVING_AVG') {
       return predictMovingAverage(actualSales, 7);
     }
     return predictExponentialSmoothing(actualSales, 0.35);
-  }, [backendForecasts, selectedProductId, actualSales, algorithm]);
+  }, [selectedForecast, actualSales, algorithm]);
 
   // Generate future daily values & labels for the chart
   const { forecastValues, forecastLabels } = useMemo(() => {
@@ -138,21 +158,20 @@ export default function ForecastPage({
       const mm = String(nextDate.getMonth() + 1).padStart(2, '0');
       labels.push(`${dd}/${mm}`);
 
-      const noise = (Math.sin(i * 1.5) * 0.08 + 1);
-      values.push(Math.round(dailyForecast * noise));
+      // Exponential Smoothing / Moving Average cho ra một mức nhu cầu/ngày nên đường dự báo là đường ngang
+      values.push(Number(Number(dailyForecast).toFixed(1)));
     }
 
     return { forecastValues: values, forecastLabels: labels };
   }, [dailyForecast, forecastDays]);
 
-  // Calculate MAE metric (Mean Absolute Error) for selected product
-  const maeScore = useMemo(() => {
-    const testActual = actualSales.slice(-7);
-    const testForecast = testActual.map((_, i) =>
-      predictExponentialSmoothing(actualSales.slice(0, 7 + i), 0.35)
-    );
-    return calculateMAE(testActual, testForecast);
-  }, [actualSales]);
+  // MAE/RMSE do backend tính trên 7 ngày cuối mà mô hình chưa thấy (AI_for_POS.md mục 6)
+  const qualityLabel = {
+    GOOD: 'Tốt (sai số ≤ 30%)',
+    FAIR: 'Trung bình (sai số ≤ 60%)',
+    LOW: 'Thấp (sai số > 60%)',
+    INSUFFICIENT_DATA: 'Chưa đủ dữ liệu để đánh giá'
+  };
 
   // Compute replenishment table from live DB backendForecasts
   const replenishmentList = useMemo(() => {
@@ -168,6 +187,9 @@ export default function ForecastPage({
         totalDemand: fc.totalPredictedDemand,
         suggestedQty: fc.suggestedRestockQty,
         urgency: fc.urgency,
+        safetyStock: fc.safetyStock,
+        reorderPoint: fc.reorderPoint,
+        reason: fc.reason,
         supplierName: 'Nhà cung cấp đối tác'
       }));
     }
@@ -252,6 +274,20 @@ export default function ForecastPage({
       )
     },
     {
+      key: 'reorderPoint',
+      title: 'Điểm đặt hàng lại',
+      width: '140px',
+      align: 'center',
+      render: (val, row) => (
+        <div className="tabular-nums">
+          <span className="font-medium">{val ?? '-'} {row.unit}</span>
+          <div className="text-muted" style={{ fontSize: '11px' }}>
+            An toàn: {row.safetyStock ?? '-'}
+          </div>
+        </div>
+      )
+    },
+    {
       key: 'suggestedQty',
       title: 'Đề xuất nhập thêm',
       width: '150px',
@@ -259,6 +295,7 @@ export default function ForecastPage({
       render: (val, row) => (
         <span
           className="font-bold tabular-nums"
+          title={row.reason || ''}
           style={{
             fontSize: '14px',
             color: val > 0 ? 'var(--success-700)' : 'var(--text-muted)'
@@ -274,9 +311,9 @@ export default function ForecastPage({
       width: '140px',
       align: 'center',
       render: (val) => {
-        if (val === 'HIGH') return <Badge variant="danger">Cấp thiết (Hết/Thiếu)</Badge>;
-        if (val === 'MEDIUM') return <Badge variant="warning">Cần nhập bổ sung</Badge>;
-        return <Badge variant="success">An toàn</Badge>;
+        if (val === 'HIGH') return <Badge variant="danger">Khẩn cấp</Badge>;
+        if (val === 'MEDIUM') return <Badge variant="warning">Cao</Badge>;
+        return <Badge variant="success">Bình thường</Badge>;
       }
     },
     {
@@ -301,7 +338,7 @@ export default function ForecastPage({
       {/* Header */}
       <header className="page-header">
         <h1 className="page-title">Dự báo nhu cầu</h1>
-        <span className="page-subtitle">Gợi ý nhập hàng dựa trên doanh số 14 ngày gần nhất</span>
+        <span className="page-subtitle">Gợi ý nhập hàng dựa trên doanh số 30 ngày gần nhất</span>
       </header>
 
       {/* Main Workspace */}
@@ -325,9 +362,12 @@ export default function ForecastPage({
           <div className="forecast-metric-card">
             <span className="forecast-metric-label">Độ sai lệch dự báo (MAE)</span>
             <span className="forecast-metric-val tabular-nums text-primary">
-              ± {maeScore} {selectedProduct.unit}
+              {selectedForecast?.mae != null ? `± ${selectedForecast.mae} ${selectedProduct.unit}` : '—'}
             </span>
-            <span className="forecast-metric-sub">Độ tin cậy mô hình: ~95.8% (Rất cao)</span>
+            <span className="forecast-metric-sub">
+              {selectedForecast?.rmse != null ? `RMSE ${selectedForecast.rmse} • ` : ''}
+              Độ tin cậy: {qualityLabel[selectedForecast?.quality] || qualityLabel.INSUFFICIENT_DATA}
+            </span>
           </div>
 
           <div className="forecast-metric-card">
@@ -415,11 +455,16 @@ export default function ForecastPage({
           <SalesTrendChart
             actualData={actualSales}
             forecastData={forecastValues}
-            actualLabels={past14DaysLabels}
+            actualLabels={historyLabels}
             forecastLabels={forecastLabels}
             unit={selectedProduct.unit}
-            title={`Diễn biến doanh số 14 ngày qua & Dự báo ${forecastDays} ngày tới: ${selectedProduct.name}`}
+            title={`Diễn biến doanh số ${actualSales.length} ngày qua & Dự báo ${forecastDays} ngày tới: ${selectedProduct.name}`}
           />
+          {selectedForecast?.reason && (
+            <p className="text-muted" style={{ fontSize: '12px', margin: '8px 0 0' }}>
+              {selectedForecast.reason}
+            </p>
+          )}
         </section>
 
         {/* Automated Restock Recommendation Table */}
@@ -430,7 +475,8 @@ export default function ForecastPage({
                 Bảng Gợi Ý Nhập Hàng Tự Động (AI Restock Recommendations)
               </h3>
               <p className="text-muted" style={{ fontSize: '12px', margin: 0 }}>
-                Công thức: Nhu cầu dự báo ({forecastDays} ngày) + 10% hệ số an toàn - Tồn kho hiện tại.
+                Công thức: Đề xuất = ⌈ROP + Nhu cầu/ngày × {forecastDays} ngày − Tồn kho⌉, với ROP = Nhu cầu/ngày × Lead time + Tồn kho an toàn
+                (Z × σ × √Lead time). Di chuột lên số đề xuất để xem lý do.
               </p>
             </div>
             <Button
