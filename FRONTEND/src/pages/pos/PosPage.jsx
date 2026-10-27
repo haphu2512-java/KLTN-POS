@@ -54,11 +54,13 @@ export default function PosPage({
   // Products & Customers from Database
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
 
   // Sync products, inventory, and customers from backend database
   useEffect(() => {
     let isMounted = true;
     async function loadBackendData() {
+      setLoadingProducts(true);
       try {
         const [prodRes, invRes, custRes] = await Promise.allSettled([
           productService.getProducts(),
@@ -97,6 +99,8 @@ export default function PosPage({
         }
       } catch (err) {
         console.error('Error loading data from database:', err);
+      } finally {
+        if (isMounted) setLoadingProducts(false);
       }
     }
 
@@ -750,6 +754,7 @@ export default function PosPage({
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
         products={products}
+        loading={loadingProducts}
         onSelectProduct={handleAddProduct}
       />
 

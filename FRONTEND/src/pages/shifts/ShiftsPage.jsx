@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Table, Badge } from '../../components/common';
+import { Button, Table, Badge, Loading } from '../../components/common';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { shiftService } from '../../services/shiftService';
 import { staffService } from '../../services/staffService';
@@ -56,12 +56,15 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
   const [employees, setEmployees] = useState([]);
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [detailId, setDetailId] = useState(null);
   // Tăng lên để tải lại danh sách (ví dụ sau khi đóng hộ một ca)
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
     shiftService
       .listShifts({
         branchId: isAdmin ? branchFilter : undefined,
@@ -75,7 +78,10 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
         setSummary(data);
         setError('');
       })
-      .catch((err) => alive && setError(err.response?.data?.message || 'Không tải được lịch sử ca.'));
+      .catch((err) => alive && setError(err.response?.data?.message || 'Không tải được lịch sử ca.'))
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
     return () => {
       alive = false;
     };
@@ -287,24 +293,24 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
             <div className="report-kpi-grid">
               <div className="report-kpi-card">
                 <div className="report-kpi-title"><span>Số ca</span></div>
-                <div className="report-kpi-value">{summary?.totalShifts ?? 0}</div>
+                <div className="report-kpi-value">{loading ? <Loading size="sm" inline text="" /> : (summary?.totalShifts ?? 0)}</div>
                 <div className="report-kpi-sub">
-                  {summary?.openShifts ?? 0} đang mở · {summary?.pendingReviewShifts ?? 0} chờ duyệt
+                  {loading ? 'Đang tải...' : `${summary?.openShifts ?? 0} đang mở · ${summary?.pendingReviewShifts ?? 0} chờ duyệt`}
                 </div>
               </div>
               <div className="report-kpi-card">
                 <div className="report-kpi-title"><span>Ca lệch tiền</span></div>
-                <div className="report-kpi-value">{summary?.mismatchedShifts ?? 0}</div>
+                <div className="report-kpi-value">{loading ? <Loading size="sm" inline text="" /> : (summary?.mismatchedShifts ?? 0)}</div>
                 <div className="report-kpi-sub">Tiền đếm được khác tiền dự kiến</div>
               </div>
               <div className="report-kpi-card">
                 <div className="report-kpi-title"><span>Tổng thiếu</span></div>
-                <div className="report-kpi-value shift-short">{formatCurrency(summary?.totalShortage)}</div>
+                <div className="report-kpi-value shift-short">{loading ? <Loading size="sm" inline text="" /> : formatCurrency(summary?.totalShortage)}</div>
                 <div className="report-kpi-sub">Cộng các ca thiếu tiền</div>
               </div>
               <div className="report-kpi-card">
                 <div className="report-kpi-title"><span>Tổng dư</span></div>
-                <div className="report-kpi-value shift-over">{formatCurrency(summary?.totalOverage)}</div>
+                <div className="report-kpi-value shift-over">{loading ? <Loading size="sm" inline text="" /> : formatCurrency(summary?.totalOverage)}</div>
                 <div className="report-kpi-sub">Cộng các ca dư tiền</div>
               </div>
             </div>
@@ -318,7 +324,9 @@ export default function ShiftsPage({ currentUser, isOnline = true }) {
                 columns={columns}
                 data={shifts}
                 rowKey="id"
-                emptyText={summary ? 'Không có ca nào trong khoảng thời gian này' : 'Đang tải...'}
+                loading={loading}
+                loadingText="Đang tải lịch sử ca..."
+                emptyText="Không có ca nào trong khoảng thời gian này"
               />
             </div>
           </>

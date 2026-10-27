@@ -61,11 +61,7 @@ export default function StaffPage({
 
   const fetchUsers = async () => {
     if (!isOnline) {
-      // Offline fallback dummy
-      setUsers([
-        { id: 1, username: 'admin', fullName: 'Quản Trị Viên', role: 'ADMIN', branchIds: [], active: true, createdAt: new Date().toISOString() },
-        { id: 2, username: 'cashier1', fullName: 'Thu Ngân Q1', role: 'CASHIER', branchIds: [1], active: true, createdAt: new Date().toISOString() }
-      ]);
+      setUsers([]);
       return;
     }
     setLoading(true);
@@ -83,6 +79,7 @@ export default function StaffPage({
     // Tải danh sách khi mở trang / đổi trạng thái kết nối là chủ ý (hàm fetch tự bật cờ loading)
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline]);
 
   const handleCreateUser = async (e) => {

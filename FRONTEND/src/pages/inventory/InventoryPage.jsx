@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Button, Input, Table, Badge, BarcodeView } from '../../components/common';
+import { Button, Input, Table, Badge, BarcodeView, Loading } from '../../components/common';
 import StockInModal from './StockInModal';
 import StockTransferModal from './StockTransferModal';
 import StockInDetailModal from './StockInDetailModal';
@@ -28,6 +28,7 @@ export default function InventoryPage({
   const [suppliers, setSuppliers] = useState([]);
   const branches = useBranches([{ id: branchId, name: branchName || `Chi nhánh ${branchId}` }]);
   const [stockInHistory, setStockInHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [currentBranchId, setCurrentBranchId] = useState(branchId || 1);
   const viewingSessionBranch = Number(currentBranchId) === Number(branchId);
@@ -42,6 +43,7 @@ export default function InventoryPage({
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
+      setLoading(true);
       try {
         const [prodRes, invRes, supRes, slipRes] = await Promise.allSettled([
           productService.getProducts(),
@@ -70,7 +72,7 @@ export default function InventoryPage({
             });
             const merged = prodList.map(p => ({
               ...p,
-              stock: stockMap.has(p.id) ? stockMap.get(p.id) : (p.stock || 50),
+              stock: stockMap.has(p.id) ? stockMap.get(p.id) : (p.stock || 0),
               costPrice: p.costPrice || 0,
               salePrice: p.salePrice ?? p.sellingPrice ?? p.price ?? 0,
               minThreshold: thresholdMap.has(p.id) ? thresholdMap.get(p.id) : (p.minThreshold || 5)
@@ -100,7 +102,9 @@ export default function InventoryPage({
           }
         }
       } catch (err) {
-        console.warn('Backend unavailable for inventory, using fallback mock data:', err.message);
+        console.error('Lỗi khi tải dữ liệu tồn kho từ backend:', err);
+      } finally {
+        if (isMounted) setLoading(false);
       }
     }
 
@@ -117,7 +121,7 @@ export default function InventoryPage({
       isMounted = false;
       unsubWs();
     };
-  }, [currentBranchId, isOnline]);
+  }, [currentBranchId, isOnline, currentUser?.fullName]);
 
   // Filter states
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -619,7 +623,7 @@ export default function InventoryPage({
             onClick={() => setStockStatusFilter('ALL')}
           >
             <span className="inv-metric-label">Tổng mặt hàng (SKUs)</span>
-            <span className="inv-metric-val">{totalSkus}</span>
+            <span className="inv-metric-val">{loading ? <Loading size="sm" inline text="" /> : totalSkus}</span>
             <span className="inv-metric-sub">Toàn bộ danh mục kinh doanh</span>
           </div>
 
@@ -631,7 +635,7 @@ export default function InventoryPage({
               Cảnh báo sắp hết hàng
             </span>
             <span className="inv-metric-val" style={{ color: 'var(--warning-700)' }}>
-              {lowStockCount} mặt hàng
+              {loading ? <Loading size="sm" inline text="" /> : `${lowStockCount} mặt hàng`}
             </span>
             <span className="inv-metric-sub">Tồn kho ≤ Ngưỡng an toàn</span>
           </div>
@@ -644,7 +648,7 @@ export default function InventoryPage({
               Đã hết hàng
             </span>
             <span className="inv-metric-val" style={{ color: 'var(--danger-700)' }}>
-              {outOfStockCount} mặt hàng
+              {loading ? <Loading size="sm" inline text="" /> : `${outOfStockCount} mặt hàng`}
             </span>
             <span className="inv-metric-sub">Cần lên phiếu nhập ngay</span>
           </div>
@@ -652,7 +656,7 @@ export default function InventoryPage({
           <div className="inv-metric-card">
             <span className="inv-metric-label">Giá trị tồn kho (Giá vốn)</span>
             <span className="inv-metric-val tabular-nums text-success" style={{ fontSize: '20px' }}>
-              {formatCurrency(totalInventoryValuation)}
+              {loading ? <Loading size="sm" inline text="" /> : formatCurrency(totalInventoryValuation)}
             </span>
             <span className="inv-metric-sub">Ước tính theo giá nhập mới nhất</span>
           </div>
@@ -760,6 +764,8 @@ export default function InventoryPage({
             <Table
               columns={productColumns}
               data={paginatedProducts}
+              loading={loading}
+              loadingText="Đang tải danh sách tồn kho..."
               emptyText="Không có sản phẩm nào phù hợp với bộ lọc"
             />
             {filteredProducts.length > pageSize && (
@@ -795,6 +801,8 @@ export default function InventoryPage({
           <Table
             columns={historyColumns}
             data={stockInHistory}
+            loading={loading}
+            loadingText="Đang tải lịch sử nhập kho..."
             emptyText="Chưa có phiếu nhập kho nào"
           />
         )}

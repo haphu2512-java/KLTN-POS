@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Button, Table, Badge } from '../../components/common';
+import { Button, Table, Badge, Loading } from '../../components/common';
 import SalesTrendChart from '../../components/forecast/SalesTrendChart';
 import {
   predictMovingAverage,
@@ -17,6 +17,7 @@ export default function ForecastPage({
   isOnline = true,
   onCreateStockInDraft
 }) {
+  const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState([]);
   const [algorithm, setAlgorithm] = useState('EXP_SMOOTHING'); // 'EXP_SMOOTHING' | 'MOVING_AVG'
   const [forecastDays, setForecastDays] = useState(7); // 7 | 14 | 30
@@ -33,6 +34,7 @@ export default function ForecastPage({
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
+      setLoading(true);
       try {
         const [prodRes, fcRes, revRes] = await Promise.allSettled([
           productService.getProducts(),
@@ -69,6 +71,8 @@ export default function ForecastPage({
         }
       } catch (err) {
         console.error('Error fetching database forecast data:', err);
+      } finally {
+        if (isMounted) setLoading(false);
       }
     }
 
@@ -77,6 +81,7 @@ export default function ForecastPage({
     return () => {
       isMounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId, forecastDays, algorithm, isOnline]);
 
   // Dự báo chi tiết của sản phẩm đang chọn (có chuỗi lịch sử bán, SS, ROP, MAE/RMSE)
@@ -94,13 +99,7 @@ export default function ForecastPage({
 
   // Selected product details
   const selectedProduct = useMemo(() => {
-    return products.find((p) => p.id === Number(selectedProductId)) || products[0] || {
-      id: 1,
-      name: 'Chọn sản phẩm',
-      unit: 'SP',
-      stock: 0,
-      costPrice: 0
-    };
+    return products.find((p) => p.id === Number(selectedProductId)) || products[0] || null;
   }, [products, selectedProductId]);
 
   // Kết quả dự báo của sản phẩm đang chọn: ưu tiên bản chi tiết, sau đó tới danh sách chung
@@ -361,21 +360,25 @@ export default function ForecastPage({
           <div className="forecast-metric-card">
             <span className="forecast-metric-label">Doanh thu 7 ngày qua (Thực tế)</span>
             <span className="forecast-metric-val tabular-nums text-success" style={{ fontSize: '22px' }}>
-              {formatCurrency(revenueSummary.totalRevenue || 0)}
+              {loading ? <Loading size="sm" inline text="" /> : formatCurrency(revenueSummary.totalRevenue || 0)}
             </span>
             <span className="forecast-metric-sub">Dữ liệu từ CSDL MySQL</span>
           </div>
 
           <div className="forecast-metric-card">
             <span className="forecast-metric-label">Số đơn hàng đã bán</span>
-            <span className="forecast-metric-val tabular-nums">{revenueSummary.totalOrders || 0} hóa đơn</span>
-            <span className="forecast-metric-sub">Giá trị đơn TB: {formatCurrency(revenueSummary.averageOrderValue || 0)}</span>
+            <span className="forecast-metric-val tabular-nums">
+              {loading ? <Loading size="sm" inline text="" /> : `${revenueSummary.totalOrders || 0} hóa đơn`}
+            </span>
+            <span className="forecast-metric-sub">
+              {loading ? 'Đang tính toán...' : `Giá trị đơn TB: ${formatCurrency(revenueSummary.averageOrderValue || 0)}`}
+            </span>
           </div>
 
           <div className="forecast-metric-card">
             <span className="forecast-metric-label">Độ sai lệch dự báo (MAE)</span>
             <span className="forecast-metric-val tabular-nums text-primary">
-              {selectedForecast?.mae != null ? `± ${selectedForecast.mae} ${selectedProduct.unit}` : '—'}
+              {loading ? <Loading size="sm" inline text="" /> : (selectedForecast?.mae != null ? `± ${selectedForecast.mae} ${selectedProduct?.unit || ''}` : '—')}
             </span>
             <span className="forecast-metric-sub">
               {selectedForecast?.rmse != null ? `RMSE ${selectedForecast.rmse} • ` : ''}
@@ -386,7 +389,7 @@ export default function ForecastPage({
           <div className="forecast-metric-card">
             <span className="forecast-metric-label">Mặt hàng cần nhập gấp</span>
             <span className="forecast-metric-val text-danger">
-              {replenishmentList.filter((r) => r.urgency === 'HIGH').length} mặt hàng
+              {loading ? <Loading size="sm" inline text="" /> : `${replenishmentList.filter((r) => r.urgency === 'HIGH').length} mặt hàng`}
             </span>
             <span className="forecast-metric-sub">Khuyến nghị bổ sung trong 48h tới</span>
           </div>
@@ -465,18 +468,26 @@ export default function ForecastPage({
             </select>
           </div>
 
-          <SalesTrendChart
-            actualData={actualSales}
-            forecastData={forecastValues}
-            actualLabels={historyLabels}
-            forecastLabels={forecastLabels}
-            unit={selectedProduct.unit}
-            title={`Diễn biến doanh số ${actualSales.length} ngày qua & Dự báo ${forecastDays} ngày tới: ${selectedProduct.name}`}
-          />
-          {selectedForecast?.reason && (
-            <p className="text-muted" style={{ fontSize: '12px', margin: '8px 0 0' }}>
-              {selectedForecast.reason}
-            </p>
+          {loading || !selectedProduct ? (
+            <div style={{ padding: '60px 20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)' }}>
+              <Loading text="Đang tải dữ liệu và phân tích chuỗi thời gian..." size="md" />
+            </div>
+          ) : (
+            <>
+              <SalesTrendChart
+                actualData={actualSales}
+                forecastData={forecastValues}
+                actualLabels={historyLabels}
+                forecastLabels={forecastLabels}
+                unit={selectedProduct.unit}
+                title={`Diễn biến doanh số ${actualSales.length} ngày qua & Dự báo ${forecastDays} ngày tới: ${selectedProduct.name}`}
+              />
+              {selectedForecast?.reason && (
+                <p className="text-muted" style={{ fontSize: '12px', margin: '8px 0 0' }}>
+                  {selectedForecast.reason}
+                </p>
+              )}
+            </>
           )}
         </section>
 
@@ -505,6 +516,8 @@ export default function ForecastPage({
           <Table
             columns={restockColumns}
             data={replenishmentList}
+            loading={loading}
+            loadingText="Đang tính toán gợi ý nhập hàng AI..."
             emptyText="Không có gợi ý nhập hàng"
           />
         </section>
