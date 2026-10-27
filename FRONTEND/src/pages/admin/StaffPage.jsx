@@ -21,7 +21,7 @@ function BranchAssignment({ role, branches, value, onChange }) {
         </label>
       ))}
       <div className="staff-branch-note">
-        Nhân viên chọn một trong các chi nhánh này khi đăng nhập. Không bỏ được chi nhánh đang có ca chưa đóng.
+        Tài khoản chọn một trong các chi nhánh này khi đăng nhập. Không bỏ được chi nhánh đang có ca chưa đóng.
       </div>
     </div>
   );
@@ -47,14 +47,12 @@ export default function StaffPage({
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    fullName: '',
     role: 'CASHIER',
     branchIds: [branchId || 1]
   });
   const [editFormData, setEditFormData] = useState({
     id: null,
     username: '',
-    fullName: '',
     role: 'CASHIER',
     branchIds: [],
     active: true
@@ -75,7 +73,7 @@ export default function StaffPage({
       const data = await userService.getUsers();
       setUsers(data || []);
     } catch (err) {
-      console.error('Lỗi khi tải danh sách nhân viên:', err);
+      console.error('Lỗi khi tải danh sách tài khoản:', err);
     } finally {
       setLoading(false);
     }
@@ -89,19 +87,19 @@ export default function StaffPage({
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
-    if (!formData.username.trim() || !formData.password.trim() || !formData.fullName.trim()) {
+    if (!formData.username.trim() || !formData.password.trim()) {
       alert('Vui lòng điền đầy đủ các thông tin bắt buộc');
       return;
     }
     if (formData.role !== 'ADMIN' && formData.branchIds.length === 0) {
-      alert('Chọn ít nhất một chi nhánh cho nhân viên');
+      alert('Chọn ít nhất một chi nhánh cho tài khoản');
       return;
     }
     try {
       await userService.createUser(formData);
-      alert('Tạo tài khoản nhân viên thành công!');
+      alert('Tạo tài khoản thành công!');
       setShowAddModal(false);
-      setFormData({ username: '', password: '', fullName: '', role: 'CASHIER', branchIds: [branchId || 1] });
+      setFormData({ username: '', password: '', role: 'CASHIER', branchIds: [branchId || 1] });
       fetchUsers();
     } catch (err) {
       alert(err.response?.data?.message || 'Có lỗi xảy ra khi tạo tài khoản');
@@ -144,7 +142,6 @@ export default function StaffPage({
     setEditFormData({
       id: user.id,
       username: user.username,
-      fullName: user.fullName || '',
       role: user.role || 'CASHIER',
       branchIds: user.branchIds || [],
       active: user.active !== false
@@ -154,22 +151,17 @@ export default function StaffPage({
 
   const handleUpdateUser = async (e) => {
     e.preventDefault();
-    if (!editFormData.fullName.trim()) {
-      alert('Vui lòng nhập họ và tên');
-      return;
-    }
     if (editFormData.role !== 'ADMIN' && editFormData.branchIds.length === 0) {
-      alert('Chọn ít nhất một chi nhánh cho nhân viên');
+      alert('Chọn ít nhất một chi nhánh cho tài khoản');
       return;
     }
     try {
       await userService.updateUser(editFormData.id, {
-        fullName: editFormData.fullName,
         role: editFormData.role,
         branchIds: editFormData.branchIds,
         active: editFormData.active
       });
-      alert('Cập nhật thông tin nhân viên thành công!');
+      alert('Cập nhật tài khoản thành công!');
       setShowEditModal(false);
       fetchUsers();
     } catch (err) {
@@ -178,9 +170,7 @@ export default function StaffPage({
   };
 
   const filteredUsers = users.filter((u) => {
-    const matchSearch =
-      u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.fullName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchSearch = u.username.toLowerCase().includes(searchTerm.toLowerCase());
     const matchRole = filterRole === 'ALL' || u.role === filterRole;
     return matchSearch && matchRole;
   });
@@ -189,10 +179,9 @@ export default function StaffPage({
     { key: 'id', title: 'ID', width: '60px' },
     {
       key: 'username',
-      title: 'Tài khoản',
+      title: 'Tên đăng nhập',
       render: (val, u) => <strong style={{ color: 'var(--text-main)' }}>{val || u?.username}</strong>
     },
-    { key: 'fullName', title: 'Họ và tên' },
     {
       key: 'role',
       title: 'Vai trò',
@@ -250,7 +239,7 @@ export default function StaffPage({
             size="sm"
             variant="ghost"
             onClick={() => handleOpenEdit(u)}
-            title="Chỉnh sửa thông tin nhân viên"
+            title="Chỉnh sửa tài khoản"
           >
             Sửa
           </Button>
@@ -282,8 +271,8 @@ export default function StaffPage({
     <div className="staff-page">
       {/* Header */}
       <header className="page-header">
-        <h1 className="page-title">Nhân viên</h1>
-        <span className="page-subtitle">Tài khoản và phân quyền</span>
+        <h1 className="page-title">Tài khoản</h1>
+        <span className="page-subtitle">Tài khoản đăng nhập và phân quyền theo vai trò</span>
       </header>
 
       {/* Content */}
@@ -292,7 +281,7 @@ export default function StaffPage({
           <div className="staff-toolbar-left">
             <input
               type="text"
-              placeholder="Tìm username, họ tên nhân viên..."
+              placeholder="Tìm tên đăng nhập..."
               className="staff-search-input"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -311,7 +300,7 @@ export default function StaffPage({
           </div>
           <div>
             <Button variant="primary" onClick={() => setShowAddModal(true)}>
-              Thêm nhân viên mới
+              Thêm tài khoản
             </Button>
           </div>
         </div>
@@ -321,7 +310,7 @@ export default function StaffPage({
             columns={columns}
             data={filteredUsers}
             loading={loading}
-            emptyMessage="Không tìm thấy nhân viên nào phù hợp"
+            emptyMessage="Không tìm thấy tài khoản nào phù hợp"
           />
         </div>
       </div>
@@ -330,7 +319,7 @@ export default function StaffPage({
       <Modal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        title="Thêm tài khoản nhân viên mới"
+        title="Thêm tài khoản mới"
         width="460px"
       >
         <form onSubmit={handleCreateUser}>
@@ -339,7 +328,7 @@ export default function StaffPage({
             <input
               type="text"
               className="staff-form-input"
-              placeholder="vd: cashier_nam"
+              placeholder="vd: quay1, quanly_q1"
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
               required
@@ -354,18 +343,6 @@ export default function StaffPage({
               placeholder="••••••••"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              required
-            />
-          </div>
-
-          <div className="staff-form-group">
-            <label>Họ và tên nhân viên *</label>
-            <input
-              type="text"
-              className="staff-form-input"
-              placeholder="vd: Nguyễn Hoàng Nam"
-              value={formData.fullName}
-              onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
               required
             />
           </div>
@@ -409,7 +386,7 @@ export default function StaffPage({
       <Modal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
-        title={`Chỉnh sửa nhân viên "${editFormData.username}"`}
+        title={`Chỉnh sửa tài khoản "${editFormData.username}"`}
         width="460px"
       >
         <form onSubmit={handleUpdateUser}>
@@ -421,18 +398,6 @@ export default function StaffPage({
               value={editFormData.username}
               disabled
               style={{ opacity: 0.7, cursor: 'not-allowed' }}
-            />
-          </div>
-
-          <div className="staff-form-group">
-            <label>Họ và tên nhân viên *</label>
-            <input
-              type="text"
-              className="staff-form-input"
-              placeholder="vd: Nguyễn Hoàng Nam"
-              value={editFormData.fullName}
-              onChange={(e) => setEditFormData({ ...editFormData, fullName: e.target.value })}
-              required
             />
           </div>
 

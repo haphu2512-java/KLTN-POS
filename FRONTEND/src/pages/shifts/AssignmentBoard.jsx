@@ -18,7 +18,7 @@ const mondayOf = (d) => {
  * Lịch xếp ca theo tuần: hàng là ca cố định, cột là ngày. Quản lý chọn nhân viên cho từng ô;
  * khi quầy mở ca đó, ca thuộc về người được xếp. Vai trò khác chỉ xem.
  */
-export default function AssignmentBoard({ canEdit, isAdmin, branches = [] }) {
+export default function AssignmentBoard({ canEdit, isAdmin, branches = [], onAddStaff }) {
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [branchId, setBranchId] = useState('');
   const [workShifts, setWorkShifts] = useState([]);
@@ -101,6 +101,17 @@ export default function AssignmentBoard({ canEdit, isAdmin, branches = [] }) {
         )}
       </div>
       {error && <div className="shift-error">{error}</div>}
+      {canEdit && !needBranch && staff.length === 0 && (
+        <div className="shift-banner is-warning">
+          Chi nhánh chưa có nhân viên trực nên chưa có ai để xếp. Tài khoản đăng nhập chỉ dùng để phân quyền, người trực ca
+          được thêm ở tab "Nhân viên trực".{' '}
+          {onAddStaff && (
+            <Button size="sm" variant="secondary" onClick={onAddStaff}>
+              Thêm nhân viên trực
+            </Button>
+          )}
+        </div>
+      )}
       {needBranch ? (
         <div className="shift-muted">Chọn chi nhánh để xem và xếp ca.</div>
       ) : (

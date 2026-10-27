@@ -62,7 +62,7 @@ export default function AppShell({
     { key: 'partners', label: 'Đối tác', onClick: onNavigateToPartners },
     {
       key: 'staff',
-      label: 'Nhân viên',
+      label: 'Tài khoản',
       onClick: currentUser?.role === 'ADMIN' ? onNavigateToStaff : undefined,
     },
   ].filter((item) => item.onClick);

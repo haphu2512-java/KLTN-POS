@@ -49,7 +49,8 @@ public class UserService {
         User user = User.builder()
                 .username(req.getUsername().trim())
                 .password(passwordEncoder.encode(req.getPassword()))
-                .fullName(req.getFullName().trim())
+                .fullName(req.getFullName() == null || req.getFullName().isBlank()
+                        ? req.getUsername().trim() : req.getFullName().trim())
                 .role(req.getRole())
                 .branchIds(validBranches(req.getRole(), req.getBranchIds()))
                 .active(true)
@@ -77,7 +78,9 @@ public class UserService {
                     HttpStatus.CONFLICT);
         }
 
-        user.setFullName(req.getFullName().trim());
+        if (req.getFullName() != null && !req.getFullName().isBlank()) {
+            user.setFullName(req.getFullName().trim());
+        }
         user.setRole(req.getRole());
         user.getBranchIds().clear();
         user.getBranchIds().addAll(branchIds);
