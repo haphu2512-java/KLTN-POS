@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS stock_in (
     employee_id BIGINT,
     total_cost DECIMAL(14,2),
     note VARCHAR(255),
+    client_request_id VARCHAR(64) UNIQUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (branch_id) REFERENCES branch(id) ON DELETE CASCADE,
     FOREIGN KEY (supplier_id) REFERENCES supplier(id) ON DELETE SET NULL,
@@ -100,6 +101,23 @@ CREATE TABLE IF NOT EXISTS stock_in_detail (
     unit_cost DECIMAL(14,2),
     FOREIGN KEY (stock_in_id) REFERENCES stock_in(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES product(id) ON DELETE CASCADE
+);
+
+-- 8b. Bảng Phiếu Điều Chuyển Kho (client_request_id chống điều chuyển 2 lần khi gửi lại)
+CREATE TABLE IF NOT EXISTS stock_transfer (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_id BIGINT NOT NULL,
+    from_branch_id BIGINT NOT NULL,
+    to_branch_id BIGINT NOT NULL,
+    quantity INT NOT NULL,
+    employee_id BIGINT,
+    note VARCHAR(255),
+    client_request_id VARCHAR(64) UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES product(id) ON DELETE CASCADE,
+    FOREIGN KEY (from_branch_id) REFERENCES branch(id) ON DELETE CASCADE,
+    FOREIGN KEY (to_branch_id) REFERENCES branch(id) ON DELETE CASCADE,
+    FOREIGN KEY (employee_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 -- 9. Bảng Hóa Đơn Bán Lẻ

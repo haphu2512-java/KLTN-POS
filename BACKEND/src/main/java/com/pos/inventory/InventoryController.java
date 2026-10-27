@@ -52,6 +52,7 @@ public class InventoryController {
     @Operation(summary = "Điều chuyển hàng từ chi nhánh đang đăng nhập sang chi nhánh khác")
     public ResponseEntity<ApiResponse<Void>> transferStock(@Valid @RequestBody StockTransferRequest req) {
         req.setFromBranchId(currentUserService.branchForWrite(req.getFromBranchId()));
+        req.setEmployeeId(currentUserService.getCurrentUser().getId());
         inventoryService.transferStock(req);
         return ResponseEntity.ok(ApiResponse.ok("Điều chuyển kho thành công", null));
     }

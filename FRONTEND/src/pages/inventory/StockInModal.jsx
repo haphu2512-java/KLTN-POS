@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Modal, Button } from '../../components/common';
 import { formatCurrency } from '../../utils/formatters';
+import { newRequestId } from '../../utils/requestId';
 
 export default function StockInModal({
   isOpen,
@@ -14,6 +15,10 @@ export default function StockInModal({
 }) {
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id || 1);
   const [note, setNote] = useState('');
+  // Một mã cho mỗi lần mở form: bấm lại sau khi lỗi mạng vẫn dùng mã này nên không bị nhập trùng
+  const [requestId] = useState(newRequestId);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   
   // Stock-in line items (điền sẵn khi mở từ đề xuất nhập hàng của trang Dự báo)
   const [items, setItems] = useState(() => initialItems?.length ? initialItems : [
@@ -83,8 +88,10 @@ export default function StockInModal({
     0
   );
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    // Chặn bấm 2 lần liên tiếp trước khi React kịp vẽ lại nút
+    if (savingRef.current) return;
     if (items.length === 0) {
       alert('Vui lòng thêm sản phẩm nhập kho!');
       return;
@@ -103,11 +110,20 @@ export default function StockInModal({
       totalItems: items.reduce((sum, item) => sum + item.quantity, 0),
       totalCost,
       items,
-      note
+      note,
+      requestId
     };
 
-    onSaveStockIn(newStockIn);
-    onClose();
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const ok = await onSaveStockIn(newStockIn);
+      // Lỗi thì giữ form mở để bấm lại với cùng mã
+      if (ok !== false) onClose();
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   };
 
   return (
@@ -121,8 +137,8 @@ export default function StockInModal({
           <Button variant="secondary" onClick={onClose}>
             Hủy (Esc)
           </Button>
-          <Button variant="success" onClick={handleSubmit}>
-            Hoàn tất & Nhập Kho
+          <Button variant="success" onClick={handleSubmit} disabled={saving}>
+            {saving ? 'Đang lưu...' : 'Hoàn tất & Nhập Kho'}
           </Button>
         </>
       }

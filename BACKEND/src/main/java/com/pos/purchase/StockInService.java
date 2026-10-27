@@ -7,12 +7,14 @@ import com.pos.inventory.InventoryService;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -39,6 +41,20 @@ public class StockInService {
 
     @Transactional
     public StockIn createStockIn(StockInRequest req) {
+        String clientRequestId = req.getClientRequestId() != null && !req.getClientRequestId().isBlank()
+                ? req.getClientRequestId().trim() : null;
+        if (clientRequestId != null) {
+            // Gửi lại phiếu sau khi mất phản hồi hoặc bấm 2 lần: trả phiếu đã tạo, không cộng kho lần nữa
+            StockIn existing = stockInRepository.findByClientRequestId(clientRequestId).orElse(null);
+            if (existing != null) {
+                if (!Objects.equals(existing.getEmployeeId(), req.getEmployeeId())) {
+                    throw new BusinessException("DUPLICATE_REQUEST",
+                            "Mã yêu cầu đã được dùng cho phiếu nhập khác", HttpStatus.CONFLICT);
+                }
+                return existing;
+            }
+        }
+
         Branch branch = branchRepository.findById(req.getBranchId())
                 .orElseThrow(() -> new BusinessException("BRANCH_NOT_FOUND", "Chi nhánh không tồn tại"));
 
@@ -52,6 +68,7 @@ public class StockInService {
                 .supplier(supplier)
                 .employeeId(req.getEmployeeId())
                 .note(req.getNote())
+                .clientRequestId(clientRequestId)
                 .totalCost(BigDecimal.ZERO)
                 .details(new ArrayList<>())
                 .build();
