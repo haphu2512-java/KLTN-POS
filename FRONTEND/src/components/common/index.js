@@ -5,3 +5,4 @@ export { default as Badge } from './Badge.jsx';
 export { default as Modal } from './Modal.jsx';
 export { default as Tabs } from './Tabs.jsx';
 export { default as BarcodeView } from './BarcodeView.jsx';
+export { default as Loading } from './Loading.jsx';

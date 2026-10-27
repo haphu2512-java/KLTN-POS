@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Button, Table, Badge, Modal } from '../../components/common';
+import { Button, Table, Badge, Modal, Loading } from '../../components/common';
 import { formatCurrency, formatNumber, formatDateTime } from '../../utils/formatters';
 import { reportService } from '../../services/reportService';
 import { saleService } from '../../services/saleService';
@@ -400,7 +400,7 @@ export default function ReportPage({
                   <span>Tổng Doanh Thu</span>
                 </div>
                 <div className="report-kpi-value" style={{ color: 'var(--primary-600)' }}>
-                  {formatCurrency(summaryData.totalRevenue)}
+                  {loading ? <Loading size="sm" inline text="" /> : formatCurrency(summaryData.totalRevenue)}
                 </div>
                 <div className="report-kpi-sub">Giá trị bán ra thực tế sau chiết khấu</div>
               </div>
@@ -410,7 +410,7 @@ export default function ReportPage({
                   <span>Tiền Vốn Hàng Bán</span>
                 </div>
                 <div className="report-kpi-value" style={{ color: 'var(--text-muted)' }}>
-                  {formatCurrency(summaryData.totalCost)}
+                  {loading ? <Loading size="sm" inline text="" /> : formatCurrency(summaryData.totalCost)}
                 </div>
                 <div className="report-kpi-sub">Theo giá nhập kho bình quân</div>
               </div>
@@ -420,10 +420,10 @@ export default function ReportPage({
                   <span>Lợi Nhuận Gộp</span>
                 </div>
                 <div className="report-kpi-value" style={{ color: 'var(--text-main)' }}>
-                  {formatCurrency(summaryData.grossProfit)}
+                  {loading ? <Loading size="sm" inline text="" /> : formatCurrency(summaryData.grossProfit)}
                 </div>
                 <div className="report-kpi-sub">
-                  Tỷ suất lợi nhuận: <strong>{summaryData.profitMarginPercent}%</strong>
+                  Tỷ suất lợi nhuận: <strong>{loading ? '—' : `${summaryData.profitMarginPercent}%`}</strong>
                 </div>
               </div>
 
@@ -432,10 +432,10 @@ export default function ReportPage({
                   <span>Tổng Đơn & AOV</span>
                 </div>
                 <div className="report-kpi-value" style={{ color: 'var(--warning-600)' }}>
-                  {formatNumber(summaryData.totalOrders)} đơn
+                  {loading ? <Loading size="sm" inline text="" /> : `${formatNumber(summaryData.totalOrders)} đơn`}
                 </div>
                 <div className="report-kpi-sub">
-                  Giá trị TB/đơn: <strong>{formatCurrency(summaryData.averageOrderValue)}</strong>
+                  Giá trị TB/đơn: <strong>{loading ? '—' : formatCurrency(summaryData.averageOrderValue)}</strong>
                 </div>
               </div>
             </div>
@@ -459,7 +459,12 @@ export default function ReportPage({
                 </div>
 
                 <div className="report-chart-wrapper">
-                  <svg className="report-chart-svg" viewBox="0 0 600 200" preserveAspectRatio="none">
+                  {loading ? (
+                    <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Loading text="Đang tải biểu đồ xu hướng..." size="md" />
+                    </div>
+                  ) : (
+                    <svg className="report-chart-svg" viewBox="0 0 600 200" preserveAspectRatio="none">
                     <line x1="0" y1="40" x2="600" y2="40" stroke="var(--border-subtle)" strokeDasharray="3 3" />
                     <line x1="0" y1="100" x2="600" y2="100" stroke="var(--border-subtle)" strokeDasharray="3 3" />
                     <line x1="0" y1="160" x2="600" y2="160" stroke="var(--border-subtle)" strokeDasharray="3 3" />
@@ -512,6 +517,7 @@ export default function ReportPage({
                       );
                     })}
                   </svg>
+                  )}
                 </div>
               </div>
 
@@ -525,6 +531,8 @@ export default function ReportPage({
                 <Table
                   columns={topColumns}
                   data={topProducts}
+                  loading={loading}
+                  loadingText="Đang tải danh sách bán chạy..."
                   rowKey="productId"
                   emptyMessage="Chưa có dữ liệu giao dịch"
                 />

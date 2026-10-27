@@ -61,11 +61,7 @@ export default function StaffPage({
 
   const fetchUsers = async () => {
     if (!isOnline) {
-      // Offline fallback dummy
-      setUsers([
-        { id: 1, username: 'admin', fullName: 'Quản Trị Viên', role: 'ADMIN', branchIds: [], active: true, createdAt: new Date().toISOString() },
-        { id: 2, username: 'cashier1', fullName: 'Thu Ngân Q1', role: 'CASHIER', branchIds: [1], active: true, createdAt: new Date().toISOString() }
-      ]);
+      setUsers([]);
       return;
     }
     setLoading(true);

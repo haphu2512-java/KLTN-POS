@@ -6,6 +6,7 @@ export default function ProductSearchModal({
   isOpen,
   onClose,
   products = [],
+  loading = false,
   onSelectProduct
 }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -170,6 +171,8 @@ export default function ProductSearchModal({
         <Table
           columns={columns}
           data={displayedProducts}
+          loading={loading}
+          loadingText="Đang nạp danh mục hàng hóa..."
           maxHeight="380px"
           emptyText="Không tìm thấy sản phẩm nào phù hợp"
           onRowClick={(row) => {

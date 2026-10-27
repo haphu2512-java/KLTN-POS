@@ -1,3 +1,4 @@
+import Loading from './Loading';
 import './Table.css';
 
 /**
@@ -8,10 +9,15 @@ export default function Table({
   data = [],
   rowKey = 'id',
   emptyText = 'Không có dữ liệu',
+  emptyMessage, // alternate prop name
+  loading = false,
+  loadingText = 'Đang tải dữ liệu...',
   onRowClick,
   className = '',
   maxHeight
 }) {
+  const finalEmptyText = emptyMessage || emptyText;
+
   return (
     <div
       className={`table-container ${className}`}
@@ -32,10 +38,16 @@ export default function Table({
           </tr>
         </thead>
         <tbody>
-          {data.length === 0 ? (
+          {loading ? (
+            <tr>
+              <td colSpan={columns.length} className="table-loading">
+                <Loading text={loadingText} size="md" inline />
+              </td>
+            </tr>
+          ) : data.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className="table-empty">
-                {emptyText}
+                {finalEmptyText}
               </td>
             </tr>
           ) : (

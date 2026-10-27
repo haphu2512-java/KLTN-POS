@@ -232,6 +232,7 @@ export default function PartnerPage({
               columns={customerColumns}
               data={customers}
               loading={loading}
+              loadingText="Đang tải danh sách khách hàng..."
               emptyMessage="Không tìm thấy khách hàng nào"
             />
           ) : (
@@ -239,6 +240,7 @@ export default function PartnerPage({
               columns={supplierColumns}
               data={filteredSuppliers}
               loading={loading}
+              loadingText="Đang tải danh sách nhà cung cấp..."
               emptyMessage="Không tìm thấy nhà cung cấp nào"
             />
           )}

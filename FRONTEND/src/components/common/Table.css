@@ -61,3 +61,19 @@
   text-align: center;
   color: var(--text-muted);
 }
+
+.table-loading {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.table-loading-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
