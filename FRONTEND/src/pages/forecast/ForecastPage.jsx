@@ -119,13 +119,13 @@ export default function ForecastPage({
     return new Array(30).fill(0);
   }, [selectedForecast]);
 
-  // Nhãn ngày cho phần lịch sử (ngày cuối là hôm nay)
+  // Nhãn ngày cho phần lịch sử (ngày cuối là hôm qua, server bỏ ngày hôm nay chưa bán xong)
   const historyLabels = useMemo(() => {
     const labels = [];
     const today = new Date();
     for (let i = actualSales.length - 1; i >= 0; i--) {
       const d = new Date(today);
-      d.setDate(today.getDate() - i);
+      d.setDate(today.getDate() - i - 1);
       const dd = String(d.getDate()).padStart(2, '0');
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       labels.push(`${dd}/${mm}`);
@@ -150,7 +150,8 @@ export default function ForecastPage({
     const labels = [];
     const today = new Date();
 
-    for (let i = 1; i <= forecastDays; i++) {
+    // Dự báo bắt đầu từ hôm nay, nối tiếp ngày cuối của lịch sử
+    for (let i = 0; i < forecastDays; i++) {
       const nextDate = new Date(today);
       nextDate.setDate(today.getDate() + i);
       const dd = String(nextDate.getDate()).padStart(2, '0');

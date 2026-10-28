@@ -1,6 +1,8 @@
 package com.pos.sale;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.pos.product.CostPriceSerializer;
 import com.pos.product.Product;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -39,6 +41,7 @@ public class InvoiceDetail {
 
     /** Giá vốn tại thời điểm bán, để báo cáo lợi nhuận không bị ảnh hưởng khi giá vốn thay đổi sau này */
     @Column(name = "cost_price", precision = 14, scale = 2)
+    @JsonSerialize(using = CostPriceSerializer.class)
     private BigDecimal costPrice;
 
     @Column(name = "total_price", nullable = false, precision = 14, scale = 2)

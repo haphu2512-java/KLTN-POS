@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,15 +31,24 @@ public class AuthController {
     private final LoginService loginService;
     private final CurrentUserService currentUserService;
     private final BranchRepository branchRepository;
+    private final LoginAttemptService loginAttemptService;
 
     @PostMapping("/login")
     @Operation(summary = "Đăng nhập và chọn chi nhánh làm việc, nhận JWT Token",
             description = "Tài khoản có nhiều chi nhánh mà chưa gửi branchId: trả 409 BRANCH_SELECTION_REQUIRED "
                     + "kèm data.branches để chọn rồi gửi lại.")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
-        );
+        loginAttemptService.checkNotLocked(request.getUsername());
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
+            );
+        } catch (BadCredentialsException e) {
+            loginAttemptService.recordFailure(request.getUsername());
+            throw e;
+        }
+        loginAttemptService.recordSuccess(request.getUsername());
 
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
         User user = userRepository.findByUsername(userDetails.getUsername())
