@@ -8,6 +8,7 @@ import VietQRModal from './VietQRModal';
 import ScannerPairingModal from './ScannerPairingModal';
 import ShiftModal from './ShiftModal';
 import CashMovementModal from './CashMovementModal';
+import RecentInvoicesModal from './RecentInvoicesModal';
 import { Modal, Button } from '../../components/common';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { useHotkeys } from '../../hooks/useHotkeys';
@@ -133,6 +134,7 @@ export default function PosPage({
   const [isPairingOpen, setIsPairingOpen] = useState(false);
   const [isShiftOpen, setIsShiftOpen] = useState(false);
   const [isCashOpen, setIsCashOpen] = useState(false);
+  const [isRecentInvoicesOpen, setIsRecentInvoicesOpen] = useState(false);
   // Ca đang trực của tài khoản: { session, shiftRequired, suggested..., previousShift }
   const [shiftInfo, setShiftInfo] = useState(null);
   // Lý do mở hộp ca: 'sale' khi thu ngân bán hàng lúc chưa mở ca, null khi tự bấm nút Mở ca / Đóng ca
@@ -292,7 +294,7 @@ export default function PosPage({
 
   // Hook Barcode scanner
   useBarcodeScanner(handleBarcodeScanned, {
-    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !isPairingOpen && !isShiftOpen && !isCashOpen && !remoteBatch
+    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !isPairingOpen && !isShiftOpen && !isCashOpen && !isRecentInvoicesOpen && !remoteBatch
   });
 
   // Listen to simulated scan events (e.g. from BarcodePrintModal or mock tester)
@@ -640,6 +642,7 @@ export default function PosPage({
     F2: () => setIsSearchOpen(true),
     F3: () => setIsCustomerOpen(true),
     F4: () => handleProcessPayment(),
+    F7: () => setIsRecentInvoicesOpen(true),
     F8: () => handleAddTab(),
     F9: () => handleCancelOrder(),
     Escape: () => {
@@ -648,6 +651,7 @@ export default function PosPage({
       setIsVietQROpen(false);
       setIsHelpOpen(false);
       setIsPairingOpen(false);
+      setIsRecentInvoicesOpen(false);
       setRemoteBatch(null);
     }
   });
@@ -669,6 +673,7 @@ export default function PosPage({
         onOpenCashMovement={isOnline && userId ? () => loadShift().then(() => setIsCashOpen(true)) : undefined}
         isOnline={isOnline}
         isWsConnected={isWsConnected}
+        onOpenRecentInvoices={() => setIsRecentInvoicesOpen(true)}
         terminalName={terminal?.name}
         pairedCount={pairedCount}
         onOpenPairing={() => setIsPairingOpen(true)}
@@ -834,6 +839,14 @@ export default function PosPage({
         </div>
       </Modal>
 
+      <RecentInvoicesModal
+        isOpen={isRecentInvoicesOpen}
+        onClose={() => setIsRecentInvoicesOpen(false)}
+        shiftSession={shiftInfo?.session}
+        branchId={branchId}
+        cashierName={currentUser?.fullName || currentUser?.username || 'Thu ngân'}
+      />
+
       <Modal
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
@@ -857,6 +870,10 @@ export default function PosPage({
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
             <span>Thực hiện thanh toán & In hóa đơn</span>
             <kbd>F4</kbd>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+            <span>Xem lịch sử hóa đơn gần đây / In lại bill</span>
+            <kbd>F7</kbd>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
             <span>Tạo thêm tab đơn hàng mới</span>

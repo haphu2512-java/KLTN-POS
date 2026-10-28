@@ -26,7 +26,7 @@ public class InvoiceController {
     private final CurrentUserService currentUserService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
     @Operation(summary = "Danh sách hóa đơn (phân trang hoặc tất cả). ADMIN lọc chi nhánh bất kỳ, vai trò khác chỉ chi nhánh đang đăng nhập")
     public ResponseEntity<ApiResponse<?>> getAll(
             @RequestParam(required = false) Long branchId,

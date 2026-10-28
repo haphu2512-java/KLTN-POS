@@ -10,6 +10,7 @@ export default function PosHeader({
   shiftOpen = false,
   onOpenShift,
   onOpenCashMovement,
+  onOpenRecentInvoices,
   isOnline = true,
   isWsConnected = false,
   terminalName,
@@ -52,6 +53,17 @@ export default function PosHeader({
           {statusText}
         </span>
         <span className="pos-time">{timeStr}</span>
+        {onOpenRecentInvoices && (
+          <Button
+            variant="secondary"
+            size="sm"
+            hotkey="F7"
+            onClick={onOpenRecentInvoices}
+            title="Xem lịch sử hóa đơn gần đây và in lại bill (F7)"
+          >
+            Hóa đơn gần đây
+          </Button>
+        )}
         {shiftOpen && onOpenCashMovement && (
           <Button variant="secondary" size="sm" onClick={onOpenCashMovement} title="Chi trong ca, nộp quỹ, bổ sung tiền lẻ">
             Thu/chi két
