@@ -152,6 +152,18 @@ class ApiSecurityIntegrationTest {
     }
 
     @Test
+    @DisplayName("Giá vốn bị ẩn với thu ngân, admin vẫn thấy")
+    void costPriceHiddenFromCashier() throws Exception {
+        mvc.perform(get("/api/products/1").header("Authorization", cashierToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.salePrice").exists())
+                .andExpect(jsonPath("$.data.costPrice").value(org.hamcrest.Matchers.nullValue()));
+        mvc.perform(get("/api/products/1").header("Authorization", tokenFor("admin")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.costPrice").isNumber());
+    }
+
+    @Test
     @DisplayName("Admin xem được báo cáo")
     void adminCanReadReports() throws Exception {
         mvc.perform(get("/api/reports/revenue").header("Authorization", tokenFor("admin")))

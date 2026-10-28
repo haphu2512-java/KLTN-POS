@@ -1,5 +1,6 @@
 package com.pos.product;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -34,6 +35,7 @@ public class Product {
     private String imageUrl;
 
     @Column(name = "cost_price", precision = 14, scale = 2)
+    @JsonSerialize(using = CostPriceSerializer.class)
     private BigDecimal costPrice;
 
     @Column(name = "sale_price", nullable = false, precision = 14, scale = 2)

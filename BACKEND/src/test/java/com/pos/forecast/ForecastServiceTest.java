@@ -132,6 +132,27 @@ class ForecastServiceTest {
     }
 
     @Test
+    @DisplayName("Chuỗi lịch sử kết thúc ở hôm qua: hóa đơn hôm nay (chưa hết ngày) không được tính")
+    void testTodayExcludedFromHistory() {
+        Product product = Product.builder().id(4L).name("Bánh quy").active(true).build();
+
+        LocalDate today = LocalDate.now();
+        when(productRepository.findByActiveTrue()).thenReturn(List.of(product));
+        when(invoiceRepository.getBranchDailyProductSales(eq(1L), any(LocalDateTime.class)))
+                .thenReturn(List.of(
+                        new Object[]{4L, java.sql.Date.valueOf(today.minusDays(1)), 6L},
+                        new Object[]{4L, java.sql.Date.valueOf(today), 1L}));
+        when(inventoryRepository.findByBranchId(1L)).thenReturn(List.of());
+
+        ForecastResponse resp = forecastService.getDemandForecastAndReplenishment(1L, 7, "MOVING_AVG").get(0);
+
+        List<Double> history = resp.getHistoricalDailySales();
+        assertEquals(ForecastService.HISTORY_DAYS, history.size());
+        assertEquals(6.0, history.get(history.size() - 1), "Ngày cuối của chuỗi phải là hôm qua");
+        assertEquals(6.0, history.stream().mapToDouble(Double::doubleValue).sum(), "Không cộng hóa đơn hôm nay");
+    }
+
+    @Test
     @DisplayName("Sản phẩm mới chưa có lịch sử bán: không gán dữ liệu giả, restock = 0")
     void testGetDemandForecastSparseHistory() {
         Product product = Product.builder()
@@ -232,7 +253,7 @@ class ForecastServiceTest {
         LocalDate today = LocalDate.now();
         List<Object[]> rows = new ArrayList<>();
         for (int i = 0; i < ForecastService.HISTORY_DAYS; i++) {
-            rows.add(new Object[]{7L, java.sql.Date.valueOf(today.minusDays(i)), 10L});
+            rows.add(new Object[]{7L, java.sql.Date.valueOf(today.minusDays(i + 1)), 10L});
         }
         when(productRepository.findById(7L)).thenReturn(java.util.Optional.of(product));
         when(invoiceRepository.getBranchDailyProductSales(eq(1L), any(LocalDateTime.class))).thenReturn(rows);
