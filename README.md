@@ -17,6 +17,7 @@
 | File | Nội dung |
 |------|----------|
 | `README.md` | Tổng quan, cách chạy, kiến trúc, danh sách API |
+| [`setup.md`](setup.md) | Dựng lại toàn bộ hệ thống từ máy trắng, từng bước cho người mới |
 | [`AI_for_POS.md`](AI_for_POS.md) | Bài toán, công thức và kiến trúc module dự báo AI |
 | [`AI_FORECAST/README.md`](AI_FORECAST/README.md) | Bản Python kiểm chứng mô hình dự báo |
 | [`FRONTEND/README.md`](FRONTEND/README.md) | Ứng dụng desktop Electron |
