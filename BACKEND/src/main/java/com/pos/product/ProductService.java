@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -36,12 +37,14 @@ public class ProductService {
 
     @Transactional
     public Product createProduct(ProductRequest req) {
-        if (productRepository.existsByBarcode(req.getBarcode().trim())) {
+        boolean generateBarcode = !StringUtils.hasText(req.getBarcode());
+        if (!generateBarcode && productRepository.existsByBarcode(req.getBarcode().trim())) {
             throw new BusinessException("BARCODE_ALREADY_EXISTS", "Mã vạch đã tồn tại trong hệ thống: " + req.getBarcode());
         }
 
         Product product = Product.builder()
-                .barcode(req.getBarcode().trim())
+                // Bỏ trống mã vạch: lưu mã tạm để lấy ID, rồi sinh mã nội bộ theo BarcodeRules
+                .barcode(generateBarcode ? "TMP-" + UUID.randomUUID() : req.getBarcode().trim())
                 .name(req.getName().trim())
                 .category(req.getCategory() != null ? req.getCategory().trim() : "Khác")
                 .costPrice(req.getCostPrice() != null ? req.getCostPrice() : req.getSalePrice())
@@ -51,14 +54,20 @@ public class ProductService {
                 .active(true)
                 .build();
 
-        return productRepository.save(product);
+        Product saved = productRepository.saveAndFlush(product);
+        if (generateBarcode) {
+            saved.setBarcode(BarcodeRules.storeBarcode(saved.getId()));
+            saved = productRepository.save(saved);
+        }
+        return saved;
     }
 
     @Transactional
     public Product updateProduct(Long id, ProductRequest req) {
         Product existing = getProductById(id);
 
-        if (!existing.getBarcode().equalsIgnoreCase(req.getBarcode().trim())) {
+        // Bỏ trống mã vạch khi sửa thì giữ mã hiện tại
+        if (StringUtils.hasText(req.getBarcode()) && !existing.getBarcode().equalsIgnoreCase(req.getBarcode().trim())) {
             if (productRepository.existsByBarcode(req.getBarcode().trim())) {
                 throw new BusinessException("BARCODE_ALREADY_EXISTS", "Mã vạch mới đã tồn tại trên hệ thống");
             }

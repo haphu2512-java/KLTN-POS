@@ -11,7 +11,7 @@ const STORAGE_KEYS = {
 const SEED_PRODUCTS = [
   {
     id: 1,
-    barcode: "1053044001004",
+    barcode: "2000000000015",
     name: "Snack mực vị tương ớt Sriracha Talaethong gói 100g",
     category: "Bánh snack",
     unit: "Gói",
@@ -21,7 +21,7 @@ const SEED_PRODUCTS = [
   },
   {
     id: 2,
-    barcode: "1053820000425",
+    barcode: "2000000000022",
     name: "Ô mai hỗn hợp cầu vồng Rainbow Plum gói 408g",
     category: "Trái cây sấy",
     unit: "Gói",
@@ -31,7 +31,7 @@ const SEED_PRODUCTS = [
   },
   {
     id: 3,
-    barcode: "1053086000170",
+    barcode: "2000000000039",
     name: "Bánh gạo vị phô mai Poca Làng gạo gói 108g",
     category: "Bánh gạo",
     unit: "Gói",
@@ -41,7 +41,7 @@ const SEED_PRODUCTS = [
   },
   {
     id: 4,
-    barcode: "1052850001654",
+    barcode: "2000000000046",
     name: "Kẹo Golia Frutta C nhân hương chanh gừng hộp 105.6g",
     category: "Kẹo cứng",
     unit: "Hộp",
@@ -51,32 +51,32 @@ const SEED_PRODUCTS = [
   },
   {
     id: 5,
-    barcode: "1052850000849",
+    barcode: "2000000000053",
     name: "Kẹo socola M&M's Mini ống 35g",
-    category: "Kẹo socola",
-    unit: "Ống",
-    salePrice: 24000,
-    costPrice: 19000,
+    category: "Socola",
+    unit: "Hủ",
+    salePrice: 33000,
+    costPrice: 26000,
     stock: 50
   },
   {
-    id: 6,
-    barcode: "8934563148268",
-    name: "Mì tôm Hảo Hảo chua cay Handy gói 75g",
-    category: "Thực phẩm ăn liền",
-    unit: "Gói",
-    salePrice: 8000,
-    costPrice: 6200,
+    id: 1097,
+    barcode: "8934588012228",
+    name: "Nước ngọt Pepsi Cola lon 320ml",
+    category: "Nước ngọt",
+    unit: "Lon",
+    salePrice: 11000,
+    costPrice: 9000,
     stock: 120
   },
   {
-    id: 7,
-    barcode: "8934588012117",
-    name: "Nước ngọt Coca-Cola lon 320ml",
-    category: "Đồ uống",
+    id: 1105,
+    barcode: "8935049510123",
+    name: "Nước ngọt Coca Cola lon 320ml",
+    category: "Nước ngọt",
     unit: "Lon",
-    salePrice: 10000,
-    costPrice: 8500,
+    salePrice: 11000,
+    costPrice: 9000,
     stock: 200
   }
 ];

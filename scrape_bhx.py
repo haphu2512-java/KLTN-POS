@@ -102,20 +102,37 @@ def clean_unit(unit_str):
             return u.capitalize()
     return unit_str[:25]
 
-def generate_ean13(idx):
-    # Vietnamese prefix 893
-    base = f"893{idx:09d}"
-    # Calculate checksum
-    odd_sum = sum(int(base[i]) for i in range(0, 12, 2))
-    even_sum = sum(int(base[i]) for i in range(1, 12, 2))
-    total = odd_sum + even_sum * 3
-    checksum = (10 - (total % 10)) % 10
-    return f"{base}{checksum}"
+# Quy tắc mã vạch giống BACKEND/.../product/BarcodeRules.java:
+# giữ mã EAN/UPC thật, còn lại sinh EAN-13 nội bộ "20" + ID sản phẩm (10 số) + số kiểm tra.
+BHX_INTERNAL_PREFIXES = {"101", "103", "105", "106", "123", "125", "135", "149", "925", "989", "990", "991", "992", "993"}
+
+def gs1_check_digit(body):
+    total = 0
+    for i, ch in enumerate(reversed(body)):
+        total += int(ch) * (3 if i % 2 == 0 else 1)
+    return (10 - total % 10) % 10
+
+def is_valid_gtin(code):
+    return (code.isdigit() and len(code) in (8, 12, 13, 14)
+            and gs1_check_digit(code[:-1]) == int(code[-1]))
+
+def needs_regeneration(code):
+    if not is_valid_gtin(code):
+        return True
+    if len(code) != 13:
+        return False
+    if code.startswith("2") and not code.startswith("20"):
+        return True
+    bhx_internal = code[:3] in BHX_INTERNAL_PREFIXES and code[7:9] == "00"
+    return bhx_internal or code.startswith("8931000000")
+
+def store_barcode(product_id):
+    body = f"20{product_id:010d}"
+    return f"{body}{gs1_check_digit(body)}"
 
 def fetch_all_bhx_products():
     collected = {}
     used_barcodes = set()
-    barcode_counter = 100000000
 
     print("=== 1. FETCHING FLASH SALE PRODUCTS ===")
     fs_res = make_request("https://api.bachhoaxanh.com/gw/FlashSale/GetAllProductFlashSaleInDay", {})
@@ -225,12 +242,12 @@ def fetch_all_bhx_products():
         if cost_price <= 0:
             cost_price = max(1000.0, sale_price - 3000.0)
             
-        # Ensure unique valid barcode
-        barcode = p['barcode']
-        if not barcode or len(barcode) < 6 or barcode in used_barcodes or not barcode.isdigit():
-            barcode = generate_ean13(barcode_counter)
-            barcode_counter += 1
-            
+        # ID trong import_bhx_data.sql là thứ tự trong danh sách (bắt đầu từ 1)
+        product_id = len(cleaned_products) + 1
+        barcode = str(p['barcode'] or "").strip()
+        if needs_regeneration(barcode) or barcode in used_barcodes:
+            barcode = store_barcode(product_id)
+
         used_barcodes.add(barcode)
         
         cleaned_products.append({
