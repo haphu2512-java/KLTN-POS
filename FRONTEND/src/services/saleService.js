@@ -6,6 +6,13 @@ export const saleService = {
     return Array.isArray(res) ? res : (res?.data || []);
   },
 
+  /** Hóa đơn mới nhất của chi nhánh (phân trang ở server, không tải toàn bộ lịch sử) */
+  async getRecentInvoices(branchId, size = 50) {
+    const res = await api.get('/invoices', { params: { branchId: branchId || undefined, page: 0, size } });
+    const data = res?.data !== undefined ? res.data : res;
+    return Array.isArray(data) ? data : (data?.content || []);
+  },
+
   async getInvoiceById(id) {
     const res = await api.get(`/invoices/${id}`);
     return res?.data !== undefined ? res.data : res;

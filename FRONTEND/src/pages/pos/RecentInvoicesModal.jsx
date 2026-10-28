@@ -10,10 +10,13 @@ export default function RecentInvoicesModal({
   isOpen,
   onClose,
   shiftSession = null,
-  branchId = 1,
-  cashierName = 'Thu ngân'
+  branchId,
+  cashierName = 'Thu ngân',
+  // Chỉ ADMIN/MANAGER xem được toàn bộ hóa đơn chi nhánh; thu ngân chỉ xem hóa đơn trong ca của mình
+  canViewAll = false
 }) {
-  const [activeTab, setActiveTab] = useState(shiftSession ? 'shift' : 'all');
+  const defaultTab = shiftSession || !canViewAll ? 'shift' : 'all';
+  const [activeTab, setActiveTab] = useState(defaultTab);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -32,21 +35,31 @@ export default function RecentInvoicesModal({
       setSearchTerm('');
       setPrintStatus(null);
       setError('');
-      setActiveTab(shiftSession ? 'shift' : 'all');
+      setActiveTab(defaultTab);
     }
   }
+  // Ca tải xong sau khi modal đã mở: chuyển sang tab ca
+  const [prevShiftId, setPrevShiftId] = useState(shiftSession?.id);
+  if (shiftSession?.id !== prevShiftId) {
+    setPrevShiftId(shiftSession?.id);
+    if (shiftSession) setActiveTab('shift');
+  }
+  const showingShift = activeTab === 'shift' || !canViewAll;
 
   // Tải danh sách hóa đơn
   useEffect(() => {
     if (!isOpen || selectedInvoice) return;
+    if (showingShift && !shiftSession?.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setInvoices([]);
+      return;
+    }
     let active = true;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
 
-    const req =
-      activeTab === 'shift' && shiftSession?.id
-        ? shiftService.getShiftInvoices(shiftSession.id)
-        : saleService.getInvoices(branchId);
+    const req = showingShift
+      ? shiftService.getShiftInvoices(shiftSession.id)
+      : saleService.getRecentInvoices(branchId);
 
     req
       .then((data) => {
@@ -67,30 +80,38 @@ export default function RecentInvoicesModal({
     return () => {
       active = false;
     };
-  }, [isOpen, activeTab, selectedInvoice, shiftSession?.id, branchId, reloadKey]);
+  }, [isOpen, showingShift, selectedInvoice, shiftSession?.id, branchId, reloadKey]);
 
   // Xem chi tiết một hóa đơn và tải đầy đủ items
+  // Không dùng dòng danh sách thay cho chi tiết: dòng của tab ca không có mặt hàng, in ra sẽ thành bill trống
   const handleSelectInvoice = async (inv) => {
+    if (loadingDetail) return;
     setLoadingDetail(true);
     setPrintStatus(null);
+    setError('');
     try {
       const full = await saleService.getInvoiceById(inv.id);
-      setSelectedInvoice(full || inv);
+      if (!full?.id) throw new Error('empty');
+      setSelectedInvoice(full);
     } catch (err) {
       console.error('Lỗi tải chi tiết hóa đơn:', err);
-      // Fallback nếu đã có sẵn thông tin
-      setSelectedInvoice(inv);
+      setError(err.response?.data?.message || 'Không tải được chi tiết hóa đơn, vui lòng thử lại.');
     } finally {
       setLoadingDetail(false);
     }
   };
 
   // In lại hóa đơn K80
+  const canPrint = (selectedInvoice?.details || []).length > 0;
   const handlePrintReceipt = async () => {
-    if (!selectedInvoice) return;
+    if (!canPrint) return;
     setPrintStatus({ loading: true, message: 'Đang gửi lệnh in...' });
     try {
-      const receipt = receiptFromInvoice(selectedInvoice, cashierName);
+      const receipt = receiptFromInvoice(
+        selectedInvoice,
+        selectedInvoice.employeeName || cashierName,
+        { at: new Date(), by: cashierName }
+      );
       const res = await printInvoiceReceipt(receipt);
       if (res?.success) {
         setPrintStatus({ success: true, message: 'Lệnh in hóa đơn K80 đã được gửi thành công!' });
@@ -183,11 +204,16 @@ export default function RecentInvoicesModal({
       title: 'Trạng thái',
       align: 'center',
       width: '120px',
-      render: (val) => (
-        <Badge variant={val === 'REFUNDED' ? 'danger' : 'success'}>
-          {val === 'REFUNDED' ? 'Đã hoàn trả' : 'Đã thanh toán'}
-        </Badge>
-      )
+      render: (val, inv) =>
+        inv.kind === 'REFUND_OTHER_SHIFT' ? (
+          <Badge variant="warning" title="Hóa đơn của ca khác, tiền hoàn trả chi từ két ca này">
+            Hoàn trả (ca khác)
+          </Badge>
+        ) : (
+          <Badge variant={val === 'REFUNDED' ? 'danger' : 'success'}>
+            {val === 'REFUNDED' ? 'Đã hoàn trả' : 'Đã thanh toán'}
+          </Badge>
+        )
     },
     {
       key: 'actions',
@@ -230,8 +256,8 @@ export default function RecentInvoicesModal({
               <Button
                 variant="primary"
                 onClick={handlePrintReceipt}
-                disabled={printStatus?.loading}
-                title="In lại hóa đơn ra máy in nhiệt K80"
+                disabled={printStatus?.loading || !canPrint}
+                title={canPrint ? 'In lại hóa đơn ra máy in nhiệt K80' : 'Hóa đơn không có mặt hàng để in'}
               >
                 {printStatus?.loading ? 'Đang in...' : 'In lại hóa đơn (K80)'}
               </Button>
@@ -255,12 +281,6 @@ export default function RecentInvoicesModal({
       {selectedInvoice ? (
         /* DETAIL VIEW */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {loadingDetail && (
-            <div style={{ textAlign: 'center', padding: '12px' }}>
-              <Loading text="Đang tải chi tiết hóa đơn..." inline />
-            </div>
-          )}
-
           {printStatus && (
             <div
               style={{
@@ -435,7 +455,7 @@ export default function RecentInvoicesModal({
             }}
           >
             <div style={{ display: 'flex', gap: '6px' }}>
-              {shiftSession && (
+              {shiftSession && canViewAll && (
                 <button
                   type="button"
                   className={`btn-filter ${activeTab === 'shift' ? 'active' : ''}`}
@@ -454,6 +474,14 @@ export default function RecentInvoicesModal({
                   Đơn trong ca này ({shiftSession.workShiftName || 'Ca hiện tại'})
                 </button>
               )}
+              {!canViewAll && (
+                <span style={{ fontSize: '13px', fontWeight: 500 }}>
+                  {shiftSession
+                    ? `Đơn trong ca này (${shiftSession.workShiftName || 'Ca hiện tại'})`
+                    : 'Chưa mở ca: mở ca để xem hóa đơn trong ca'}
+                </span>
+              )}
+              {canViewAll && (
               <button
                 type="button"
                 className={`btn-filter ${activeTab === 'all' ? 'active' : ''}`}
@@ -469,8 +497,9 @@ export default function RecentInvoicesModal({
                   cursor: 'pointer'
                 }}
               >
-                Tất cả đơn gần đây của quầy
+                50 đơn gần nhất của chi nhánh
               </button>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flex: '1', maxWidth: '320px', marginLeft: 'auto' }}>
@@ -485,6 +514,12 @@ export default function RecentInvoicesModal({
               </Button>
             </div>
           </div>
+
+          {loadingDetail && (
+            <div style={{ textAlign: 'center', padding: '4px' }}>
+              <Loading text="Đang tải chi tiết hóa đơn..." inline />
+            </div>
+          )}
 
           {error && (
             <div
@@ -509,8 +544,10 @@ export default function RecentInvoicesModal({
             emptyMessage={
               searchTerm
                 ? 'Không tìm thấy hóa đơn nào khớp với từ khóa tìm kiếm.'
-                : activeTab === 'shift'
-                ? 'Ca hiện tại chưa có hóa đơn bán hàng nào.'
+                : showingShift
+                ? shiftSession
+                  ? 'Ca hiện tại chưa có hóa đơn bán hàng nào.'
+                  : 'Chưa mở ca nên chưa có hóa đơn trong ca.'
                 : 'Chưa có hóa đơn nào được ghi nhận.'
             }
             onRowClick={handleSelectInvoice}

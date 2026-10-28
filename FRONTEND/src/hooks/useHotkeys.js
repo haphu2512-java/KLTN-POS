@@ -13,7 +13,7 @@ export function useHotkeys(keyMap, enabled = true) {
       const handler = keyMap[e.key];
       if (handler) {
         // Prevent default browser actions for standard POS keys like F1, F3, F4, etc.
-        if (['F1', 'F2', 'F3', 'F4', 'F8', 'F9'].includes(e.key)) {
+        if (['F1', 'F2', 'F3', 'F4', 'F7', 'F8', 'F9'].includes(e.key)) {
           e.preventDefault();
         }
         handler(e);
