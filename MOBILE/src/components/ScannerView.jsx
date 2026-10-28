@@ -16,12 +16,12 @@ import { colors, fonts, radius, type } from '../theme';
 
 // Mã mẫu để thử nhanh khi không có hàng thật trong tay
 const MOCK_BARCODES = [
-  { barcode: '1053044001004', name: 'Snack mực Talaethong' },
-  { barcode: '1053820000425', name: 'Ô mai cầu vồng Plum' },
-  { barcode: '1053086000170', name: 'Bánh gạo Poca' },
-  { barcode: '1052850001654', name: 'Kẹo Golia C' },
-  { barcode: '8934563148268', name: 'Mì Hảo Hảo' },
-  { barcode: '8934588012117', name: 'Coca-Cola 320ml' }
+  { barcode: '2000000000015', name: 'Snack mực Talaethong' },
+  { barcode: '2000000000022', name: 'Ô mai cầu vồng Plum' },
+  { barcode: '2000000000039', name: 'Bánh gạo Poca' },
+  { barcode: '2000000000046', name: 'Kẹo Golia C' },
+  { barcode: '8934588012228', name: 'Pepsi lon 320ml' },
+  { barcode: '8935049510123', name: 'Coca-Cola lon 320ml' }
 ];
 
 const BARCODE_TYPES = ['ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e', 'qr'];

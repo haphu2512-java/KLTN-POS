@@ -4,6 +4,7 @@ import com.pos.branch.Branch;
 import com.pos.branch.BranchRepository;
 import com.pos.inventory.Inventory;
 import com.pos.inventory.InventoryRepository;
+import com.pos.product.BarcodeSyncService;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
 import com.pos.purchase.Supplier;
@@ -41,9 +42,13 @@ public class DatabaseInitializer implements CommandLineRunner {
     private final WorkShiftRepository workShiftRepository;
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbcTemplate;
+    private final BarcodeSyncService barcodeSyncService;
 
     @Value("${app.seed.default-password:}")
     private String seedPassword;
+
+    @Value("${app.barcode.sync-on-startup:true}")
+    private boolean syncBarcodesOnStartup;
 
     @Override
     public void run(String... args) {
@@ -131,6 +136,10 @@ public class DatabaseInitializer implements CommandLineRunner {
             }
 
             log.info("Đã khởi tạo thành công dữ liệu mẫu cho hệ thống POS!");
+        }
+
+        if (syncBarcodesOnStartup) {
+            barcodeSyncService.syncLegacyBarcodes();
         }
     }
 

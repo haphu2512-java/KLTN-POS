@@ -82,6 +82,20 @@ Tạo tự động khi database còn trống, mật khẩu là giá trị `SEED_
 
 Bốn vai trò: `ADMIN`, `MANAGER`, `CASHIER`, `WAREHOUSE`. Báo cáo dành cho ADMIN/MANAGER; Dự báo dành cho ADMIN/MANAGER/WAREHOUSE.
 
+### Dữ liệu sản phẩm và mã vạch
+Database mới chỉ có 8 sản phẩm mẫu. Muốn có 1.949 sản phẩm Bách Hóa Xanh thì nạp `import_bhx_data.sql` sau khi backend đã chạy lần đầu (script này **xóa sạch** bảng `product` và `inventory` rồi nạp lại):
+
+```bash
+docker exec -i pos-mysql mysql -uroot -p"$DB_ROOT_PASSWORD" pos_inventory < import_bhx_data.sql
+```
+
+Quy tắc mã vạch (`BarcodeRules.java`):
+- Mã EAN-8/UPC-A/EAN-13/ITF-14 thật in trên bao bì (đúng số kiểm tra) được giữ nguyên.
+- Sản phẩm không có mã thật dùng mã EAN-13 nội bộ của cửa hàng: `20` + ID sản phẩm đủ 10 số + số kiểm tra (vd. sản phẩm #3 → `2000000000039`). In tem ở trang Kho để dán lên hàng.
+- Bỏ trống mã vạch khi tạo sản phẩm thì hệ thống tự sinh theo quy tắc trên.
+- Lúc khởi động, backend tự đổi các mã cũ không quét được (mã nội bộ BHX, mã giả `8931000000xxx`, mã sai số kiểm tra) sang mã nội bộ. Chỉ đổi cột mã vạch, không xóa hóa đơn hay tồn kho. Tắt bằng `BARCODE_SYNC_ON_STARTUP=false`; quản trị có thể chạy tay qua `POST /api/products/barcodes/sync`.
+- Sau khi đồng bộ, mở app điện thoại khi có mạng để tải lại danh mục (danh mục offline cũ vẫn mang mã cũ).
+
 ### Chi nhánh và ca làm
 - Chi nhánh được chọn ở bước đăng nhập. Tài khoản chỉ chọn được chi nhánh quản trị đã phân công (trang Tài khoản, một người có thể được phân công nhiều chi nhánh); được phân công một chi nhánh thì vào thẳng. Quản trị chọn được mọi chi nhánh.
 - Chi nhánh nằm trong token: bán hàng, nhập kho, điều chuyển, mở ca đều ghi vào chi nhánh đó. Muốn đổi chi nhánh thì đăng xuất và đăng nhập lại.
@@ -285,6 +299,7 @@ Mọi API (trừ đăng nhập và `/api/scanner/ping`) cần header `Authorizat
 | POST | `/api/products` | Tạo sản phẩm |
 | PUT | `/api/products/{id}` | Cập nhật sản phẩm |
 | DELETE | `/api/products/{id}` | Xóa mềm sản phẩm |
+| POST | `/api/products/barcodes/sync` | (ADMIN) Đổi mã cũ không quét được sang mã nội bộ `20` + ID |
 
 ### Inventory
 | Method | Endpoint | Mô tả |
