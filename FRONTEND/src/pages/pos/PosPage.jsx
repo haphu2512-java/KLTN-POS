@@ -642,7 +642,7 @@ export default function PosPage({
     F2: () => setIsSearchOpen(true),
     F3: () => setIsCustomerOpen(true),
     F4: () => handleProcessPayment(),
-    F7: () => setIsRecentInvoicesOpen(true),
+    F7: () => isOnline && setIsRecentInvoicesOpen(true),
     F8: () => handleAddTab(),
     F9: () => handleCancelOrder(),
     Escape: () => {
@@ -673,7 +673,7 @@ export default function PosPage({
         onOpenCashMovement={isOnline && userId ? () => loadShift().then(() => setIsCashOpen(true)) : undefined}
         isOnline={isOnline}
         isWsConnected={isWsConnected}
-        onOpenRecentInvoices={() => setIsRecentInvoicesOpen(true)}
+        onOpenRecentInvoices={isOnline ? () => setIsRecentInvoicesOpen(true) : undefined}
         terminalName={terminal?.name}
         pairedCount={pairedCount}
         onOpenPairing={() => setIsPairingOpen(true)}
@@ -845,6 +845,7 @@ export default function PosPage({
         shiftSession={shiftInfo?.session}
         branchId={branchId}
         cashierName={currentUser?.fullName || currentUser?.username || 'Thu ngân'}
+        canViewAll={currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER'}
       />
 
       <Modal

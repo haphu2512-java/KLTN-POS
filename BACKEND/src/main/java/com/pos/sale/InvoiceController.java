@@ -26,7 +26,7 @@ public class InvoiceController {
     private final CurrentUserService currentUserService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Danh sách hóa đơn (phân trang hoặc tất cả). ADMIN lọc chi nhánh bất kỳ, vai trò khác chỉ chi nhánh đang đăng nhập")
     public ResponseEntity<ApiResponse<?>> getAll(
             @RequestParam(required = false) Long branchId,
@@ -41,9 +41,10 @@ public class InvoiceController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Xem chi tiết hóa đơn theo ID")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @Operation(summary = "Xem chi tiết hóa đơn theo ID. ADMIN mọi hóa đơn, MANAGER hóa đơn chi nhánh đang đăng nhập, CASHIER hóa đơn trong ca của mình")
     public ResponseEntity<ApiResponse<Invoice>> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.ok(invoiceService.getInvoiceById(id)));
+        return ResponseEntity.ok(ApiResponse.ok(invoiceService.getInvoiceForViewer(id, currentUserService.getCurrentUser())));
     }
 
     @PostMapping

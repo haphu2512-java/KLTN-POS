@@ -5,7 +5,15 @@ import com.pos.user.Role;
 import com.pos.user.User;
 import com.pos.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
+import com.pos.branch.BranchRepository;
+import com.pos.sale.Invoice;
+import com.pos.sale.InvoiceRepository;
+import com.pos.sale.PaymentMethod;
 import com.pos.shift.ShiftAssignmentRepository;
+import com.pos.shift.ShiftSession;
+import com.pos.shift.ShiftSessionRepository;
+import com.pos.shift.ShiftStatus;
+import com.pos.shift.WorkShiftRepository;
 import com.pos.staff.StaffMemberRepository;
 import com.pos.support.ShiftTestData;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +24,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -54,6 +66,18 @@ class ApiSecurityIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private InvoiceRepository invoiceRepository;
+
+    @Autowired
+    private BranchRepository branchRepository;
+
+    @Autowired
+    private ShiftSessionRepository shiftSessionRepository;
+
+    @Autowired
+    private WorkShiftRepository workShiftRepository;
 
     private String cashierToken;
 
@@ -169,5 +193,45 @@ class ApiSecurityIntegrationTest {
 
         mvc.perform(get("/api/products").header("Authorization", token))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Chi tiết hóa đơn: thu ngân chỉ xem hóa đơn trong ca của mình, admin xem được mọi hóa đơn")
+    void invoiceDetailScopedToOwnShift() throws Exception {
+        User cashier = userRepository.findByUsername("cashier").orElseThrow();
+        User other = userRepository.save(User.builder().username("other_cashier").password("x")
+                .fullName("Thu ngân khác").role(Role.CASHIER).branchIds(TestAuth.branches(1L)).active(true).build());
+
+        Long ownShift = closedShift(cashier.getId());
+        Long otherShift = closedShift(other.getId());
+        Long ownInvoice = invoiceIn(ownShift, cashier.getId());
+        Long otherInvoice = invoiceIn(otherShift, other.getId());
+        Long noShiftInvoice = invoiceIn(null, other.getId());
+
+        mvc.perform(get("/api/invoices/" + ownInvoice).header("Authorization", cashierToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.employeeName").value(cashier.getFullName()));
+        for (Long id : new Long[]{otherInvoice, noShiftInvoice}) {
+            mvc.perform(get("/api/invoices/" + id).header("Authorization", cashierToken))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("INVOICE_FORBIDDEN"));
+        }
+        mvc.perform(get("/api/invoices/" + otherInvoice).header("Authorization", tokenFor("admin")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.employeeName").value("Thu ngân khác"));
+    }
+
+    private Long closedShift(Long employeeId) {
+        return shiftSessionRepository.save(ShiftSession.builder()
+                .branchId(1L).workShift(workShiftRepository.findAll().get(0)).employeeId(employeeId)
+                .shiftDate(LocalDate.now()).status(ShiftStatus.CLOSED)
+                .openedAt(LocalDateTime.now()).openingCash(BigDecimal.ZERO).build()).getId();
+    }
+
+    private Long invoiceIn(Long shiftId, Long employeeId) {
+        return invoiceRepository.save(Invoice.builder()
+                .branch(branchRepository.findById(1L).orElseThrow()).employeeId(employeeId)
+                .subtotal(BigDecimal.TEN).totalAmount(BigDecimal.TEN).paymentMethod(PaymentMethod.CARD)
+                .shiftSessionId(shiftId).build()).getId();
     }
 }

@@ -55,6 +55,27 @@ public class InvoiceService {
     }
 
     /**
+     * Xem chi tiết hóa đơn theo quyền: ADMIN mọi hóa đơn; MANAGER hóa đơn của chi nhánh đang đăng nhập;
+     * CASHIER chỉ hóa đơn bán (hoặc hoàn trả) trong ca do chính mình mở.
+     */
+    public Invoice getInvoiceForViewer(Long id, User actor) {
+        Invoice invoice = getInvoiceById(id);
+        boolean allowed = switch (actor.getRole()) {
+            case ADMIN -> true;
+            case MANAGER -> invoice.getBranch() != null
+                    && invoice.getBranch().getId().equals(actor.getCurrentBranchId());
+            case CASHIER -> shiftService.isOwnShift(invoice.getShiftSessionId(), actor)
+                    || shiftService.isOwnShift(invoice.getRefundShiftSessionId(), actor);
+            default -> false;
+        };
+        if (!allowed) {
+            throw new BusinessException("INVOICE_FORBIDDEN", "Bạn không có quyền xem hóa đơn này", HttpStatus.FORBIDDEN);
+        }
+        invoice.setEmployeeName(shiftService.userDisplayName(invoice.getEmployeeId()));
+        return invoice;
+    }
+
+    /**
      * Tạo hóa đơn bán hàng.
      * Giá bán, nhân viên và chi nhánh do server quyết định dựa trên tài khoản đang đăng nhập (actor),
      * không tin giá trị client gửi lên.

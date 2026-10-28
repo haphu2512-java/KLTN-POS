@@ -95,4 +95,8 @@ public class Invoice {
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonManagedReference
     private List<InvoiceDetail> details = new ArrayList<>();
+
+    /** Tên nhân viên bán, chỉ điền khi xem chi tiết để in lại bill đúng người bán gốc */
+    @Transient
+    private String employeeName;
 }

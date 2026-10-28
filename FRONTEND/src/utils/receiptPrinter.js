@@ -15,9 +15,11 @@ export function escapeHtml(value) {
 /**
  * Dữ liệu in lấy từ hóa đơn server trả về (mã, giá, tiền thối là số đã được ghi nhận),
  * không lấy từ giỏ hàng trên màn hình.
+ * reprint = { at, by } khi in lại bill cũ, để bill có dấu BẢN IN LẠI.
  */
-export function receiptFromInvoice(invoice, cashierName) {
+export function receiptFromInvoice(invoice, cashierName, reprint = null) {
   return {
+    reprint,
     code: `HD${String(invoice.id).padStart(6, '0')}`,
     createdAt: invoice.createdAt,
     branchName: invoice.branch?.name || '',
@@ -84,6 +86,7 @@ export function generateReceiptHtml(receipt) {
         <div style="font-size: 11px;">${escapeHtml(receipt.branchName)}</div>
         ${receipt.branchAddress ? `<div style="font-size: 10px;">${escapeHtml(receipt.branchAddress)}</div>` : ''}
         <div style="font-size: 10px;">Hotline: 1900 1234 • Giờ mở cửa: 07:00 - 22:00</div>
+        ${receipt.reprint ? '<div class="bold" style="font-size: 13px; margin-top: 4px;">*** BẢN IN LẠI ***</div>' : ''}
       </div>
 
       <div class="divider"></div>
@@ -92,6 +95,7 @@ export function generateReceiptHtml(receipt) {
         <div>Mã HĐ: <span class="bold">${escapeHtml(receipt.code)}</span></div>
         <div>Ngày giờ: ${formatDateTime(receipt.createdAt || new Date())}</div>
         <div>Thu ngân: ${escapeHtml(receipt.cashierName)}</div>
+        ${receipt.reprint ? `<div>In lại: ${formatDateTime(receipt.reprint.at)} bởi ${escapeHtml(receipt.reprint.by)}</div>` : ''}
         <div>Khách hàng: ${escapeHtml(receipt.customerName)}</div>
       </div>
 

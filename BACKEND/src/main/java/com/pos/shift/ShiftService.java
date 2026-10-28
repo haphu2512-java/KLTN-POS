@@ -606,6 +606,19 @@ public class ShiftService {
         return staffRepository.findById(staffId).map(StaffMember::getFullName).orElse("#" + staffId);
     }
 
+    /** Ca shiftId do chính actor mở (dùng cho quyền xem hóa đơn trong ca của thu ngân) */
+    public boolean isOwnShift(Long shiftId, User actor) {
+        if (shiftId == null) return false;
+        return shiftSessionRepository.findById(shiftId)
+                .map(s -> actor.getId().equals(s.getEmployeeId()))
+                .orElse(false);
+    }
+
+    public String userDisplayName(Long userId) {
+        if (userId == null) return null;
+        return userRepository.findById(userId).map(ShiftService::displayName).orElse(null);
+    }
+
     static String displayName(User u) {
         return u.getFullName() != null && !u.getFullName().isBlank() ? u.getFullName() : u.getUsername();
     }
