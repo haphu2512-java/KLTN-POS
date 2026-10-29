@@ -169,6 +169,16 @@ class BranchLoginIntegrationTest {
     void writesUseTokenBranch() throws Exception {
         newUser("seller_b2", Role.MANAGER, 1L, 2L);
         String token = tokenOf(login("seller_b2", PASSWORD, 2L).andExpect(status().isOk()));
+        // Bán hàng cần ca đang mở ở chi nhánh, kể cả với quản lý
+        mvc.perform(post("/api/invoices").header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentMethod\":\"CARD\",\"items\":[{\"productId\":1,\"quantity\":1}]}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SHIFT_NOT_OPEN"));
+        ShiftTestData.assignNewStaff(staffRepository, assignmentRepository, 2L, 1, "NV ca 1");
+        mvc.perform(post("/api/shifts/open").header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workShiftId\":1,\"openingCash\":0,\"handoverReason\":\"test\"}"))
+                .andExpect(status().isOk());
 
         mvc.perform(post("/api/invoices").header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"paymentMethod\":\"CARD\",\"items\":[{\"productId\":1,\"quantity\":1}]}"))

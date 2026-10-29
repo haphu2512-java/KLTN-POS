@@ -536,8 +536,8 @@ public class ShiftService {
     // ---------- Gắn hóa đơn vào ca ----------
 
     /**
-     * Ca dùng để gắn hóa đơn mới: ca đang mở của chi nhánh bán. Thu ngân bắt buộc có ca mở;
-     * các vai trò khác bán được khi chi nhánh chưa mở ca (hóa đơn không gắn ca).
+     * Ca dùng để gắn hóa đơn mới: ca đang mở của chi nhánh bán. Mọi vai trò đều bắt buộc có ca mở
+     * để tiền bán hàng luôn được đối soát két; quản lý bán hộ thì hóa đơn ghi vào ca đang mở của chi nhánh.
      */
     public Long resolveShiftForSale(User actor, Long branchId) {
         ShiftSession open = branchId == null ? null : openAt(branchId);
@@ -560,7 +560,7 @@ public class ShiftService {
     }
 
     boolean isShiftRequired(User actor) {
-        return requireOpenShift && actor.getRole() == Role.CASHIER;
+        return requireOpenShift;
     }
 
     // ---------- Nội bộ ----------
