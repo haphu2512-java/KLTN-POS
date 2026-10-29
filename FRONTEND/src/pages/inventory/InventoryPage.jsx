@@ -27,7 +27,10 @@ export default function InventoryPage({
   // Quản trị xem được tồn kho chi nhánh khác nhưng muốn nhập/xuất ở đó thì đăng nhập vào chi nhánh đó.
   const isAdmin = currentUser?.role === 'ADMIN';
   // Thu ngân chỉ xem tồn kho; nhập kho, điều chuyển và lịch sử phiếu nhập dành cho kho/quản lý
+  const isCashier = currentUser?.role === 'CASHIER';
+  // Thu ngân chỉ xem tồn kho; nhập kho, điều chuyển và lịch sử phiếu nhập dành cho kho/quản lý
   const canEdit = can(PERMS.INVENTORY_EDIT);
+  const canViewCost = canEdit && !isCashier;
   // State from Database
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -356,18 +359,32 @@ export default function InventoryPage({
   };
 
   const handleExportInventory = () => {
-    const headers = ['Mã vạch', 'Tên sản phẩm', 'Danh mục', 'ĐVT', 'Tồn kho', 'Ngưỡng an toàn', 'Giá vốn (VND)', 'Giá bán (VND)', 'Tổng giá trị tồn (VND)'];
-    const rows = filteredProducts.map((p) => [
-      p.barcode,
-      p.name,
-      p.category,
-      p.unit,
-      p.stock,
-      p.minThreshold,
-      p.costPrice,
-      p.salePrice,
-      (Number(p.stock) || 0) * (Number(p.costPrice) || 0)
-    ]);
+    const headers = canViewCost
+      ? ['Mã vạch', 'Tên sản phẩm', 'Danh mục', 'ĐVT', 'Tồn kho', 'Ngưỡng an toàn', 'Giá vốn (VND)', 'Giá bán (VND)', 'Tổng giá trị tồn (VND)']
+      : ['Mã vạch', 'Tên sản phẩm', 'Danh mục', 'ĐVT', 'Tồn kho', 'Ngưỡng an toàn', 'Giá bán (VND)'];
+    const rows = filteredProducts.map((p) =>
+      canViewCost
+        ? [
+            p.barcode,
+            p.name,
+            p.category,
+            p.unit,
+            p.stock,
+            p.minThreshold,
+            p.costPrice,
+            p.salePrice,
+            (Number(p.stock) || 0) * (Number(p.costPrice) || 0)
+          ]
+        : [
+            p.barcode,
+            p.name,
+            p.category,
+            p.unit,
+            p.stock,
+            p.minThreshold,
+            p.salePrice
+          ]
+    );
     exportToCsv(`BaoCaoTonKho_ChiNhanh_${currentBranchId}`, headers, rows);
   };
 
@@ -669,13 +686,15 @@ export default function InventoryPage({
             <span className="inv-metric-sub">Cần lên phiếu nhập ngay</span>
           </div>
 
-          <div className="inv-metric-card">
-            <span className="inv-metric-label">Giá trị tồn kho (Giá vốn)</span>
-            <span className="inv-metric-val tabular-nums text-success" style={{ fontSize: '20px' }}>
-              {loading ? <Loading size="sm" inline text="" /> : formatCurrency(totalInventoryValuation)}
-            </span>
-            <span className="inv-metric-sub">Ước tính theo giá nhập mới nhất</span>
-          </div>
+          {canViewCost && (
+            <div className="inv-metric-card">
+              <span className="inv-metric-label">Giá trị tồn kho (Giá vốn)</span>
+              <span className="inv-metric-val tabular-nums text-success" style={{ fontSize: '20px' }}>
+                {loading ? <Loading size="sm" inline text="" /> : formatCurrency(totalInventoryValuation)}
+              </span>
+              <span className="inv-metric-sub">Ước tính theo giá nhập mới nhất</span>
+            </div>
+          )}
         </section>
 
         {/* Toolbar & Filter Options */}
@@ -780,7 +799,11 @@ export default function InventoryPage({
         {activeTab === 'inventory' ? (
           <>
             <Table
-              columns={canEdit ? productColumns : productColumns.filter((col) => col.key !== 'actions')}
+              columns={productColumns.filter((col) => {
+                if (col.key === 'actions' && !canEdit) return false;
+                if (col.key === 'costPrice' && !canViewCost) return false;
+                return true;
+              })}
               data={paginatedProducts}
               loading={loading}
               loadingText="Đang tải danh sách tồn kho..."
