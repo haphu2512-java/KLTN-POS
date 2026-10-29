@@ -96,7 +96,11 @@ public class Invoice {
     @JsonManagedReference
     private List<InvoiceDetail> details = new ArrayList<>();
 
-    /** Tên nhân viên bán, chỉ điền khi xem chi tiết để in lại bill đúng người bán gốc */
+    /** Tên nhân viên bán: in lại bill đúng người bán gốc và để quản lý biết ai chịu trách nhiệm hóa đơn */
     @Transient
     private String employeeName;
+
+    /** Tên người bấm hoàn trả, chỉ điền khi trả về cho ADMIN/MANAGER */
+    @Transient
+    private String refundedByName;
 }

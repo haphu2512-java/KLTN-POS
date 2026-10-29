@@ -167,6 +167,17 @@ export default function RecentInvoicesModal({
         );
       }
     },
+    // Tab ca chỉ có hóa đơn của một người nên chỉ hiện cột nhân viên ở danh sách toàn chi nhánh
+    ...(canViewAll && !showingShift
+      ? [
+          {
+            key: 'employeeName',
+            title: 'Nhân viên',
+            width: '140px',
+            render: (val) => val || <span style={{ color: 'var(--text-muted)' }}>—</span>
+          }
+        ]
+      : []),
     {
       key: 'itemCount',
       title: 'Số món',
@@ -335,6 +346,21 @@ export default function RecentInvoicesModal({
                 {selectedInvoice.customer?.phone ? ` (${selectedInvoice.customer.phone})` : ''}
               </div>
             </div>
+            {canViewAll && (
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Nhân viên bán:</span>
+                <div style={{ fontWeight: 500 }}>{selectedInvoice.employeeName || '—'}</div>
+              </div>
+            )}
+            {canViewAll && selectedInvoice.status === 'REFUNDED' && (
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Người hoàn trả:</span>
+                <div style={{ fontWeight: 500 }}>
+                  {selectedInvoice.refundedByName || '—'}
+                  {selectedInvoice.refundedAt ? ` (${formatDateTime(selectedInvoice.refundedAt)})` : ''}
+                </div>
+              </div>
+            )}
             <div>
               <span style={{ color: 'var(--text-muted)' }}>Phương thức:</span>
               <div>
