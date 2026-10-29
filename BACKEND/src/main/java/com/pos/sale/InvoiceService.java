@@ -22,6 +22,8 @@ import org.springframework.data.domain.Pageable;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -36,17 +38,30 @@ public class InvoiceService {
     private final ShiftService shiftService;
 
     public Page<Invoice> getInvoices(Long branchId, Pageable pageable) {
-        if (branchId != null) {
-            return invoiceRepository.findByBranchIdOrderByCreatedAtDesc(branchId, pageable);
-        }
-        return invoiceRepository.findAllByOrderByCreatedAtDesc(pageable);
+        Page<Invoice> page = branchId != null
+                ? invoiceRepository.findByBranchIdOrderByCreatedAtDesc(branchId, pageable)
+                : invoiceRepository.findAllByOrderByCreatedAtDesc(pageable);
+        fillStaffNames(page.getContent());
+        return page;
     }
 
     public List<Invoice> getAllInvoices(Long branchId) {
-        if (branchId != null) {
-            return invoiceRepository.findByBranchIdOrderByCreatedAtDesc(branchId);
+        List<Invoice> invoices = branchId != null
+                ? invoiceRepository.findByBranchIdOrderByCreatedAtDesc(branchId)
+                : invoiceRepository.findAllByOrderByCreatedAtDesc();
+        fillStaffNames(invoices);
+        return invoices;
+    }
+
+    /** Gắn tên nhân viên bán và người hoàn trả để quản lý biết ai chịu trách nhiệm từng hóa đơn */
+    private void fillStaffNames(List<Invoice> invoices) {
+        if (invoices.isEmpty()) return;
+        Map<Long, String> names = shiftService.userDisplayNames(invoices.stream()
+                .flatMap(i -> Stream.of(i.getEmployeeId(), i.getRefundedBy())).toList());
+        for (Invoice i : invoices) {
+            i.setEmployeeName(i.getEmployeeId() != null ? names.get(i.getEmployeeId()) : null);
+            i.setRefundedByName(i.getRefundedBy() != null ? names.get(i.getRefundedBy()) : null);
         }
-        return invoiceRepository.findAllByOrderByCreatedAtDesc();
     }
 
     public Invoice getInvoiceById(Long id) {
@@ -71,7 +86,11 @@ public class InvoiceService {
         if (!allowed) {
             throw new BusinessException("INVOICE_FORBIDDEN", "Bạn không có quyền xem hóa đơn này", HttpStatus.FORBIDDEN);
         }
-        invoice.setEmployeeName(shiftService.userDisplayName(invoice.getEmployeeId()));
+        if (actor.getRole() == Role.CASHIER) {
+            invoice.setEmployeeName(shiftService.userDisplayName(invoice.getEmployeeId()));
+        } else {
+            fillStaffNames(List.of(invoice));
+        }
         return invoice;
     }
 

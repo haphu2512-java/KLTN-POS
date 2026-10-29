@@ -17,9 +17,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -336,5 +341,39 @@ class InvoiceServiceTest {
         Invoice saved = invoiceService.createInvoice(req, cashier);
         assertEquals("req-3", saved.getClientRequestId());
         verify(inventoryService).deductStockAtomic(1L, 1L, 2);
+    }
+    @Test
+    @DisplayName("Danh sách hóa đơn cho quản lý: gắn tên nhân viên bán và người hoàn trả bằng một truy vấn")
+    void testInvoiceListFillsStaffNames() {
+        Invoice sold = Invoice.builder().id(1L).employeeId(7L).build();
+        Invoice refunded = Invoice.builder().id(2L).employeeId(7L).refundedBy(8L).status(InvoiceStatus.REFUNDED).build();
+        Invoice legacy = Invoice.builder().id(3L).build();
+        Pageable pageable = PageRequest.of(0, 50);
+        when(invoiceRepository.findByBranchIdOrderByCreatedAtDesc(1L, pageable))
+                .thenReturn(new PageImpl<>(List.of(sold, refunded, legacy)));
+        when(shiftService.userDisplayNames(any())).thenReturn(Map.of(7L, "Thu Ngân A", 8L, "Quản Lý B"));
+
+        Page<Invoice> page = invoiceService.getInvoices(1L, pageable);
+
+        assertEquals("Thu Ngân A", page.getContent().get(0).getEmployeeName());
+        assertNull(page.getContent().get(0).getRefundedByName());
+        assertEquals("Quản Lý B", page.getContent().get(1).getRefundedByName());
+        assertNull(page.getContent().get(2).getEmployeeName());
+        verify(shiftService, times(1)).userDisplayNames(any());
+    }
+
+    @Test
+    @DisplayName("Thu ngân xem chi tiết hóa đơn trong ca mình: chỉ có tên người bán, không có tên người hoàn trả")
+    void testCashierInvoiceDetailHidesRefunder() {
+        Invoice inv = Invoice.builder().id(5L).employeeId(7L).shiftSessionId(11L).refundedBy(8L).build();
+        when(invoiceRepository.findById(5L)).thenReturn(Optional.of(inv));
+        when(shiftService.isOwnShift(11L, cashier)).thenReturn(true);
+        when(shiftService.userDisplayName(7L)).thenReturn("Thu Ngân A");
+
+        Invoice result = invoiceService.getInvoiceForViewer(5L, cashier);
+
+        assertEquals("Thu Ngân A", result.getEmployeeName());
+        assertNull(result.getRefundedByName());
+        verify(shiftService, never()).userDisplayNames(any());
     }
 }

@@ -118,7 +118,7 @@ export default function ReportPage({
       const rows = invoices.map((i) => [
         `HD-${i.id}`,
         formatDateTime(i.createdAt),
-        `Nhân viên ${i.employeeId || 1}`,
+        i.employeeName || '',
         i.customer ? i.customer.name : 'Khách lẻ',
         i.totalAmount,
         i.paymentMethod,
@@ -224,6 +224,18 @@ export default function ReportPage({
         const cust = val || i?.customer;
         return cust ? `${cust.name} (${cust.phone})` : 'Khách lẻ';
       }
+    },
+    {
+      key: 'employeeName',
+      title: 'Nhân viên',
+      render: (val, i) => (
+        <div>
+          <div>{val || '—'}</div>
+          {i?.status === 'REFUNDED' && i?.refundedByName && (
+            <small style={{ color: 'var(--text-muted)' }}>Hoàn trả: {i.refundedByName}</small>
+          )}
+        </div>
+      )
     },
     {
       key: 'totalAmount',

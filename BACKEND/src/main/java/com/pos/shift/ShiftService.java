@@ -619,6 +619,13 @@ public class ShiftService {
         return userRepository.findById(userId).map(ShiftService::displayName).orElse(null);
     }
 
+    /** Tên hiển thị của nhiều tài khoản trong một truy vấn (id không tồn tại thì không có trong map) */
+    public Map<Long, String> userDisplayNames(Collection<Long> userIds) {
+        List<Long> ids = userIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) return Map.of();
+        return userRepository.findAllById(ids).stream().collect(Collectors.toMap(User::getId, ShiftService::displayName));
+    }
+
     static String displayName(User u) {
         return u.getFullName() != null && !u.getFullName().isBlank() ? u.getFullName() : u.getUsername();
     }
