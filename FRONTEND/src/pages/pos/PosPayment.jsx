@@ -7,6 +7,11 @@ export default function PosPayment({
   subtotal,
   discount,
   onChangeDiscount,
+  discountReason = '',
+  onChangeDiscountReason,
+  // Hạn mức thu ngân được tự giảm (null = không giới hạn)
+  discountLimit = null,
+  discountApproverName = null,
   finalAmount,
   paymentMethod,
   onChangePaymentMethod,
@@ -62,6 +67,24 @@ export default function PosPayment({
             <span className="text-muted" style={{ fontSize: '12px' }}>₫</span>
           </div>
         </div>
+
+        {discount > 0 && onChangeDiscountReason && (
+          <input
+            type="text"
+            className="pos-discount-reason"
+            value={discountReason}
+            onChange={(e) => onChangeDiscountReason(e.target.value)}
+            placeholder={discountLimit != null && discount > discountLimit ? 'Lý do giảm giá (bắt buộc)' : 'Lý do giảm giá'}
+            maxLength={255}
+          />
+        )}
+        {discountLimit != null && discount > discountLimit && (
+          <div className={`pos-discount-hint${discountApproverName ? ' is-approved' : ''}`}>
+            {discountApproverName
+              ? `Đã được ${discountApproverName} duyệt`
+              : `Vượt hạn mức ${formatCurrency(discountLimit)}: cần quản lý nhập PIN khi thanh toán`}
+          </div>
+        )}
 
         <div className="pos-calc-divider" />
 

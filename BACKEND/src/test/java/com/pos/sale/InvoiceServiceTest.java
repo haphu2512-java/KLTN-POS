@@ -1,5 +1,6 @@
 package com.pos.sale;
 
+import com.pos.approval.ApprovalService;
 import com.pos.branch.Branch;
 import com.pos.branch.BranchRepository;
 import com.pos.common.BusinessException;
@@ -31,6 +32,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -53,6 +56,9 @@ class InvoiceServiceTest {
 
     @Mock
     private ShiftService shiftService;
+
+    @Mock
+    private ApprovalService approvalService;
 
     @InjectMocks
     private InvoiceService invoiceService;
@@ -180,6 +186,46 @@ class InvoiceServiceTest {
         Invoice invoice = invoiceService.createInvoice(cashRequest(null, null, null), cashier);
 
         assertEquals(BigDecimal.valueOf(72000), invoice.getTotalAmount());
+    }
+
+    @Test
+    @DisplayName("Thu ngân giảm vượt hạn mức: thiếu lý do hoặc mã duyệt thì bị từ chối, không lưu hóa đơn")
+    void testCashierDiscountOverLimitNeedsReasonAndApproval() {
+        when(branchRepository.findById(1L)).thenReturn(Optional.of(Branch.builder().id(1L).build()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(milk()));
+        when(approvalService.requiresDiscountApproval(eq(cashier), any(), any())).thenReturn(true);
+
+        InvoiceRequest noReason = cashRequest(null, BigDecimal.valueOf(20000), BigDecimal.valueOf(100000));
+        BusinessException ex = assertThrows(BusinessException.class, () -> invoiceService.createInvoice(noReason, cashier));
+        assertEquals("DISCOUNT_REASON_REQUIRED", ex.getCode());
+
+        InvoiceRequest noToken = cashRequest(null, BigDecimal.valueOf(20000), BigDecimal.valueOf(100000));
+        noToken.setDiscountReason("Khách quen");
+        when(approvalService.checkDiscountApproval(isNull(), eq(cashier), eq(1L), any()))
+                .thenThrow(new BusinessException("DISCOUNT_APPROVAL_REQUIRED", "cần PIN"));
+        ex = assertThrows(BusinessException.class, () -> invoiceService.createInvoice(noToken, cashier));
+        assertEquals("DISCOUNT_APPROVAL_REQUIRED", ex.getCode());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Thu ngân giảm vượt hạn mức có PIN quản lý: lưu lý do, người duyệt và đánh dấu mã đã dùng")
+    void testCashierDiscountWithApproval() {
+        when(branchRepository.findById(1L)).thenReturn(Optional.of(Branch.builder().id(1L).build()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(milk()));
+        when(invoiceRepository.save(any(Invoice.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(approvalService.requiresDiscountApproval(eq(cashier), any(), any())).thenReturn(true);
+        when(approvalService.checkDiscountApproval("tok", cashier, 1L, BigDecimal.valueOf(20000))).thenReturn(8L);
+
+        InvoiceRequest req = cashRequest(null, BigDecimal.valueOf(20000), BigDecimal.valueOf(100000));
+        req.setDiscountReason("  Hàng móp hộp ");
+        req.setDiscountApprovalToken("tok");
+        Invoice invoice = invoiceService.createInvoice(req, cashier);
+
+        assertEquals(BigDecimal.valueOf(52000), invoice.getTotalAmount());
+        assertEquals("Hàng móp hộp", invoice.getDiscountReason());
+        assertEquals(8L, invoice.getDiscountApprovedBy());
+        verify(approvalService).markUsed("tok");
     }
 
     @Test

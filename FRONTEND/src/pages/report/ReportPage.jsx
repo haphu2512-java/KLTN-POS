@@ -114,12 +114,15 @@ export default function ReportPage({
 
   const handleExportCsv = () => {
     if (viewMode === 'invoices') {
-      const headers = ['Mã hóa đơn', 'Thời gian', 'Thu ngân', 'Khách hàng', 'Tổng tiền (VND)', 'Phương thức', 'Trạng thái', 'Ghi chú'];
+      const headers = ['Mã hóa đơn', 'Thời gian', 'Thu ngân', 'Khách hàng', 'Giảm giá (VND)', 'Lý do giảm', 'Người duyệt giảm', 'Tổng tiền (VND)', 'Phương thức', 'Trạng thái', 'Ghi chú'];
       const rows = invoices.map((i) => [
         `HD-${i.id}`,
         formatDateTime(i.createdAt),
         i.employeeName || '',
         i.customer ? i.customer.name : 'Khách lẻ',
+        i.discount || 0,
+        i.discountReason || '',
+        i.discountApprovedByName || '',
         i.totalAmount,
         i.paymentMethod,
         i.status === 'REFUNDED' ? 'Đã hoàn trả' : 'Đã thanh toán',
@@ -233,6 +236,11 @@ export default function ReportPage({
           <div>{val || '—'}</div>
           {i?.status === 'REFUNDED' && i?.refundedByName && (
             <small style={{ color: 'var(--text-muted)' }}>Hoàn trả: {i.refundedByName}</small>
+          )}
+          {Number(i?.discount) > 0 && i?.discountApprovedByName && (
+            <small style={{ display: 'block', color: 'var(--text-muted)' }}>
+              Duyệt giảm {formatCurrency(i.discount)}: {i.discountApprovedByName}
+            </small>
           )}
         </div>
       )

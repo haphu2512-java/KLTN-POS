@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import ApprovalPinModal from './ApprovalPinModal';
 import './AppShell.css';
 
 const ICONS = {
@@ -64,6 +66,8 @@ export default function AppShell({
   ].filter((item) => item.onClick);
 
   const displayName = currentUser?.fullName || currentUser?.username || '';
+  const canApprove = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
+  const [isPinOpen, setIsPinOpen] = useState(false);
 
   return (
     <div className="shell">
@@ -87,6 +91,16 @@ export default function AppShell({
           {branchName && (
             <span className="shell-user-branch" title={`Đang làm việc tại ${branchName}`}>{branchName}</span>
           )}
+          {canApprove && (
+            <button
+              type="button"
+              className="shell-rail-item shell-logout"
+              onClick={() => setIsPinOpen(true)}
+              title="Đặt PIN để duyệt giảm giá vượt hạn mức tại quầy"
+            >
+              PIN duyệt
+            </button>
+          )}
           {onLogout && (
             <button type="button" className="shell-rail-item shell-logout" onClick={onLogout}>
               Đăng xuất
@@ -95,6 +109,7 @@ export default function AppShell({
         </div>
       </nav>
       <div className="shell-main">{children}</div>
+      {canApprove && <ApprovalPinModal isOpen={isPinOpen} onClose={() => setIsPinOpen(false)} />}
     </div>
   );
 }

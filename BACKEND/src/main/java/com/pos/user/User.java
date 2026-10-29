@@ -1,5 +1,6 @@
 package com.pos.user;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -55,6 +56,11 @@ public class User {
     @Builder.Default
     @Column(nullable = false)
     private Boolean active = true;
+
+    /** PIN duyệt tại quầy của ADMIN/MANAGER (BCrypt), dùng cho giảm giá vượt hạn mức của thu ngân */
+    @JsonIgnore
+    @Column(name = "approval_pin_hash")
+    private String approvalPinHash;
 
     @Builder.Default
     @Column(name = "created_at")

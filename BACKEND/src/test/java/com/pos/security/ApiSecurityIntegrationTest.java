@@ -23,6 +23,9 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.servlet.MvcResult;
+import com.jayway.jsonpath.JsonPath;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -31,6 +34,7 @@ import java.time.LocalDateTime;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -69,6 +73,9 @@ class ApiSecurityIntegrationTest {
 
     @Autowired
     private InvoiceRepository invoiceRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Autowired
     private BranchRepository branchRepository;
@@ -245,5 +252,61 @@ class ApiSecurityIntegrationTest {
                 .branch(branchRepository.findById(1L).orElseThrow()).employeeId(employeeId)
                 .subtotal(BigDecimal.TEN).totalAmount(BigDecimal.TEN).paymentMethod(PaymentMethod.CARD)
                 .shiftSessionId(shiftId).build()).getId();
+    }
+
+    @Test
+    @DisplayName("Giảm giá vượt hạn mức: thu ngân bị chặn, quản lý nhập PIN thì bán được và hóa đơn ghi người duyệt")
+    void discountOverLimitNeedsManagerPin() throws Exception {
+        User manager = userRepository.save(User.builder().username("pin_manager").password(passwordEncoder.encode("mgr-pass"))
+                .fullName("Quản lý PIN").role(Role.MANAGER).branchIds(TestAuth.branches(1L)).active(true).build());
+        String managerToken = tokenFor("pin_manager");
+
+        mvc.perform(put("/api/approvals/pin").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"currentPassword\":\"x\",\"pin\":\"1234\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/approvals/pin").header("Authorization", managerToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"currentPassword\":\"mgr-pass\",\"pin\":\"2468\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/approvals/policy").header("Authorization", cashierToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cashierMaxDiscountPercent").value(5));
+
+        ShiftTestData.assignNewStaff(staffRepository, assignmentRepository, 1L, 1, "NV giảm giá");
+        mvc.perform(post("/api/shifts/open").header("Authorization", cashierToken)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"workShiftId\":1,\"openingCash\":0,\"handoverReason\":\"test\"}"));
+
+        // 2 hộp sữa = 72.000đ, hạn mức 5% = 3.600đ; giảm 10.000đ phải có PIN
+        String sale = "{\"branchId\":1,\"paymentMethod\":\"CARD\",\"discount\":10000,\"discountReason\":\"Hộp móp\"%s,"
+                + "\"items\":[{\"productId\":1,\"quantity\":2}]}";
+        mvc.perform(post("/api/invoices").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(String.format(sale, "")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("DISCOUNT_APPROVAL_REQUIRED"));
+
+        mvc.perform(post("/api/approvals/discount").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"approverUsername\":\"pin_manager\",\"pin\":\"0000\",\"amount\":10000}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("APPROVAL_PIN_INVALID"));
+        MvcResult granted = mvc.perform(post("/api/approvals/discount").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"approverUsername\":\"pin_manager\",\"pin\":\"2468\",\"amount\":10000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.approverName").value("Quản lý PIN"))
+                .andReturn();
+        String token = JsonPath.read(granted.getResponse().getContentAsString(), "$.data.token");
+
+        String withToken = String.format(sale, ",\"discountApprovalToken\":\"" + token + "\"");
+        mvc.perform(post("/api/invoices").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(withToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalAmount").value(62000.0))
+                .andExpect(jsonPath("$.data.discountReason").value("Hộp móp"))
+                .andExpect(jsonPath("$.data.discountApprovedBy").value(manager.getId()));
+        // Mã duyệt chỉ dùng một lần
+        mvc.perform(post("/api/invoices").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(withToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("DISCOUNT_APPROVAL_REQUIRED"));
     }
 }
