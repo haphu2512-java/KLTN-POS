@@ -473,6 +473,10 @@ export default function ReportPage({
                       const totalBars = summaryData.dailyTrend.length;
                       const slotWidth = 600 / totalBars;
                       const xCenter = slotWidth * idx + slotWidth / 2;
+                      // Thu hẹp cột và giãn nhãn ngày khi khoảng thời gian dài (30/90 ngày) để không chồng lên nhau
+                      const barWidth = Math.min(12, slotWidth * 0.4);
+                      const labelStep = Math.ceil(totalBars / 10);
+                      const showLabel = idx % labelStep === 0 || idx === totalBars - 1;
 
                       const revHeight = Math.max(4, ((Number(d.revenue) || 0) / maxRevenue) * 140);
                       const profHeight = Math.max(2, ((Number(d.profit) || 0) / maxRevenue) * 140);
@@ -483,9 +487,9 @@ export default function ReportPage({
                       return (
                         <g key={idx}>
                           <rect
-                            x={xCenter - 14}
+                            x={xCenter - barWidth - 1}
                             y={revY}
-                            width="12"
+                            width={barWidth}
                             height={revHeight}
                             fill="var(--primary-600)"
                             rx="2"
@@ -494,9 +498,9 @@ export default function ReportPage({
                           </rect>
 
                           <rect
-                            x={xCenter + 2}
+                            x={xCenter + 1}
                             y={profY}
-                            width="12"
+                            width={barWidth}
                             height={profHeight}
                             fill="var(--warning-600)"
                             rx="2"
@@ -504,15 +508,17 @@ export default function ReportPage({
                             <title>{`${d.date}: Lợi nhuận ${formatCurrency(d.profit)}`}</title>
                           </rect>
 
-                          <text
-                            x={xCenter}
-                            y="180"
-                            fill="var(--text-muted)"
-                            fontSize="10"
-                            textAnchor="middle"
-                          >
-                            {d.date}
-                          </text>
+                          {showLabel && (
+                            <text
+                              x={xCenter}
+                              y="180"
+                              fill="var(--text-muted)"
+                              fontSize="10"
+                              textAnchor="middle"
+                            >
+                              {d.date}
+                            </text>
+                          )}
                         </g>
                       );
                     })}
