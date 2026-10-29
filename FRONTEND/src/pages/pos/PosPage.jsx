@@ -108,8 +108,9 @@ export default function PosPage({
 
     // Subscribe to STOMP WebSocket inventory updates
     const unsubWs = websocketService.on('inventory-update', (event) => {
-      if (event && event.productId) {
-        setProducts(prev => prev.map(p => p.id === event.productId ? { ...p, stock: event.newQuantity ?? p.stock } : p));
+      // Chỉ cập nhật tồn của chi nhánh đang xem; máy chủ gửi kèm tồn mới (newQuantity)
+      if (event?.productId && event.newQuantity != null && Number(event.branchId) === Number(branchId)) {
+        setProducts(prev => prev.map(p => p.id === event.productId ? { ...p, stock: event.newQuantity } : p));
       }
     });
 

@@ -47,7 +47,7 @@ export default function ManagerApprovalModal({ isOpen, onClose, amount, maxWitho
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Hủy</Button>
-          <Button type="submit" form="manager-approval-form" disabled={loading || !username.trim() || !pin}>
+          <Button variant="primary" type="submit" form="manager-approval-form" disabled={loading || !username.trim() || !pin}>
             {loading ? 'Đang kiểm tra...' : 'Duyệt'}
           </Button>
         </>

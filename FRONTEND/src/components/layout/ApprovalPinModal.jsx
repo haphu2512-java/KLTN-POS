@@ -53,11 +53,11 @@ export default function ApprovalPinModal({ isOpen, onClose }) {
       maxWidth="420px"
       footer={
         done ? (
-          <Button onClick={onClose}>Đóng</Button>
+          <Button variant="primary" onClick={onClose}>Đóng</Button>
         ) : (
           <>
             <Button variant="secondary" onClick={onClose}>Hủy</Button>
-            <Button type="submit" form="approval-pin-form" disabled={saving}>
+            <Button variant="primary" type="submit" form="approval-pin-form" disabled={saving}>
               {saving ? 'Đang lưu...' : 'Lưu PIN'}
             </Button>
           </>

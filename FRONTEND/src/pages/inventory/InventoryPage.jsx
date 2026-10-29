@@ -5,6 +5,7 @@ import StockInModal from './StockInModal';
 import StockTransferModal from './StockTransferModal';
 import StockInDetailModal from './StockInDetailModal';
 import BarcodePrintModal from './BarcodePrintModal';
+import ProductFormModal from './ProductFormModal';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 import { productService } from '../../services/productService';
 import { inventoryService } from '../../services/inventoryService';
@@ -45,6 +46,10 @@ export default function InventoryPage({
 
   // Barcode Printing State
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
+  // Thêm/sửa sản phẩm: product = null là thêm mới
+  const [productForm, setProductForm] = useState({ open: false, product: null });
+  const [reloadKey, setReloadKey] = useState(0);
+  const [syncingBarcodes, setSyncingBarcodes] = useState(false);
   const [selectedBarcodeProduct, setSelectedBarcodeProduct] = useState(null);
 
   // Sync data from Backend
@@ -120,8 +125,9 @@ export default function InventoryPage({
 
     // Subscribe to STOMP WebSocket inventory updates
     const unsubWs = websocketService.on('inventory-update', (event) => {
-      if (event && event.productId) {
-        setProducts(prev => prev.map(p => p.id === event.productId ? { ...p, stock: event.newQuantity ?? p.stock } : p));
+      // Chỉ cập nhật tồn của chi nhánh đang xem; máy chủ gửi kèm tồn mới (newQuantity)
+      if (event?.productId && event.newQuantity != null && Number(event.branchId) === Number(currentBranchId)) {
+        setProducts(prev => prev.map(p => p.id === event.productId ? { ...p, stock: event.newQuantity } : p));
       }
     });
 
@@ -129,7 +135,32 @@ export default function InventoryPage({
       isMounted = false;
       unsubWs();
     };
-  }, [currentBranchId, isOnline, currentUser?.fullName, canEdit]);
+  }, [currentBranchId, isOnline, currentUser?.fullName, canEdit, reloadKey]);
+
+  const handleProductSaved = (saved, action) => {
+    setProductForm({ open: false, product: null });
+    setReloadKey((k) => k + 1);
+    if (action === 'created' && saved?.barcode) {
+      alert(`Đã thêm sản phẩm "${saved.name}" (mã vạch ${saved.barcode}). Nhập kho để có tồn bán.`);
+    }
+  };
+
+  const handleSyncBarcodes = async () => {
+    if (!window.confirm('Gán mã vạch nội bộ cho các sản phẩm đang mang mã cũ không quét được?')) return;
+    setSyncingBarcodes(true);
+    try {
+      const result = await productService.syncBarcodes();
+      alert(
+        `Đồng bộ mã vạch xong: kiểm tra ${result?.checked ?? 0} sản phẩm, ` +
+          `đổi mã ${result?.updated ?? 0}, bỏ qua ${result?.skipped ?? 0}.`
+      );
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Không đồng bộ được mã vạch.');
+    } finally {
+      setSyncingBarcodes(false);
+    }
+  };
 
   // Filter states
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -519,10 +550,18 @@ export default function InventoryPage({
     {
       key: 'actions',
       title: 'Thao tác',
-      width: '140px',
+      width: '190px',
       align: 'center',
       render: (_, row) => (
         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setProductForm({ open: true, product: row })}
+            title="Sửa thông tin, giá bán hoặc ngừng kinh doanh"
+          >
+            Sửa
+          </Button>
           <Button
             size="sm"
             variant="secondary"
@@ -625,6 +664,25 @@ export default function InventoryPage({
         <div className="page-header-spacer" />
         {canEdit && (
         <>
+        {isAdmin && (
+          <Button
+            variant="ghost"
+            size="md"
+            onClick={handleSyncBarcodes}
+            disabled={syncingBarcodes}
+            title="Gán mã nội bộ cho sản phẩm mang mã vạch cũ không quét được"
+          >
+            {syncingBarcodes ? 'Đang đồng bộ...' : 'Đồng bộ mã vạch'}
+          </Button>
+        )}
+        <Button
+          variant="secondary"
+          size="md"
+          onClick={() => setProductForm({ open: true, product: null })}
+          title="Thêm sản phẩm mới vào danh mục"
+        >
+          + Sản phẩm
+        </Button>
         <Button
           variant="secondary"
           size="md"
@@ -876,6 +934,14 @@ export default function InventoryPage({
         isOpen={!!selectedSlip}
         onClose={() => setSelectedSlip(null)}
         slip={selectedSlip}
+      />
+
+      <ProductFormModal
+        isOpen={productForm.open}
+        onClose={() => setProductForm({ open: false, product: null })}
+        product={productForm.product}
+        categories={categories.filter((c) => c !== 'ALL' && c)}
+        onSaved={handleProductSaved}
       />
 
       <BarcodePrintModal

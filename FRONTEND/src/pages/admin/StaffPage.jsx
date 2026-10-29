@@ -3,6 +3,7 @@ import { Button, Table, Badge, Modal } from '../../components/common';
 import { userService } from '../../services/userService';
 import { formatDateTime } from '../../utils/formatters';
 import useBranches, { branchNameOf } from '../../hooks/useBranches';
+import BranchManager from './BranchManager';
 import './StaffPage.css';
 
 /** Ô chọn nhiều chi nhánh được phân công; quản trị không cần (làm việc được mọi chi nhánh) */
@@ -269,7 +270,7 @@ export default function StaffPage({
       {/* Header */}
       <header className="page-header">
         <h1 className="page-title">Tài khoản</h1>
-        <span className="page-subtitle">Tài khoản đăng nhập và phân quyền theo vai trò</span>
+        <span className="page-subtitle">Tài khoản đăng nhập, phân quyền theo vai trò và chi nhánh</span>
       </header>
 
       {/* Content */}
@@ -310,6 +311,8 @@ export default function StaffPage({
             emptyMessage="Không tìm thấy tài khoản nào phù hợp"
           />
         </div>
+
+        <BranchManager />
       </div>
 
       {/* Modal Add User */}

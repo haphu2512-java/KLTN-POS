@@ -16,6 +16,10 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
 
     List<Inventory> findByBranchId(Long branchId);
 
+    /** Đọc thẳng số lượng trong DB (sau UPDATE hàng loạt, entity trong bộ nhớ có thể đã cũ) */
+    @Query("SELECT i.quantity FROM Inventory i WHERE i.product.id = :productId AND i.branch.id = :branchId")
+    Integer findQuantity(@Param("productId") Long productId, @Param("branchId") Long branchId);
+
     @Query("SELECT i FROM Inventory i WHERE i.branch.id = :branchId AND i.quantity <= i.minThreshold")
     List<Inventory> findLowStockByBranchId(@Param("branchId") Long branchId);
 
