@@ -439,6 +439,12 @@ export default function RecentInvoicesModal({
                 <span className="tabular-nums">- {formatCurrency(selectedInvoice.discount)}</span>
               </div>
             )}
+            {Number(selectedInvoice.discount) > 0 && (selectedInvoice.discountReason || selectedInvoice.discountApprovedByName) && (
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'right' }}>
+                {selectedInvoice.discountReason && <div>Lý do: {selectedInvoice.discountReason}</div>}
+                {selectedInvoice.discountApprovedByName && <div>Duyệt bởi: {selectedInvoice.discountApprovedByName}</div>}
+              </div>
+            )}
             <div
               style={{
                 display: 'flex',

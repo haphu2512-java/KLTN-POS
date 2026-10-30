@@ -9,6 +9,7 @@ import ScannerPairingModal from './ScannerPairingModal';
 import ShiftModal from './ShiftModal';
 import CashMovementModal from './CashMovementModal';
 import RecentInvoicesModal from './RecentInvoicesModal';
+import ManagerApprovalModal from './ManagerApprovalModal';
 import { Modal, Button } from '../../components/common';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { useHotkeys } from '../../hooks/useHotkeys';
@@ -22,6 +23,7 @@ import { saleService } from '../../services/saleService';
 import { websocketService } from '../../services/websocketService';
 import { scannerPairingService } from '../../services/scannerPairingService';
 import { shiftService } from '../../services/shiftService';
+import { approvalService } from '../../services/approvalService';
 import { newRequestId } from '../../utils/requestId';
 import './PosPage.css';
 
@@ -31,6 +33,9 @@ function emptyOrder() {
     items: [],
     customer: null,
     discount: 0,
+    discountReason: '',
+    // Mã duyệt sau khi quản lý nhập PIN: { token, approverName, maxDiscount }
+    discountApproval: null,
     paymentMethod: 'CASH',
     receivedAmount: 0,
     note: '',
@@ -103,8 +108,9 @@ export default function PosPage({
 
     // Subscribe to STOMP WebSocket inventory updates
     const unsubWs = websocketService.on('inventory-update', (event) => {
-      if (event && event.productId) {
-        setProducts(prev => prev.map(p => p.id === event.productId ? { ...p, stock: event.newQuantity ?? p.stock } : p));
+      // Chỉ cập nhật tồn của chi nhánh đang xem; máy chủ gửi kèm tồn mới (newQuantity)
+      if (event?.productId && event.newQuantity != null && Number(event.branchId) === Number(branchId)) {
+        setProducts(prev => prev.map(p => p.id === event.productId ? { ...p, stock: event.newQuantity } : p));
       }
     });
 
@@ -173,6 +179,18 @@ export default function PosPage({
   const finalAmount = useMemo(() => {
     return Math.max(0, subtotal - (currentOrder.discount || 0));
   }, [subtotal, currentOrder.discount]);
+
+  // Hạn mức giảm giá của thu ngân (ADMIN/MANAGER không giới hạn)
+  const isCashier = currentUser?.role === 'CASHIER';
+  const [cashierMaxDiscountPercent, setCashierMaxDiscountPercent] = useState(null);
+  const discountLimit = isCashier && cashierMaxDiscountPercent != null
+    ? Math.floor((subtotal * cashierMaxDiscountPercent) / 100)
+    : null;
+  const isOverDiscountLimit = (order) => discountLimit != null && (order.discount || 0) > discountLimit;
+  const isDiscountApproved = (order) => Number(order.discountApproval?.maxDiscount || 0) >= (order.discount || 0);
+  const discountOverLimit = isOverDiscountLimit(currentOrder);
+  const discountApproved = isDiscountApproved(currentOrder);
+  const [isApprovalOpen, setIsApprovalOpen] = useState(false);
 
   const changeAmount = useMemo(() => {
     if (currentOrder.paymentMethod !== 'CASH') return 0;
@@ -294,7 +312,7 @@ export default function PosPage({
 
   // Hook Barcode scanner
   useBarcodeScanner(handleBarcodeScanned, {
-    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !isPairingOpen && !isShiftOpen && !isCashOpen && !isRecentInvoicesOpen && !remoteBatch
+    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !isPairingOpen && !isShiftOpen && !isCashOpen && !isRecentInvoicesOpen && !isApprovalOpen && !remoteBatch
   });
 
   // Listen to simulated scan events (e.g. from BarcodePrintModal or mock tester)
@@ -307,6 +325,20 @@ export default function PosPage({
     window.addEventListener('pos:barcode_scanned', handleCustomScan);
     return () => window.removeEventListener('pos:barcode_scanned', handleCustomScan);
   }, [handleBarcodeScanned]);
+
+  useEffect(() => {
+    if (!isOnline || !currentUser?.userId || !isCashier) return;
+    let cancelled = false;
+    approvalService
+      .getPolicy()
+      .then((p) => {
+        if (!cancelled) setCashierMaxDiscountPercent(Number(p?.cashierMaxDiscountPercent));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnline, currentUser?.userId, isCashier]);
 
   // Tải ca đang trực. Không tự bật hộp mở ca: thu ngân vẫn đi các màn hình khác hay đăng xuất được
   const userId = currentUser?.userId; // chế độ demo ngoại tuyến không có userId nên không gọi API ca
@@ -459,6 +491,8 @@ export default function PosPage({
       updateCurrentOrder({
         items: [],
         discount: 0,
+        discountReason: '',
+        discountApproval: null,
         receivedAmount: 0,
         note: '',
         requestId: newRequestId()
@@ -467,7 +501,8 @@ export default function PosPage({
   };
 
   // Process Payment (F4)
-  const handleProcessPayment = () => {
+  // order: truyền đơn đã có mã duyệt ngay sau khi quản lý nhập PIN (state chưa kịp cập nhật)
+  const handleProcessPayment = (order = currentOrder) => {
     if (isProcessing) return;
     if (needsShift) {
       playBeepWarning();
@@ -477,6 +512,19 @@ export default function PosPage({
     if (finalAmount <= 0) {
       alert('Đơn hàng chưa có sản phẩm để thanh toán!');
       return;
+    }
+
+    // Thu ngân giảm vượt hạn mức: cần lý do và PIN quản lý trước khi thu tiền
+    if (isOverDiscountLimit(order)) {
+      if (!order.discountReason?.trim()) {
+        playBeepWarning();
+        alert('Giảm giá vượt hạn mức, vui lòng nhập lý do giảm giá.');
+        return;
+      }
+      if (!isDiscountApproved(order)) {
+        setIsApprovalOpen(true);
+        return;
+      }
     }
 
     if (currentOrder.paymentMethod === 'VIETQR') {
@@ -490,14 +538,14 @@ export default function PosPage({
       return;
     }
 
-    executeFinishPayment();
+    executeFinishPayment(order);
   };
 
   // Finalize payment & receipt
-  const executeFinishPayment = async () => {
+  const executeFinishPayment = async (orderOverride) => {
     if (processingRef.current) return;
     processingRef.current = true;
-    const order = currentOrder;
+    const order = orderOverride || currentOrder;
     const orderTabId = activeTabId;
     const cashierName = currentUser?.fullName || currentUser?.username || 'Thu ngân';
     let receipt;
@@ -513,6 +561,8 @@ export default function PosPage({
             branchId: Number(branchId) || undefined,
             customerId: order.customer?.id || null,
             discount: order.discount || 0,
+            discountReason: order.discount > 0 ? order.discountReason || '' : '',
+            discountApprovalToken: order.discountApproval?.token || undefined,
             paymentMethod: order.paymentMethod,
             receivedAmount: order.receivedAmount || finalAmount,
             note: order.note || '',
@@ -525,7 +575,11 @@ export default function PosPage({
           });
         } catch (err) {
           playBeepWarning();
-          if (err.response) {
+          if (err.response?.data?.code === 'DISCOUNT_APPROVAL_REQUIRED') {
+            // Mã duyệt hết hạn hoặc chưa có: bỏ mã cũ, mời quản lý nhập PIN lại
+            setOrders((prev) => ({ ...prev, [orderTabId]: { ...prev[orderTabId], discountApproval: null } }));
+            setIsApprovalOpen(true);
+          } else if (err.response) {
             // Server từ chối (sai giá, giảm giá không hợp lệ, hết hàng, không có quyền...)
             alert(`Không thể thanh toán: ${err.response.data?.message || 'Máy chủ từ chối hóa đơn'}`);
           } else {
@@ -579,6 +633,8 @@ export default function PosPage({
           items: [],
           customer: null,
           discount: 0,
+          discountReason: '',
+          discountApproval: null,
           receivedAmount: 0,
           note: '',
           requestId: newRequestId()
@@ -716,6 +772,10 @@ export default function PosPage({
           subtotal={subtotal}
           discount={currentOrder.discount}
           onChangeDiscount={(val) => updateCurrentOrder({ discount: val })}
+          discountReason={currentOrder.discountReason || ''}
+          onChangeDiscountReason={(val) => updateCurrentOrder({ discountReason: val })}
+          discountLimit={discountLimit}
+          discountApproverName={discountOverLimit && discountApproved ? currentOrder.discountApproval?.approverName : null}
           finalAmount={finalAmount}
           paymentMethod={currentOrder.paymentMethod}
           onChangePaymentMethod={(method) =>
@@ -727,7 +787,7 @@ export default function PosPage({
           }
           changeAmount={changeAmount}
           onCancelOrder={handleCancelOrder}
-          onProcessPayment={handleProcessPayment}
+          onProcessPayment={() => handleProcessPayment()}
           isProcessing={isProcessing}
         />
       </div>
@@ -800,7 +860,7 @@ export default function PosPage({
         onClose={() => setIsVietQROpen(false)}
         amount={finalAmount}
         orderId={activeTabId.replace('order-', 'DH')}
-        onConfirmSuccess={executeFinishPayment}
+        onConfirmSuccess={() => executeFinishPayment()}
       />
 
       {/* Help Modal */}
@@ -838,6 +898,19 @@ export default function PosPage({
           </div>
         </div>
       </Modal>
+
+      <ManagerApprovalModal
+        isOpen={isApprovalOpen}
+        onClose={() => setIsApprovalOpen(false)}
+        amount={currentOrder.discount || 0}
+        maxWithoutApproval={discountLimit}
+        reason={currentOrder.discountReason}
+        onApproved={(grant) => {
+          updateCurrentOrder({ discountApproval: grant });
+          setIsApprovalOpen(false);
+          handleProcessPayment({ ...currentOrder, discountApproval: grant });
+        }}
+      />
 
       <RecentInvoicesModal
         isOpen={isRecentInvoicesOpen}

@@ -28,6 +28,13 @@ public class InvoiceRequest {
 
     private String note;
 
+    @Size(max = 255, message = "Lý do giảm giá tối đa 255 ký tự")
+    private String discountReason;
+
+    /** Mã duyệt nhận được sau khi quản lý nhập PIN (POST /api/approvals/discount) */
+    @Size(max = 64)
+    private String discountApprovalToken;
+
     /** Mã chống trùng do POS tạo cho mỗi đơn (UUID); tùy chọn */
     @Size(max = 64, message = "Mã yêu cầu tối đa 64 ký tự")
     private String clientRequestId;

@@ -112,8 +112,11 @@ public class InventoryService {
 
     private void notifyInventoryUpdate(Long branchId, Long productId) {
         try {
-            messagingTemplate.convertAndSend("/topic/inventory-updates",
-                    Map.of("branchId", branchId, "productId", productId));
+            // Gửi kèm tồn mới để POS và trang Kho cập nhật ngay, không phải tải lại
+            Integer quantity = inventoryRepository.findQuantity(productId, branchId);
+            Map<String, Object> payload = new java.util.HashMap<>(Map.of("branchId", branchId, "productId", productId));
+            if (quantity != null) payload.put("newQuantity", quantity);
+            messagingTemplate.convertAndSend("/topic/inventory-updates", payload);
         } catch (Exception e) {
             log.warn("WS notify failed branchId={} productId={}: {}", branchId, productId, e.getMessage());
         }

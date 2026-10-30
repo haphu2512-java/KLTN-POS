@@ -21,6 +21,11 @@ function loadBranches() {
   return pending;
 }
 
+/** Gọi sau khi thêm/sửa chi nhánh để các màn hình tải lại danh sách */
+export function invalidateBranches() {
+  cache = null;
+}
+
 /** Chi nhánh đang hoạt động; khi chưa tải được thì trả về danh sách dự phòng */
 export default function useBranches(fallback = []) {
   const [branches, setBranches] = useState(cache || fallback);

@@ -1,5 +1,6 @@
 package com.pos.sale;
 
+import com.pos.approval.ApprovalService;
 import com.pos.branch.Branch;
 import com.pos.branch.BranchRepository;
 import com.pos.common.BusinessException;
@@ -36,6 +37,7 @@ public class InvoiceService {
     private final ProductRepository productRepository;
     private final InventoryService inventoryService;
     private final ShiftService shiftService;
+    private final ApprovalService approvalService;
 
     public Page<Invoice> getInvoices(Long branchId, Pageable pageable) {
         Page<Invoice> page = branchId != null
@@ -57,10 +59,11 @@ public class InvoiceService {
     private void fillStaffNames(List<Invoice> invoices) {
         if (invoices.isEmpty()) return;
         Map<Long, String> names = shiftService.userDisplayNames(invoices.stream()
-                .flatMap(i -> Stream.of(i.getEmployeeId(), i.getRefundedBy())).toList());
+                .flatMap(i -> Stream.of(i.getEmployeeId(), i.getRefundedBy(), i.getDiscountApprovedBy())).toList());
         for (Invoice i : invoices) {
             i.setEmployeeName(i.getEmployeeId() != null ? names.get(i.getEmployeeId()) : null);
             i.setRefundedByName(i.getRefundedBy() != null ? names.get(i.getRefundedBy()) : null);
+            i.setDiscountApprovedByName(i.getDiscountApprovedBy() != null ? names.get(i.getDiscountApprovedBy()) : null);
         }
     }
 
@@ -174,6 +177,18 @@ public class InvoiceService {
         if (discount.compareTo(subtotal) > 0) {
             throw new BusinessException("INVALID_DISCOUNT", "Giảm giá không được lớn hơn tổng tiền hàng");
         }
+        String discountReason = req.getDiscountReason() != null && !req.getDiscountReason().isBlank()
+                ? req.getDiscountReason().trim() : null;
+        invoice.setDiscountReason(discount.signum() > 0 ? discountReason : null);
+        // Thu ngân giảm vượt hạn mức: phải có lý do và mã duyệt từ PIN quản lý
+        String approvalToken = null;
+        if (approvalService.requiresDiscountApproval(actor, discount, subtotal)) {
+            if (discountReason == null) {
+                throw new BusinessException("DISCOUNT_REASON_REQUIRED", "Nhập lý do giảm giá");
+            }
+            approvalToken = req.getDiscountApprovalToken();
+            invoice.setDiscountApprovedBy(approvalService.checkDiscountApproval(approvalToken, actor, branchId, discount));
+        }
         BigDecimal totalAmount = subtotal.subtract(discount);
         invoice.setTotalAmount(totalAmount);
 
@@ -198,7 +213,9 @@ public class InvoiceService {
             }
         }
 
-        return invoiceRepository.save(invoice);
+        Invoice saved = invoiceRepository.save(invoice);
+        approvalService.markUsed(approvalToken);
+        return saved;
     }
 
     @Transactional

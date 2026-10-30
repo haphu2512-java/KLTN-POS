@@ -65,6 +65,14 @@ public class Invoice {
     @Column(length = 255)
     private String note;
 
+    /** Lý do giảm giá (bắt buộc khi giảm vượt hạn mức của thu ngân) */
+    @Column(name = "discount_reason", length = 255)
+    private String discountReason;
+
+    /** Quản lý đã nhập PIN duyệt khoản giảm giá vượt hạn mức */
+    @Column(name = "discount_approved_by")
+    private Long discountApprovedBy;
+
     /** Mã do máy POS tạo cho mỗi đơn; gửi lại cùng mã (sau khi timeout) sẽ không tạo hóa đơn thứ hai */
     @Column(name = "client_request_id", length = 64, unique = true)
     private String clientRequestId;
@@ -103,4 +111,8 @@ public class Invoice {
     /** Tên người bấm hoàn trả, chỉ điền khi trả về cho ADMIN/MANAGER */
     @Transient
     private String refundedByName;
+
+    /** Tên quản lý duyệt giảm giá, chỉ điền khi trả về cho ADMIN/MANAGER */
+    @Transient
+    private String discountApprovedByName;
 }
