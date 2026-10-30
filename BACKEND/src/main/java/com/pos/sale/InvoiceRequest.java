@@ -21,6 +21,10 @@ public class InvoiceRequest {
 
     private BigDecimal discount;
 
+    /** Số điểm khách muốn dùng để trả (cần customerId); server kiểm tra số dư và trần theo pos.loyalty.* */
+    @Min(value = 0, message = "Số điểm đổi không được âm")
+    private Integer redeemPoints;
+
     @NotNull(message = "Phương thức thanh toán không được để trống")
     private PaymentMethod paymentMethod;
 

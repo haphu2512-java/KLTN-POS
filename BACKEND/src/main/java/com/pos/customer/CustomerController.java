@@ -3,6 +3,7 @@ package com.pos.customer;
 import com.pos.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -39,7 +40,13 @@ public class CustomerController {
 
     @PostMapping
     @Operation(summary = "Tạo mới thông tin khách hàng")
-    public ResponseEntity<ApiResponse<Customer>> create(@RequestBody Customer customer) {
-        return ResponseEntity.ok(ApiResponse.ok("Tạo khách hàng thành công", customerService.createCustomer(customer)));
+    public ResponseEntity<ApiResponse<Customer>> create(@Valid @RequestBody CustomerRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Tạo khách hàng thành công", customerService.createCustomer(req)));
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Sửa tên, SĐT, địa chỉ khách hàng (không sửa điểm ở đây)")
+    public ResponseEntity<ApiResponse<Customer>> update(@PathVariable Long id, @Valid @RequestBody CustomerRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Đã cập nhật khách hàng", customerService.updateCustomer(id, req)));
     }
 }

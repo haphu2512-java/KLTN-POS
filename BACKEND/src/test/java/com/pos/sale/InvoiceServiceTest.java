@@ -7,15 +7,18 @@ import com.pos.common.BusinessException;
 import com.pos.customer.Customer;
 import com.pos.customer.CustomerRepository;
 import com.pos.inventory.InventoryService;
+import com.pos.loyalty.LoyaltyPolicy;
+import com.pos.loyalty.LoyaltyService;
+import com.pos.loyalty.PointTransactionRepository;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
 import com.pos.shift.ShiftService;
 import com.pos.user.Role;
 import com.pos.user.User;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -60,8 +63,19 @@ class InvoiceServiceTest {
     @Mock
     private ApprovalService approvalService;
 
-    @InjectMocks
+    @Mock
+    private PointTransactionRepository pointTransactionRepository;
+
     private InvoiceService invoiceService;
+
+    @BeforeEach
+    void setUp() {
+        // Dùng LoyaltyService thật (quy tắc mặc định) trên repository mock để kiểm tra đúng câu lệnh cộng/trừ điểm
+        LoyaltyService loyaltyService = new LoyaltyService(customerRepository, pointTransactionRepository,
+                new LoyaltyPolicy(BigDecimal.valueOf(10000), BigDecimal.valueOf(1000), BigDecimal.valueOf(50), 10));
+        invoiceService = new InvoiceService(invoiceRepository, branchRepository, customerRepository, productRepository,
+                inventoryService, shiftService, approvalService, loyaltyService);
+    }
 
     private final User cashier = User.builder().id(7L).username("cashier").role(Role.CASHIER).currentBranchId(1L).build();
     private final User manager = User.builder().id(8L).username("manager").role(Role.MANAGER).currentBranchId(1L).build();
@@ -308,6 +322,8 @@ class InvoiceServiceTest {
         when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
 
         when(shiftService.resolveShiftForRefund(manager, 1L)).thenReturn(42L);
+        when(customerRepository.findPointsById(1L)).thenReturn(20);
+        when(customerRepository.deductPointsIfEnough(1L, 5)).thenReturn(1);
 
         Invoice refunded = invoiceService.refundInvoice(10L, "Khách đổi ý", manager);
 
@@ -317,7 +333,8 @@ class InvoiceServiceTest {
         assertNotNull(refunded.getRefundedAt());
         assertTrue(refunded.getNote().contains("Khách đổi ý"));
         verify(inventoryService).addStockAtomic(1L, 1L, 3);
-        verify(customerRepository).addPoints(1L, -5); // 50,000 VND = 5 points
+        // Hóa đơn cũ chưa lưu points_earned: tính lại 50.000đ = 5 điểm và thu hồi
+        verify(customerRepository).deductPointsIfEnough(1L, 5);
     }
 
     @Test

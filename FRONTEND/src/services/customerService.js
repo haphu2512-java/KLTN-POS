@@ -20,4 +20,9 @@ export const customerService = {
     const res = await api.post('/customers', data);
     return res?.data !== undefined ? res.data : res;
   },
+
+  async updateCustomer(id, data) {
+    const res = await api.put(`/customers/${id}`, data);
+    return res?.data !== undefined ? res.data : res;
+  },
 };

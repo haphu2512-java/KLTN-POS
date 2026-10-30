@@ -12,6 +12,8 @@ export default function CustomerModal({
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const searchInputRef = useRef(null);
 
   // Reset form mỗi lần mở modal (điều chỉnh state khi prop đổi, không cần effect)
@@ -21,6 +23,9 @@ export default function CustomerModal({
     if (isOpen) {
       setSearchTerm('');
       setIsAddingNew(false);
+      setNewName('');
+      setNewPhone('');
+      setSaveError('');
     }
   }
 
@@ -32,24 +37,25 @@ export default function CustomerModal({
 
   const filtered = customers.filter(
     (c) =>
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.phone.includes(searchTerm)
+      (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.phone || '').includes(searchTerm)
   );
 
-  const handleSaveNew = (e) => {
+  // Lưu khách vào máy chủ trước rồi mới chọn, để hóa đơn gắn đúng khách và được tích điểm
+  const handleSaveNew = async (e) => {
     e.preventDefault();
-    if (!newName.trim()) return;
-    const newCust = {
-      id: Date.now(),
-      name: newName.trim(),
-      phone: newPhone.trim(),
-      points: 0
-    };
-    if (onAddNewCustomer) {
-      onAddNewCustomer(newCust);
+    if (!newName.trim() || saving) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      const created = await onAddNewCustomer({ name: newName.trim(), phone: newPhone.trim() });
+      onSelectCustomer(created);
+      onClose();
+    } catch (err) {
+      setSaveError(err.response?.data?.message || err.message || 'Không lưu được khách hàng');
+    } finally {
+      setSaving(false);
     }
-    onSelectCustomer(newCust);
-    onClose();
   };
 
   const columns = [
@@ -72,7 +78,7 @@ export default function CustomerModal({
       title: 'Điểm tích lũy',
       width: '120px',
       align: 'right',
-      render: (val) => <span className="tabular-nums font-semibold">{val} đ</span>
+      render: (val) => <span className="tabular-nums font-semibold">{val ?? 0} điểm</span>
     },
     {
       key: 'action',
@@ -106,8 +112,8 @@ export default function CustomerModal({
             <Button variant="secondary" onClick={() => setIsAddingNew(false)}>
               Quay lại danh sách
             </Button>
-            <Button variant="success" onClick={handleSaveNew}>
-              Lưu & Chọn khách
+            <Button variant="success" onClick={handleSaveNew} disabled={saving}>
+              {saving ? 'Đang lưu...' : 'Lưu & Chọn khách'}
             </Button>
           </>
         ) : (
@@ -138,6 +144,7 @@ export default function CustomerModal({
             onChange={(e) => setNewPhone(e.target.value)}
             placeholder="Ví dụ: 0987123456..."
           />
+          {saveError && <div className="text-danger" style={{ fontSize: '13px' }}>{saveError}</div>}
         </form>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

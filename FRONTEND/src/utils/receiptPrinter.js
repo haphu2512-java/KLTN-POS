@@ -33,6 +33,11 @@ export function receiptFromInvoice(invoice, cashierName, reprint = null) {
     })),
     subtotal: invoice.subtotal,
     discount: invoice.discount,
+    pointsDiscount: invoice.pointsDiscount,
+    pointsRedeemed: invoice.pointsRedeemed,
+    pointsEarned: invoice.pointsEarned,
+    // Số dư chỉ có ngay lúc bán; in lại bill cũ thì không in số dư (có thể đã đổi)
+    pointsBalance: invoice.customerPointsBalance ?? null,
     total: invoice.totalAmount,
     received: invoice.receivedAmount,
     change: invoice.changeAmount,
@@ -51,6 +56,8 @@ export function generateReceiptHtml(receipt) {
   `).join('');
 
   const discount = Number(receipt.discount) || 0;
+  const pointsDiscount = Number(receipt.pointsDiscount) || 0;
+  const hasPoints = receipt.pointsEarned != null && receipt.customerName !== 'Khách lẻ';
   const paymentLabel = PAYMENT_LABELS[receipt.paymentMethod] || receipt.paymentMethod;
 
   return `
@@ -128,6 +135,12 @@ export function generateReceiptHtml(receipt) {
           <td class="text-right">-${formatCurrency(discount)}</td>
         </tr>
         ` : ''}
+        ${pointsDiscount > 0 ? `
+        <tr>
+          <td>Dùng ${escapeHtml(receipt.pointsRedeemed)} điểm:</td>
+          <td class="text-right">-${formatCurrency(pointsDiscount)}</td>
+        </tr>
+        ` : ''}
         <tr style="font-size: 14px;" class="bold">
           <td>THANH TOÁN:</td>
           <td class="text-right">${formatCurrency(receipt.total)}</td>
@@ -141,6 +154,22 @@ export function generateReceiptHtml(receipt) {
           <td class="text-right bold">${formatCurrency(receipt.change)}</td>
         </tr>
       </table>
+
+      ${hasPoints ? `
+      <div class="divider"></div>
+      <table style="margin: 0;">
+        <tr>
+          <td>Điểm tích lũy đơn này:</td>
+          <td class="text-right">+${escapeHtml(receipt.pointsEarned)}</td>
+        </tr>
+        ${receipt.pointsBalance != null ? `
+        <tr>
+          <td>Điểm hiện có:</td>
+          <td class="text-right bold">${escapeHtml(receipt.pointsBalance)}</td>
+        </tr>
+        ` : ''}
+      </table>
+      ` : ''}
 
       <div class="divider"></div>
 

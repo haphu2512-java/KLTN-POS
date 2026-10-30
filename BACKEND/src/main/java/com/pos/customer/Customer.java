@@ -26,8 +26,12 @@ public class Customer {
     @Column(unique = true, length = 20)
     private String phone;
 
+    /**
+     * Số dư điểm. Chỉ đổi bằng câu UPDATE nguyên tử trong CustomerRepository (updatable = false),
+     * để lưu entity không ghi đè số dư mà quầy khác vừa cộng/trừ.
+     */
     @Builder.Default
-    @Column(nullable = false)
+    @Column(nullable = false, updatable = false)
     private Integer points = 0;
 
     @Column(length = 255)

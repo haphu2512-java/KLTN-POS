@@ -24,6 +24,7 @@ import { websocketService } from '../../services/websocketService';
 import { scannerPairingService } from '../../services/scannerPairingService';
 import { shiftService } from '../../services/shiftService';
 import { approvalService } from '../../services/approvalService';
+import { loyaltyService, maxRedeemablePoints } from '../../services/loyaltyService';
 import { newRequestId } from '../../utils/requestId';
 import './PosPage.css';
 
@@ -36,6 +37,8 @@ function emptyOrder() {
     discountReason: '',
     // Mã duyệt sau khi quản lý nhập PIN: { token, approverName, maxDiscount }
     discountApproval: null,
+    // Số điểm khách muốn dùng để trả
+    redeemPoints: 0,
     paymentMethod: 'CASH',
     receivedAmount: 0,
     note: '',
@@ -176,9 +179,20 @@ export default function PosPage({
     );
   }, [currentOrder.items]);
 
+  // Đổi điểm: tính trên số tiền sau giảm tay, không vượt trần % và số dư của khách
+  const [loyaltyPolicy, setLoyaltyPolicy] = useState(null);
+  const afterDiscount = Math.max(0, subtotal - (currentOrder.discount || 0));
+  const maxRedeem = maxRedeemablePoints(loyaltyPolicy, afterDiscount, currentOrder.customer?.points || 0);
+  // Giỏ hoặc giảm giá đổi sau khi nhập điểm: tự hạ về mức còn hợp lệ, dưới mức tối thiểu thì bỏ
+  const redeemPoints = useMemo(() => {
+    const wanted = Math.min(currentOrder.redeemPoints || 0, maxRedeem);
+    return loyaltyPolicy && wanted >= Number(loyaltyPolicy.minRedeemPoints) ? wanted : 0;
+  }, [currentOrder.redeemPoints, maxRedeem, loyaltyPolicy]);
+  const pointsDiscount = loyaltyPolicy ? redeemPoints * Number(loyaltyPolicy.pointValue) : 0;
+
   const finalAmount = useMemo(() => {
-    return Math.max(0, subtotal - (currentOrder.discount || 0));
-  }, [subtotal, currentOrder.discount]);
+    return Math.max(0, afterDiscount - pointsDiscount);
+  }, [afterDiscount, pointsDiscount]);
 
   // Hạn mức giảm giá của thu ngân (ADMIN/MANAGER không giới hạn)
   const isCashier = currentUser?.role === 'CASHIER';
@@ -325,6 +339,20 @@ export default function PosPage({
     window.addEventListener('pos:barcode_scanned', handleCustomScan);
     return () => window.removeEventListener('pos:barcode_scanned', handleCustomScan);
   }, [handleBarcodeScanned]);
+
+  useEffect(() => {
+    if (!isOnline || !currentUser?.userId) return;
+    let cancelled = false;
+    loyaltyService
+      .getPolicy()
+      .then((p) => {
+        if (!cancelled) setLoyaltyPolicy(p);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnline, currentUser?.userId]);
 
   useEffect(() => {
     if (!isOnline || !currentUser?.userId || !isCashier) return;
@@ -493,6 +521,7 @@ export default function PosPage({
         discount: 0,
         discountReason: '',
         discountApproval: null,
+        redeemPoints: 0,
         receivedAmount: 0,
         note: '',
         requestId: newRequestId()
@@ -563,6 +592,7 @@ export default function PosPage({
             discount: order.discount || 0,
             discountReason: order.discount > 0 ? order.discountReason || '' : '',
             discountApprovalToken: order.discountApproval?.token || undefined,
+            redeemPoints: order.customer ? redeemPoints : 0,
             paymentMethod: order.paymentMethod,
             receivedAmount: order.receivedAmount || finalAmount,
             note: order.note || '',
@@ -594,6 +624,11 @@ export default function PosPage({
           return;
         }
         receipt = receiptFromInvoice(invoice, cashierName);
+        // Cập nhật số dư điểm của khách trong danh sách để lần chọn sau thấy đúng
+        if (invoice.customer?.id != null && invoice.customerPointsBalance != null) {
+          setCustomers((prev) => prev.map((c) =>
+            c.id === invoice.customer.id ? { ...c, points: invoice.customerPointsBalance } : c));
+        }
       } else {
         // Chế độ demo ngoại tuyến (chưa đăng nhập): không có máy chủ, hóa đơn chỉ để trình diễn
         receipt = {
@@ -604,6 +639,7 @@ export default function PosPage({
           items: order.items.map(it => ({ name: it.name, quantity: it.quantity, unitPrice: it.price })),
           subtotal,
           discount: order.discount || 0,
+          pointsDiscount,
           total: finalAmount,
           received: order.paymentMethod === 'CASH' ? order.receivedAmount || finalAmount : finalAmount,
           change: Math.max(0, changeAmount),
@@ -635,6 +671,7 @@ export default function PosPage({
           discount: 0,
           discountReason: '',
           discountApproval: null,
+          redeemPoints: 0,
           receivedAmount: 0,
           note: '',
           requestId: newRequestId()
@@ -648,6 +685,11 @@ export default function PosPage({
       alert(
         `Thanh toán thành công [${receipt.code}]!\n\n` +
           `• Khách hàng: ${receipt.customerName}\n` +
+          (receipt.pointsBalance != null
+            ? `• Điểm: +${receipt.pointsEarned || 0}` +
+              (receipt.pointsRedeemed ? `, dùng ${receipt.pointsRedeemed}` : '') +
+              ` → còn ${receipt.pointsBalance}\n`
+            : '') +
           `• Tổng thanh toán: ${formatCurrency(receipt.total)}\n` +
           `• Phương thức: ${receipt.paymentMethod}\n` +
           `• Tiền thừa trả khách: ${formatCurrency(receipt.change)}\n\n` +
@@ -774,6 +816,11 @@ export default function PosPage({
           onChangeDiscount={(val) => updateCurrentOrder({ discount: val })}
           discountReason={currentOrder.discountReason || ''}
           onChangeDiscountReason={(val) => updateCurrentOrder({ discountReason: val })}
+          loyaltyPolicy={loyaltyPolicy}
+          redeemPoints={redeemPoints}
+          maxRedeem={maxRedeem}
+          pointsDiscount={pointsDiscount}
+          onChangeRedeemPoints={(val) => updateCurrentOrder({ redeemPoints: val })}
           discountLimit={discountLimit}
           discountApproverName={discountOverLimit && discountApproved ? currentOrder.discountApproval?.approverName : null}
           finalAmount={finalAmount}
@@ -821,8 +868,12 @@ export default function PosPage({
         isOpen={isCustomerOpen}
         onClose={() => setIsCustomerOpen(false)}
         customers={customers}
-        onSelectCustomer={(cust) => updateCurrentOrder({ customer: cust })}
-        onAddNewCustomer={(newCust) => setCustomers([...customers, newCust])}
+        onSelectCustomer={(cust) => updateCurrentOrder({ customer: cust, redeemPoints: 0 })}
+        onAddNewCustomer={async (data) => {
+          const created = await customerService.createCustomer(data);
+          setCustomers((prev) => [...prev, created]);
+          return created;
+        }}
       />
 
       {isShiftOpen && (

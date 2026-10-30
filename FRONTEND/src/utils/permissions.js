@@ -10,7 +10,8 @@ export const PERMS = {
   SHIFTS_MANAGE: 'shifts.manage', // Lịch sử ca & thiếu/dư, xếp ca, nhân viên trực
   SHIFTS_SCHEDULE: 'shifts.schedule', // Giờ các ca (lịch mẫu)
   REPORT_VIEW: 'report.view', // Báo cáo, hoàn trả hóa đơn
-  CUSTOMER_VIEW: 'customer.view', // Xem, thêm khách hàng
+  CUSTOMER_VIEW: 'customer.view', // Xem, thêm khách hàng, xem lịch sử điểm
+  LOYALTY_ADJUST: 'loyalty.adjust', // Điều chỉnh điểm thành viên bằng tay
   SUPPLIER_VIEW: 'supplier.view', // Xem, thêm nhà cung cấp
   ACCOUNT_MANAGE: 'account.manage', // Tài khoản, chi nhánh
 };

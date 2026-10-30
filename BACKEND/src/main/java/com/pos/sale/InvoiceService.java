@@ -7,6 +7,8 @@ import com.pos.common.BusinessException;
 import com.pos.customer.Customer;
 import com.pos.customer.CustomerRepository;
 import com.pos.inventory.InventoryService;
+import com.pos.loyalty.LoyaltyPolicy;
+import com.pos.loyalty.LoyaltyService;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
 import com.pos.shift.ShiftService;
@@ -38,6 +40,7 @@ public class InvoiceService {
     private final InventoryService inventoryService;
     private final ShiftService shiftService;
     private final ApprovalService approvalService;
+    private final LoyaltyService loyaltyService;
 
     public Page<Invoice> getInvoices(Long branchId, Pageable pageable) {
         Page<Invoice> page = branchId != null
@@ -132,7 +135,13 @@ public class InvoiceService {
 
         Customer customer = null;
         if (req.getCustomerId() != null) {
-            customer = customerRepository.findById(req.getCustomerId()).orElse(null);
+            customer = customerRepository.findById(req.getCustomerId())
+                    .orElseThrow(() -> new BusinessException("CUSTOMER_NOT_FOUND",
+                            "Không tìm thấy khách hàng. Hãy chọn lại khách trước khi thanh toán."));
+        }
+        int redeemPoints = req.getRedeemPoints() != null ? req.getRedeemPoints() : 0;
+        if (redeemPoints > 0 && customer == null) {
+            throw new BusinessException("CUSTOMER_REQUIRED", "Chọn khách hàng thành viên để dùng điểm");
         }
 
         Invoice invoice = Invoice.builder()
@@ -189,8 +198,29 @@ public class InvoiceService {
             approvalToken = req.getDiscountApprovalToken();
             invoice.setDiscountApprovedBy(approvalService.checkDiscountApproval(approvalToken, actor, branchId, discount));
         }
-        BigDecimal totalAmount = subtotal.subtract(discount);
+        // Đổi điểm tính trên số tiền sau giảm tay; không tính vào hạn mức giảm của thu ngân
+        LoyaltyPolicy loyalty = loyaltyService.getPolicy();
+        BigDecimal afterDiscount = subtotal.subtract(discount);
+        if (redeemPoints > 0) {
+            if (redeemPoints < loyalty.getMinRedeemPoints()) {
+                throw new BusinessException("INVALID_REDEEM",
+                        "Mỗi lần đổi tối thiểu " + loyalty.getMinRedeemPoints() + " điểm");
+            }
+            int balance = customer.getPoints() != null ? customer.getPoints() : 0;
+            int maxRedeem = loyalty.maxRedeemable(afterDiscount, balance);
+            if (redeemPoints > maxRedeem) {
+                throw new BusinessException("INVALID_REDEEM", "Hóa đơn này chỉ dùng được tối đa " + maxRedeem + " điểm");
+            }
+        }
+        BigDecimal pointsDiscount = loyalty.valueOf(redeemPoints);
+        BigDecimal totalAmount = afterDiscount.subtract(pointsDiscount);
         invoice.setTotalAmount(totalAmount);
+        int earnedPoints = customer != null ? loyalty.pointsEarnedFor(totalAmount) : 0;
+        if (customer != null) {
+            invoice.setPointsRedeemed(redeemPoints);
+            invoice.setPointsDiscount(pointsDiscount);
+            invoice.setPointsEarned(earnedPoints);
+        }
 
         // 2. Handle Cash Tendered & Change
         BigDecimal received = req.getReceivedAmount() != null ? req.getReceivedAmount() : totalAmount;
@@ -204,16 +234,14 @@ public class InvoiceService {
             invoice.setChangeAmount(BigDecimal.ZERO);
         }
 
-        // 3. Award Customer Points atomically (1 point per 10,000 VND)
-        if (customer != null && totalAmount.compareTo(BigDecimal.ZERO) > 0) {
-            int earnedPoints = totalAmount.divide(BigDecimal.valueOf(10000), java.math.RoundingMode.FLOOR).intValue();
-            if (earnedPoints > 0) {
-                customerRepository.addPoints(customer.getId(), earnedPoints);
-                customer.setPoints(customer.getPoints() + earnedPoints);
-            }
-        }
-
         Invoice saved = invoiceRepository.save(invoice);
+
+        // 3. Trừ điểm đã dùng rồi cộng điểm mới, ghi sổ điểm theo hóa đơn (cùng transaction với hóa đơn)
+        if (customer != null) {
+            loyaltyService.redeem(customer, saved.getId(), redeemPoints, actor.getId());
+            loyaltyService.earn(customer, saved.getId(), earnedPoints, actor.getId());
+            saved.setCustomerPointsBalance(customer.getPoints());
+        }
         approvalService.markUsed(approvalToken);
         return saved;
     }
@@ -244,17 +272,14 @@ public class InvoiceService {
             }
         }
 
-        // 2. Thu hồi điểm tích lũy khách hàng (nếu có)
-        if (invoice.getCustomer() != null && invoice.getTotalAmount() != null && invoice.getTotalAmount().compareTo(BigDecimal.ZERO) > 0) {
-            int earnedPoints = invoice.getTotalAmount().divide(BigDecimal.valueOf(10000), java.math.RoundingMode.FLOOR).intValue();
-            if (earnedPoints > 0) {
-                int currentPoints = invoice.getCustomer().getPoints();
-                int deductPoints = Math.min(currentPoints, earnedPoints);
-                if (deductPoints > 0) {
-                    customerRepository.addPoints(invoice.getCustomer().getId(), -deductPoints);
-                    invoice.getCustomer().setPoints(currentPoints - deductPoints);
-                }
-            }
+        // 2. Trả lại điểm khách đã dùng và thu hồi đúng số điểm đã cộng cho hóa đơn này.
+        // Hóa đơn cũ chưa lưu points_earned thì tính lại theo công thức hiện hành.
+        if (invoice.getCustomer() != null) {
+            int redeemed = invoice.getPointsRedeemed() != null ? invoice.getPointsRedeemed() : 0;
+            int earned = invoice.getPointsEarned() != null
+                    ? invoice.getPointsEarned()
+                    : loyaltyService.getPolicy().pointsEarnedFor(invoice.getTotalAmount());
+            loyaltyService.reverseForRefund(invoice.getCustomer(), invoice.getId(), redeemed, earned, actor.getId());
         }
 
         // 3. Cập nhật trạng thái hóa đơn
