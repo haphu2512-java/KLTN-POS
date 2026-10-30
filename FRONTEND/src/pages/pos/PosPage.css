@@ -259,6 +259,10 @@
 .pos-discount-hint.is-approved {
   color: var(--success-700, #047857);
 }
+.pos-points-hint {
+  font-size: 12px;
+  color: var(--text-muted, #6b7280);
+}
 
 .pos-calc-divider {
   height: 1px;

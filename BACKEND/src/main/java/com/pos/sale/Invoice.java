@@ -44,6 +44,18 @@ public class Invoice {
     @Column(name = "discount", precision = 14, scale = 2)
     private BigDecimal discount = BigDecimal.ZERO;
 
+    /** Số điểm khách dùng để trả (null với hóa đơn trước khi có đổi điểm) */
+    @Column(name = "points_redeemed")
+    private Integer pointsRedeemed;
+
+    /** Số tiền được giảm nhờ đổi điểm (= pointsRedeemed x giá trị 1 điểm lúc bán) */
+    @Column(name = "points_discount", precision = 14, scale = 2)
+    private BigDecimal pointsDiscount;
+
+    /** Số điểm được cộng cho hóa đơn này; hoàn trả thu hồi đúng số này (null: hóa đơn cũ, tính lại theo công thức) */
+    @Column(name = "points_earned")
+    private Integer pointsEarned;
+
     @Column(name = "total_amount", nullable = false, precision = 14, scale = 2)
     private BigDecimal totalAmount;
 
@@ -103,6 +115,10 @@ public class Invoice {
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonManagedReference
     private List<InvoiceDetail> details = new ArrayList<>();
+
+    /** Số dư điểm của khách ngay sau khi tạo hóa đơn, để in lên bill */
+    @Transient
+    private Integer customerPointsBalance;
 
     /** Tên nhân viên bán: in lại bill đúng người bán gốc và để quản lý biết ai chịu trách nhiệm hóa đơn */
     @Transient

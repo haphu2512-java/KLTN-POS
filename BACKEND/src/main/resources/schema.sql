@@ -128,6 +128,9 @@ CREATE TABLE IF NOT EXISTS invoice (
     employee_id BIGINT,
     subtotal DECIMAL(14,2),
     discount DECIMAL(14,2) DEFAULT 0,
+    points_redeemed INT,                 -- điểm khách dùng để trả (null: hóa đơn trước khi có đổi điểm)
+    points_discount DECIMAL(14,2),       -- số tiền giảm nhờ đổi điểm
+    points_earned INT,                   -- điểm được cộng; hoàn trả thu hồi đúng số này
     total_amount DECIMAL(14,2) NOT NULL,
     payment_method VARCHAR(20) NOT NULL DEFAULT 'CASH',
     received_amount DECIMAL(14,2),
@@ -286,4 +289,19 @@ CREATE TABLE IF NOT EXISTS shift_assignment (
     FOREIGN KEY (branch_id) REFERENCES branch(id) ON DELETE CASCADE,
     FOREIGN KEY (work_shift_id) REFERENCES work_shift(id),
     FOREIGN KEY (staff_member_id) REFERENCES staff_member(id)
+);
+
+-- Sổ điểm thành viên: mỗi lần cộng/trừ/hoàn/điều chỉnh điểm là một dòng (docs/tich-diem-doi-diem.md)
+CREATE TABLE IF NOT EXISTS point_transaction (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    customer_id BIGINT NOT NULL,
+    invoice_id BIGINT,
+    type VARCHAR(20) NOT NULL,           -- EARN, REDEEM, REFUND_EARN, REFUND_REDEEM, ADJUST
+    points INT NOT NULL,                 -- dương = cộng, âm = trừ
+    balance_after INT NOT NULL,
+    note VARCHAR(255),
+    created_by BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_point_tx_customer (customer_id, created_at),
+    INDEX idx_point_tx_invoice (invoice_id)
 );

@@ -22,6 +22,7 @@
 | [`AI_FORECAST/README.md`](AI_FORECAST/README.md) | Bản Python kiểm chứng mô hình dự báo |
 | [`FRONTEND/README.md`](FRONTEND/README.md) | Ứng dụng desktop Electron |
 | [`MOBILE/README.md`](MOBILE/README.md) | App điện thoại quét mã vạch, API ghép cặp với quầy |
+| [`docs/tich-diem-doi-diem.md`](docs/tich-diem-doi-diem.md) | Khuyến mãi / Thành viên: quy trình tích điểm, đổi điểm, hoàn điểm, sổ điểm |
 | `.agents/`, `skills/`, `MOBILE/AGENTS.md` | Hướng dẫn cho trợ lý AI khi lập trình (không phải tài liệu người dùng) |
 
 ---

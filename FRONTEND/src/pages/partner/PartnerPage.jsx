@@ -4,6 +4,7 @@ import { customerService } from '../../services/customerService';
 import { purchaseService } from '../../services/purchaseService';
 import { formatNumber, formatDateTime } from '../../utils/formatters';
 import { PERMS } from '../../utils/permissions';
+import PointHistoryModal from './PointHistoryModal';
 import './PartnerPage.css';
 
 export default function PartnerPage({
@@ -13,6 +14,8 @@ export default function PartnerPage({
   // Thu ngân chỉ có tab khách hàng, thủ kho chỉ có tab nhà cung cấp
   const canCustomers = can(PERMS.CUSTOMER_VIEW);
   const canSuppliers = can(PERMS.SUPPLIER_VIEW);
+  const canAdjustPoints = can(PERMS.LOYALTY_ADJUST);
+  const [historyCustomer, setHistoryCustomer] = useState(null);
   const [activeTab, setActiveTab] = useState(canCustomers ? 'customers' : 'suppliers'); // 'customers' | 'suppliers'
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -137,6 +140,17 @@ export default function PartnerPage({
         const dt = val || c?.createdAt;
         return dt ? formatDateTime(dt) : '—';
       }
+    },
+    {
+      key: 'history',
+      title: '',
+      width: '120px',
+      align: 'center',
+      render: (_, c) => (
+        <Button size="sm" variant="secondary" onClick={() => setHistoryCustomer(c)} disabled={!isOnline}>
+          Lịch sử điểm
+        </Button>
+      )
     }
   ];
 
@@ -256,6 +270,16 @@ export default function PartnerPage({
           )}
         </div>
       </div>
+
+      <PointHistoryModal
+        customer={historyCustomer}
+        onClose={() => setHistoryCustomer(null)}
+        canAdjust={canAdjustPoints}
+        onAdjusted={(updated) => {
+          setHistoryCustomer(updated);
+          setCustomers((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+        }}
+      />
 
       {/* Modal Add Customer */}
       <Modal

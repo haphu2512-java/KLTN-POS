@@ -12,6 +12,12 @@ export default function PosPayment({
   // Hạn mức thu ngân được tự giảm (null = không giới hạn)
   discountLimit = null,
   discountApproverName = null,
+  // Đổi điểm (loyaltyPolicy null: chưa tải được quy tắc, ẩn phần đổi điểm)
+  loyaltyPolicy = null,
+  redeemPoints = 0,
+  maxRedeem = 0,
+  pointsDiscount = 0,
+  onChangeRedeemPoints,
   finalAmount,
   paymentMethod,
   onChangePaymentMethod,
@@ -40,6 +46,11 @@ export default function PosPayment({
               </span>
             )}
           </div>
+          {customer && (
+            <span className="text-muted" style={{ fontSize: '12px' }}>
+              Điểm hiện có: <strong className="tabular-nums">{customer.points ?? 0}</strong>
+            </span>
+          )}
         </div>
         <Button size="sm" variant="secondary" onClick={onOpenCustomerModal}>
           Đổi (F3)
@@ -84,6 +95,41 @@ export default function PosPayment({
               ? `Đã được ${discountApproverName} duyệt`
               : `Vượt hạn mức ${formatCurrency(discountLimit)}: cần quản lý nhập PIN khi thanh toán`}
           </div>
+        )}
+
+        {customer && loyaltyPolicy && onChangeRedeemPoints && (
+          <>
+            <div className="pos-calc-row">
+              <span className="text-muted">Dùng điểm</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <input
+                  type="number"
+                  className="pos-discount-input"
+                  value={redeemPoints || ''}
+                  onChange={(e) => onChangeRedeemPoints(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                  placeholder="0"
+                  min="0"
+                  max={maxRedeem}
+                  disabled={maxRedeem < Number(loyaltyPolicy.minRedeemPoints)}
+                />
+                <button
+                  type="button"
+                  className="pos-cash-chip"
+                  onClick={() => onChangeRedeemPoints(maxRedeem)}
+                  disabled={maxRedeem < Number(loyaltyPolicy.minRedeemPoints)}
+                >
+                  Tối đa
+                </button>
+              </div>
+            </div>
+            <div className="pos-points-hint">
+              {maxRedeem < Number(loyaltyPolicy.minRedeemPoints)
+                ? `Cần tối thiểu ${loyaltyPolicy.minRedeemPoints} điểm dùng được cho đơn này`
+                : pointsDiscount > 0
+                  ? `Giảm ${formatCurrency(pointsDiscount)} (dùng được tối đa ${maxRedeem} điểm)`
+                  : `Dùng được tối đa ${maxRedeem} điểm (1 điểm = ${formatCurrency(loyaltyPolicy.pointValue)})`}
+            </div>
+          </>
         )}
 
         <div className="pos-calc-divider" />
