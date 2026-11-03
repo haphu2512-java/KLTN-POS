@@ -348,6 +348,11 @@ Mọi API (trừ đăng nhập và `/api/scanner/ping`) cần header `Authorizat
 | GET | `/api/forecast/demand/{productId}?branchId=&days=` | Dự báo 1 sản phẩm kèm lịch sử 30 ngày, SS, ROP, MAE/RMSE, lý do |
 | GET | `/api/forecast/recommendations?branchId=` | Sản phẩm cần nhập, sắp theo mức Khẩn cấp / Cao / Bình thường |
 
+### Trợ lý hỏi đáp (chatbot)
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| POST | `/api/assistant/chat` | Body `{ "message": "..." }`. Trả `{ reply, intent, source, suggestions }`. Hiểu câu hỏi tiếng Việt (có dấu hoặc không) theo từ khóa, không gọi LLM: tồn kho/giá một sản phẩm (tên hoặc mã vạch), hàng sắp hết (mọi vai trò); doanh thu hôm nay/hôm qua/N ngày, top bán chạy (ADMIN, MANAGER); gợi ý nhập theo dự báo (ADMIN, MANAGER, WAREHOUSE). Luôn theo chi nhánh của phiên đăng nhập. Giao diện: nút **Trợ lý** trên thanh điều hướng desktop. |
+
 ### Shifts (Ca làm việc)
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|

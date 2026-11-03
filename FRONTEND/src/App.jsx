@@ -55,6 +55,8 @@ function AppRoutes() {
     isOnline: isBackendOnline,
     isWsConnected,
     onLogout: handleLogout,
+    // Trợ lý hỏi đáp cần máy chủ, không có ở chế độ demo ngoại tuyến
+    assistantEnabled: !isOfflineDemo && isAuthenticated,
     ...nav, // onNavigateToPos, onNavigateToInventory, onNavigateToForecast, ...
     // Ẩn nút điều hướng tới trang không có quyền
     onNavigateToPos: can(PERMS.POS_SELL) ? nav.onNavigateToPos : undefined,
