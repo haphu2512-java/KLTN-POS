@@ -106,6 +106,27 @@ class ApiSecurityIntegrationTest {
     }
 
     @Test
+    @DisplayName("Trợ lý: cần đăng nhập; thu ngân hỏi doanh thu bị từ chối trong câu trả lời, admin xem được")
+    void assistantChatRespectsRole() throws Exception {
+        String body = "{\"message\":\"Doanh thu hôm nay\"}";
+        mvc.perform(post("/api/assistant/chat").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/assistant/chat").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.intent").value("REVENUE"))
+                .andExpect(jsonPath("$.data.reply").value(org.hamcrest.Matchers.containsString("không có quyền")));
+        mvc.perform(post("/api/assistant/chat").header("Authorization", tokenFor("admin"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reply").value(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("không có quyền"))));
+        mvc.perform(post("/api/assistant/chat").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"  \"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("Thu ngân không được xem báo cáo, hoàn trả, xóa sản phẩm hay điều chuyển kho")
     void cashierBlockedFromManagementEndpoints() throws Exception {
         mvc.perform(get("/api/reports/revenue").header("Authorization", cashierToken))
