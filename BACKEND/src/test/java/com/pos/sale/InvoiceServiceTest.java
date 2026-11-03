@@ -12,6 +12,7 @@ import com.pos.loyalty.LoyaltyService;
 import com.pos.loyalty.PointTransactionRepository;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
+import com.pos.promotion.PromotionService;
 import com.pos.shift.ShiftService;
 import com.pos.user.Role;
 import com.pos.user.User;
@@ -66,6 +67,9 @@ class InvoiceServiceTest {
     @Mock
     private PointTransactionRepository pointTransactionRepository;
 
+    @Mock
+    private PromotionService promotionService;
+
     private InvoiceService invoiceService;
 
     @BeforeEach
@@ -74,7 +78,7 @@ class InvoiceServiceTest {
         LoyaltyService loyaltyService = new LoyaltyService(customerRepository, pointTransactionRepository,
                 new LoyaltyPolicy(BigDecimal.valueOf(10000), BigDecimal.valueOf(1000), BigDecimal.valueOf(50), 10));
         invoiceService = new InvoiceService(invoiceRepository, branchRepository, customerRepository, productRepository,
-                inventoryService, shiftService, approvalService, loyaltyService);
+                inventoryService, shiftService, approvalService, loyaltyService, promotionService);
     }
 
     private final User cashier = User.builder().id(7L).username("cashier").role(Role.CASHIER).currentBranchId(1L).build();

@@ -21,6 +21,9 @@ public class InvoiceRequest {
 
     private BigDecimal discount;
 
+    /** Chương trình khuyến mãi POS chọn; server kiểm tra điều kiện và tự tính số tiền giảm */
+    private Long promotionId;
+
     /** Số điểm khách muốn dùng để trả (cần customerId); server kiểm tra số dư và trần theo pos.loyalty.* */
     @Min(value = 0, message = "Số điểm đổi không được âm")
     private Integer redeemPoints;

@@ -14,13 +14,17 @@ export const PERMS = {
   LOYALTY_ADJUST: 'loyalty.adjust', // Điều chỉnh điểm thành viên bằng tay
   SUPPLIER_VIEW: 'supplier.view', // Xem, thêm nhà cung cấp
   ACCOUNT_MANAGE: 'account.manage', // Tài khoản, chi nhánh
+  PROMOTION_VIEW: 'promotion.view', // Xem chương trình khuyến mãi
+  PROMOTION_MANAGE: 'promotion.manage', // Tạo, sửa, bật/tắt, xóa khuyến mãi
 };
 
 const ALL = Object.values(PERMS);
 
 const ROLE_PERMS = {
   ADMIN: ALL,
-  MANAGER: ALL.filter((p) => p !== PERMS.SHIFTS_SCHEDULE && p !== PERMS.ACCOUNT_MANAGE),
+  MANAGER: ALL.filter(
+    (p) => p !== PERMS.SHIFTS_SCHEDULE && p !== PERMS.ACCOUNT_MANAGE && p !== PERMS.PROMOTION_MANAGE
+  ),
   CASHIER: [PERMS.POS_SELL, PERMS.INVENTORY_VIEW, PERMS.CUSTOMER_VIEW],
   WAREHOUSE: [
     PERMS.INVENTORY_VIEW,

@@ -11,6 +11,7 @@ import ReportPage from './pages/report/ReportPage';
 import PartnerPage from './pages/partner/PartnerPage';
 import StaffPage from './pages/admin/StaffPage';
 import ShiftsPage from './pages/shifts/ShiftsPage';
+import PromotionPage from './pages/promotion/PromotionPage';
 import { PERMS, permissionsFor, homePathFor } from './utils/permissions';
 
 /**
@@ -66,6 +67,8 @@ function AppRoutes() {
     // Ca làm cần máy chủ (lịch sử ca), không có ở chế độ demo ngoại tuyến
     onNavigateToShifts: !isOfflineDemo && can(PERMS.SHIFTS_MANAGE) ? nav.onNavigateToShifts : undefined,
     onNavigateToStaff: can(PERMS.ACCOUNT_MANAGE) ? nav.onNavigateToStaff : undefined,
+    // Khuyến mãi lưu trên máy chủ, không có ở chế độ demo ngoại tuyến
+    onNavigateToPromotions: !isOfflineDemo && can(PERMS.PROMOTION_VIEW) ? nav.onNavigateToPromotions : undefined,
     onCreateStockInDraft: can(PERMS.INVENTORY_EDIT) ? nav.onCreateStockInDraft : undefined,
   };
 
@@ -106,6 +109,14 @@ function AppRoutes() {
       <Route
         path="/staff"
         element={shell("staff", can(PERMS.ACCOUNT_MANAGE), <StaffPage {...sharedProps} />)}
+      />
+      <Route
+        path="/promotions"
+        element={shell(
+          "promotions",
+          !isOfflineDemo && can(PERMS.PROMOTION_VIEW),
+          <PromotionPage {...sharedProps} />
+        )}
       />
       {/* Fallback: đường dẫn lạ về trang mở đầu của vai trò */}
       <Route path="*" element={<Navigate to={homePath} replace />} />
