@@ -120,6 +120,28 @@ CREATE TABLE IF NOT EXISTS stock_transfer (
     FOREIGN KEY (employee_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
+-- Chương trình khuyến mãi (ADMIN quản lý)
+CREATE TABLE IF NOT EXISTS promotion (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description VARCHAR(255),
+    type VARCHAR(20) NOT NULL,           -- PERCENT | FIXED_AMOUNT
+    discount_value DECIMAL(14,2) NOT NULL,
+    max_discount_amount DECIMAL(14,2),   -- trần tiền giảm cho loại %
+    min_order_amount DECIMAL(14,2),      -- tiền hàng được áp dụng tối thiểu
+    category VARCHAR(150),               -- null: cả đơn; có giá trị: chỉ mặt hàng thuộc danh mục
+    member_only BOOLEAN NOT NULL DEFAULT FALSE,
+    min_customer_points INT,             -- khách cần tối thiểu số điểm này
+    branch_id BIGINT,                    -- null: mọi chi nhánh
+    start_at DATETIME,
+    end_at DATETIME,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by BIGINT,
+    updated_by BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME
+);
+
 -- 9. Bảng Hóa Đơn Bán Lẻ
 CREATE TABLE IF NOT EXISTS invoice (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -128,6 +150,9 @@ CREATE TABLE IF NOT EXISTS invoice (
     employee_id BIGINT,
     subtotal DECIMAL(14,2),
     discount DECIMAL(14,2) DEFAULT 0,
+    promotion_id BIGINT,                 -- khuyến mãi đã áp (không khóa ngoại: xóa chương trình vẫn giữ hóa đơn)
+    promotion_name VARCHAR(100),         -- tên chương trình lúc bán
+    promotion_discount DECIMAL(14,2),    -- số tiền giảm nhờ khuyến mãi (tính trước giảm tay và đổi điểm)
     points_redeemed INT,                 -- điểm khách dùng để trả (null: hóa đơn trước khi có đổi điểm)
     points_discount DECIMAL(14,2),       -- số tiền giảm nhờ đổi điểm
     points_earned INT,                   -- điểm được cộng; hoàn trả thu hồi đúng số này

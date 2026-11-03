@@ -239,6 +239,21 @@
   border-color: var(--primary-600);
 }
 
+.pos-promo-select {
+  width: 100%;
+  height: 32px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 0 8px;
+  font-size: 13px;
+  background: var(--bg-surface, #fff);
+  color: inherit;
+  outline: none;
+}
+.pos-promo-select:focus {
+  border-color: var(--primary-600);
+}
+
 .pos-discount-reason {
   width: 100%;
   height: 32px;

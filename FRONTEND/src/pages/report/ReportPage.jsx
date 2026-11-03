@@ -114,12 +114,14 @@ export default function ReportPage({
 
   const handleExportCsv = () => {
     if (viewMode === 'invoices') {
-      const headers = ['Mã hóa đơn', 'Thời gian', 'Thu ngân', 'Khách hàng', 'Giảm giá (VND)', 'Lý do giảm', 'Người duyệt giảm', 'Tổng tiền (VND)', 'Phương thức', 'Trạng thái', 'Ghi chú'];
+      const headers = ['Mã hóa đơn', 'Thời gian', 'Thu ngân', 'Khách hàng', 'Khuyến mãi', 'Tiền khuyến mãi (VND)', 'Giảm giá (VND)', 'Lý do giảm', 'Người duyệt giảm', 'Tổng tiền (VND)', 'Phương thức', 'Trạng thái', 'Ghi chú'];
       const rows = invoices.map((i) => [
         `HD-${i.id}`,
         formatDateTime(i.createdAt),
         i.employeeName || '',
         i.customer ? i.customer.name : 'Khách lẻ',
+        i.promotionName || '',
+        i.promotionDiscount || 0,
         i.discount || 0,
         i.discountReason || '',
         i.discountApprovedByName || '',

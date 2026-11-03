@@ -5,6 +5,13 @@ export default function PosPayment({
   customer,
   onOpenCustomerModal,
   subtotal,
+  // Khuyến mãi máy chủ tính cho giỏ (giảm nhiều nhất trước); null/[] khi không có
+  promotionsEnabled = false,
+  promotionsLoading = false,
+  applicablePromotions = [],
+  selectedPromotion = null,
+  promotionDiscount = 0,
+  onChangePromotion,
   discount,
   onChangeDiscount,
   discountReason = '',
@@ -63,6 +70,40 @@ export default function PosPayment({
           <span className="text-muted">Tiền hàng</span>
           <span className="font-medium tabular-nums">{formatCurrency(subtotal)}</span>
         </div>
+
+        {promotionsEnabled && onChangePromotion && (
+          <>
+            <div className="pos-calc-row">
+              <span className="text-muted">Khuyến mãi</span>
+              <span className="font-medium tabular-nums">
+                {promotionDiscount > 0 ? `- ${formatCurrency(promotionDiscount)}` : '0 ₫'}
+              </span>
+            </div>
+            {applicablePromotions.length > 0 ? (
+              <select
+                className="pos-promo-select"
+                value={selectedPromotion ? String(selectedPromotion.promotionId) : 'none'}
+                onChange={(e) =>
+                  onChangePromotion(e.target.value === 'none' ? null : Number(e.target.value))
+                }
+              >
+                {applicablePromotions.map((p) => (
+                  <option key={p.promotionId} value={String(p.promotionId)}>
+                    {p.name} (-{formatCurrency(p.discountAmount)})
+                  </option>
+                ))}
+                <option value="none">Không áp khuyến mãi</option>
+              </select>
+            ) : (
+              <div className="pos-points-hint">
+                {promotionsLoading ? 'Đang kiểm tra khuyến mãi...' : 'Không có khuyến mãi áp được cho đơn này'}
+              </div>
+            )}
+            {selectedPromotion?.description && (
+              <div className="pos-points-hint">{selectedPromotion.description}</div>
+            )}
+          </>
+        )}
 
         <div className="pos-calc-row">
           <span className="text-muted">Giảm giá</span>

@@ -33,6 +33,8 @@ export function receiptFromInvoice(invoice, cashierName, reprint = null) {
     })),
     subtotal: invoice.subtotal,
     discount: invoice.discount,
+    promotionName: invoice.promotionName,
+    promotionDiscount: invoice.promotionDiscount,
     pointsDiscount: invoice.pointsDiscount,
     pointsRedeemed: invoice.pointsRedeemed,
     pointsEarned: invoice.pointsEarned,
@@ -56,6 +58,7 @@ export function generateReceiptHtml(receipt) {
   `).join('');
 
   const discount = Number(receipt.discount) || 0;
+  const promotionDiscount = Number(receipt.promotionDiscount) || 0;
   const pointsDiscount = Number(receipt.pointsDiscount) || 0;
   const hasPoints = receipt.pointsEarned != null && receipt.customerName !== 'Khách lẻ';
   const paymentLabel = PAYMENT_LABELS[receipt.paymentMethod] || receipt.paymentMethod;
@@ -129,6 +132,12 @@ export function generateReceiptHtml(receipt) {
           <td>Tổng tiền hàng:</td>
           <td class="text-right">${formatCurrency(receipt.subtotal)}</td>
         </tr>
+        ${promotionDiscount > 0 ? `
+        <tr>
+          <td>KM: ${escapeHtml(receipt.promotionName || 'Khuyến mãi')}</td>
+          <td class="text-right">-${formatCurrency(promotionDiscount)}</td>
+        </tr>
+        ` : ''}
         ${discount > 0 ? `
         <tr>
           <td>Giảm giá / Chiết khấu:</td>

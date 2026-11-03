@@ -44,6 +44,18 @@ public class Invoice {
     @Column(name = "discount", precision = 14, scale = 2)
     private BigDecimal discount = BigDecimal.ZERO;
 
+    /** Chương trình khuyến mãi đã áp (không ràng buộc khóa ngoại: xóa chương trình vẫn giữ hóa đơn) */
+    @Column(name = "promotion_id")
+    private Long promotionId;
+
+    /** Tên chương trình lúc bán, để in lại bill và báo cáo đúng kể cả khi chương trình đã sửa/xóa */
+    @Column(name = "promotion_name", length = 100)
+    private String promotionName;
+
+    /** Số tiền giảm nhờ khuyến mãi (tính trước giảm tay và đổi điểm) */
+    @Column(name = "promotion_discount", precision = 14, scale = 2)
+    private BigDecimal promotionDiscount;
+
     /** Số điểm khách dùng để trả (null với hóa đơn trước khi có đổi điểm) */
     @Column(name = "points_redeemed")
     private Integer pointsRedeemed;
