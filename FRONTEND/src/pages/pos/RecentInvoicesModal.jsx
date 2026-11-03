@@ -433,6 +433,12 @@ export default function RecentInvoicesModal({
                 {formatCurrency(selectedInvoice.subtotal || selectedInvoice.totalAmount)}
               </span>
             </div>
+            {Number(selectedInvoice.promotionDiscount) > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--danger-600)' }}>
+                <span>KM {selectedInvoice.promotionName || ''}:</span>
+                <span className="tabular-nums">- {formatCurrency(selectedInvoice.promotionDiscount)}</span>
+              </div>
+            )}
             {Number(selectedInvoice.discount) > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--danger-600)' }}>
                 <span>Giảm giá:</span>

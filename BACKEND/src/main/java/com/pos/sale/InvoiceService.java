@@ -11,6 +11,7 @@ import com.pos.loyalty.LoyaltyPolicy;
 import com.pos.loyalty.LoyaltyService;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
+import com.pos.promotion.PromotionService;
 import com.pos.shift.ShiftService;
 import com.pos.user.Role;
 import com.pos.user.User;
@@ -41,6 +42,7 @@ public class InvoiceService {
     private final ShiftService shiftService;
     private final ApprovalService approvalService;
     private final LoyaltyService loyaltyService;
+    private final PromotionService promotionService;
 
     public Page<Invoice> getInvoices(Long branchId, Pageable pageable) {
         Page<Invoice> page = branchId != null
@@ -157,6 +159,7 @@ public class InvoiceService {
                 .build();
 
         BigDecimal subtotal = BigDecimal.ZERO;
+        List<PromotionService.Line> promotionLines = new ArrayList<>();
 
         // 1. Process each item & Deduct Inventory atomically
         for (InvoiceRequest.Item itemReq : req.getItems()) {
@@ -180,11 +183,27 @@ public class InvoiceService {
 
             invoice.getDetails().add(detail);
             subtotal = subtotal.add(lineTotal);
+            promotionLines.add(new PromotionService.Line(product.getCategory(), lineTotal));
         }
 
         invoice.setSubtotal(subtotal);
-        if (discount.compareTo(subtotal) > 0) {
-            throw new BusinessException("INVALID_DISCOUNT", "Giảm giá không được lớn hơn tổng tiền hàng");
+
+        // Khuyến mãi tính trước tiên, trên tiền hàng; không tính vào hạn mức giảm tay của thu ngân
+        BigDecimal promotionDiscount = BigDecimal.ZERO;
+        if (req.getPromotionId() != null) {
+            PromotionService.Applied applied = promotionService.applyToInvoice(
+                    req.getPromotionId(), branchId, customer, promotionLines);
+            promotionDiscount = applied.discountAmount();
+            invoice.setPromotionId(applied.promotionId());
+            invoice.setPromotionName(applied.name());
+            invoice.setPromotionDiscount(promotionDiscount);
+        }
+        BigDecimal afterPromotion = subtotal.subtract(promotionDiscount);
+
+        if (discount.compareTo(afterPromotion) > 0) {
+            throw new BusinessException("INVALID_DISCOUNT", promotionDiscount.signum() > 0
+                    ? "Giảm giá không được lớn hơn tiền hàng sau khuyến mãi"
+                    : "Giảm giá không được lớn hơn tổng tiền hàng");
         }
         String discountReason = req.getDiscountReason() != null && !req.getDiscountReason().isBlank()
                 ? req.getDiscountReason().trim() : null;
@@ -198,9 +217,9 @@ public class InvoiceService {
             approvalToken = req.getDiscountApprovalToken();
             invoice.setDiscountApprovedBy(approvalService.checkDiscountApproval(approvalToken, actor, branchId, discount));
         }
-        // Đổi điểm tính trên số tiền sau giảm tay; không tính vào hạn mức giảm của thu ngân
+        // Đổi điểm tính trên số tiền sau khuyến mãi và giảm tay; không tính vào hạn mức giảm của thu ngân
         LoyaltyPolicy loyalty = loyaltyService.getPolicy();
-        BigDecimal afterDiscount = subtotal.subtract(discount);
+        BigDecimal afterDiscount = afterPromotion.subtract(discount);
         if (redeemPoints > 0) {
             if (redeemPoints < loyalty.getMinRedeemPoints()) {
                 throw new BusinessException("INVALID_REDEEM",
