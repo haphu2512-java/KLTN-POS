@@ -64,6 +64,15 @@ public class InventoryService {
                 });
     }
 
+    /** Điều chỉnh tồn theo chênh lệch kiểm kê (delta âm là hao hụt); tạo dòng tồn nếu chưa có */
+    @Transactional
+    public void adjustStockAtomic(Long productId, Long branchId, int delta) {
+        if (delta == 0) return;
+        getInventory(productId, branchId);
+        inventoryRepository.adjustStockAtomic(productId, branchId, delta);
+        notifyInventoryUpdate(branchId, productId);
+    }
+
     @Transactional
     public void deductStockAtomic(Long productId, Long branchId, int qty) {
         int updatedRows = inventoryRepository.decrementStockAtomic(productId, branchId, qty);

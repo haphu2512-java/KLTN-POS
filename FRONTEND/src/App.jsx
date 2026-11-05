@@ -13,6 +13,7 @@ import StaffPage from './pages/admin/StaffPage';
 import ShiftsPage from './pages/shifts/ShiftsPage';
 import PromotionPage from './pages/promotion/PromotionPage';
 import AuditLogPage from './pages/audit/AuditLogPage';
+import StockCountPage from './pages/stockcount/StockCountPage';
 import { PERMS, permissionsFor, homePathFor } from './utils/permissions';
 
 /**
@@ -74,6 +75,8 @@ function AppRoutes() {
     onNavigateToPromotions: !isOfflineDemo && can(PERMS.PROMOTION_VIEW) ? nav.onNavigateToPromotions : undefined,
     // Nhật ký lưu trên máy chủ, không có ở chế độ demo ngoại tuyến
     onNavigateToAudit: !isOfflineDemo && can(PERMS.AUDIT_VIEW) ? nav.onNavigateToAudit : undefined,
+    // Kiểm kê lưu trên máy chủ, không có ở chế độ demo ngoại tuyến
+    onNavigateToStockCount: !isOfflineDemo && can(PERMS.INVENTORY_EDIT) ? nav.onNavigateToStockCount : undefined,
     onCreateStockInDraft: can(PERMS.INVENTORY_EDIT) ? nav.onCreateStockInDraft : undefined,
   };
 
@@ -122,6 +125,10 @@ function AppRoutes() {
           !isOfflineDemo && can(PERMS.PROMOTION_VIEW),
           <PromotionPage {...sharedProps} />
         )}
+      />
+      <Route
+        path="/stock-counts"
+        element={shell("stockcount", !isOfflineDemo && can(PERMS.INVENTORY_EDIT), <StockCountPage {...sharedProps} />)}
       />
       <Route
         path="/audit"
