@@ -126,7 +126,7 @@ CREATE TABLE point_transaction (
 );
 ```
 
-Hibernate (`ddl-auto=update`) tự thêm cột và bảng khi khởi động; `schema.sql` cập nhật để tham khảo.
+Hibernate (`ddl-auto=update`) tự thêm cột và bảng khi khởi động; cấu trúc đầy đủ xem `db/migration/V1__baseline.sql`.
 
 ## 10. Kiểm thử
 

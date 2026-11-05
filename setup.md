@@ -167,7 +167,22 @@ docker compose logs -f backend   # xem log, Ctrl+C để thoát
    mvn spring-boot:run
    ```
 
-Không cần chạy file SQL nào để tạo bảng: Hibernate tự tạo bảng từ entity (`JPA_DDL_AUTO=update`). File `BACKEND/src/main/resources/schema.sql` chỉ là tài liệu tham khảo cấu trúc bảng.
+Không cần chạy file SQL nào để tạo bảng: khi chạy thử, Hibernate tự tạo bảng từ entity (`JPA_DDL_AUTO=update`).
+
+### Quản lý cấu trúc database bằng Flyway (môi trường thật)
+
+Cấu trúc đầy đủ của database nằm ở `BACKEND/src/main/resources/db/migration/V1__baseline.sql`. Khi triển khai thật, đặt trong `.env`:
+
+```
+FLYWAY_ENABLED=true
+JPA_DDL_AUTO=validate
+```
+
+- Database trống: Flyway chạy V1 tạo toàn bộ bảng, sau đó backend tạo dữ liệu mẫu như bình thường.
+- Database đã có bảng (trước đây chạy với `update`): lần đầu Flyway chỉ đánh dấu database là V1 (bảng `flyway_schema_history`), không tạo lại bảng. Hibernate `validate` kiểm tra entity khớp với bảng, lệch thì backend dừng ngay lúc khởi động thay vì lỗi giữa ca bán hàng.
+- Khi thêm hoặc sửa entity (thêm cột, thêm bảng, thêm giá trị enum), viết thêm file `V2__mo_ta.sql`, `V3__...` trong cùng thư mục. File đã chạy thì không sửa lại.
+
+Đã thử cả hai trường hợp trên MySQL 8: database trống lên V1 rồi tạo dữ liệu mẫu, database đang dùng được đánh dấu V1 và qua bước `validate`.
 
 ### Lần chạy đầu tiên backend tự làm gì
 
