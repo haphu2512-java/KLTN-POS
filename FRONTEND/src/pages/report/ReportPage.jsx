@@ -96,6 +96,18 @@ export default function ReportPage({
     };
   }, [viewMode, selectedBranchId, isOnline]);
 
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const handleExportExcel = async () => {
+    setExportingExcel(true);
+    try {
+      await reportService.downloadExcel(selectedBranchId, days);
+    } catch (err) {
+      alert(`Không xuất được file Excel: ${err?.response?.status === 403 ? 'không có quyền' : err.message}`);
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
   const handleExportCsv = () => {
     if (viewMode === 'invoices') {
       const headers = ['Mã hóa đơn', 'Thời gian', 'Thu ngân', 'Khách hàng', 'Khuyến mãi', 'Tiền khuyến mãi (VND)', 'Giảm giá (VND)', 'Lý do giảm', 'Người duyệt giảm', 'Tổng tiền (VND)', 'Phương thức', 'Trạng thái', 'Ghi chú'];
@@ -339,6 +351,18 @@ export default function ReportPage({
                 </button>
               ))}
             </div>
+
+            {isOnline && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleExportExcel}
+                disabled={exportingExcel}
+                title="Tải file Excel gồm tổng quan, doanh thu theo ngày, sản phẩm bán chạy, danh sách hóa đơn và hao hụt kho"
+              >
+                {exportingExcel ? 'Đang xuất...' : 'Xuất Excel'}
+              </Button>
+            )}
 
             <Button
               variant="secondary"
