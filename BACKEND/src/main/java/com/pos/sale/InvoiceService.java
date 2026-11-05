@@ -1,5 +1,8 @@
 package com.pos.sale;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import com.pos.audit.AuditService;
+import com.pos.audit.AuditAction;
 import com.pos.approval.ApprovalService;
 import com.pos.branch.Branch;
 import com.pos.branch.BranchRepository;
@@ -43,6 +46,14 @@ public class InvoiceService {
     private final ApprovalService approvalService;
     private final LoyaltyService loyaltyService;
     private final PromotionService promotionService;
+
+    /** Nhật ký thao tác; để trống trong unit test dựng service bằng tay */
+    @Autowired(required = false)
+    private AuditService auditService;
+
+    private void audit(AuditAction action, String entityType, Object entityId, Long branchId, String summary) {
+        if (auditService != null) auditService.log(action, entityType, entityId, branchId, summary);
+    }
 
     public Page<Invoice> getInvoices(Long branchId, Pageable pageable) {
         Page<Invoice> page = branchId != null
@@ -262,6 +273,13 @@ public class InvoiceService {
             saved.setCustomerPointsBalance(customer.getPoints());
         }
         approvalService.markUsed(approvalToken);
+        if (discount.signum() > 0) {
+            audit(AuditAction.INVOICE_DISCOUNT, "INVOICE", saved.getId(), branchId,
+                    "Hóa đơn #" + saved.getId() + " giảm tay " + AuditService.money(discount)
+                            + " / tiền hàng " + AuditService.money(subtotal)
+                            + (discountReason != null ? " - lý do: " + discountReason : "")
+                            + (saved.getDiscountApprovedBy() != null ? " (quản lý #" + saved.getDiscountApprovedBy() + " duyệt)" : ""));
+        }
         return saved;
     }
 

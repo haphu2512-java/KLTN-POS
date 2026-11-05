@@ -1,5 +1,8 @@
 package com.pos.auth;
 
+import com.pos.common.BusinessException;
+import com.pos.audit.AuditService;
+import com.pos.audit.AuditAction;
 import com.pos.branch.Branch;
 import com.pos.branch.BranchRepository;
 import com.pos.common.ApiResponse;
@@ -32,13 +35,20 @@ public class AuthController {
     private final CurrentUserService currentUserService;
     private final BranchRepository branchRepository;
     private final LoginAttemptService loginAttemptService;
+    private final AuditService auditService;
 
     @PostMapping("/login")
     @Operation(summary = "Đăng nhập và chọn chi nhánh làm việc, nhận JWT Token",
             description = "Tài khoản có nhiều chi nhánh mà chưa gửi branchId: trả 409 BRANCH_SELECTION_REQUIRED "
                     + "kèm data.branches để chọn rồi gửi lại.")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
-        loginAttemptService.checkNotLocked(request.getUsername());
+        try {
+            loginAttemptService.checkNotLocked(request.getUsername());
+        } catch (BusinessException e) {
+            auditService.logIndependent(AuditAction.LOGIN_LOCKED, "USER", null, null,
+                    "Thử đăng nhập khi đang bị khóa: " + request.getUsername(), request.getUsername());
+            throw e;
+        }
         Authentication authentication;
         try {
             authentication = authenticationManager.authenticate(
@@ -46,6 +56,8 @@ public class AuthController {
             );
         } catch (BadCredentialsException e) {
             loginAttemptService.recordFailure(request.getUsername());
+            auditService.logIndependent(AuditAction.LOGIN_FAILED, "USER", null, null,
+                    "Sai mật khẩu: " + request.getUsername(), request.getUsername());
             throw e;
         }
         loginAttemptService.recordSuccess(request.getUsername());

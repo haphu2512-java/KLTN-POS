@@ -1,5 +1,8 @@
 package com.pos.loyalty;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import com.pos.audit.AuditService;
+import com.pos.audit.AuditAction;
 import com.pos.common.BusinessException;
 import com.pos.customer.Customer;
 import com.pos.customer.CustomerRepository;
@@ -22,6 +25,14 @@ public class LoyaltyService {
     private final CustomerRepository customerRepository;
     private final PointTransactionRepository pointTransactionRepository;
     private final LoyaltyPolicy policy;
+
+    /** Nhật ký thao tác; để trống trong unit test dựng service bằng tay */
+    @Autowired(required = false)
+    private AuditService auditService;
+
+    private void audit(AuditAction action, String entityType, Object entityId, Long branchId, String summary) {
+        if (auditService != null) auditService.log(action, entityType, entityId, branchId, summary);
+    }
 
     public LoyaltyPolicy getPolicy() {
         return policy;
@@ -88,6 +99,8 @@ public class LoyaltyService {
             throw new BusinessException("INSUFFICIENT_POINTS", "Không thể trừ nhiều hơn số điểm khách đang có");
         }
         record(customer, null, PointType.ADJUST, delta, reason.trim(), actorId);
+        audit(AuditAction.POINTS_ADJUST, "CUSTOMER", customerId, null,
+                (delta > 0 ? "+" : "") + delta + " điểm cho " + customer.getName() + " - lý do: " + reason.trim());
         return customer;
     }
 

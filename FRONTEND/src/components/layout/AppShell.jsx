@@ -11,6 +11,7 @@ const ICONS = {
   shifts: <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2" />,
   partners: <path d="M9 11.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5M16 5.5a3 3 0 0 1 0 5.6M18 14.8c1.7.7 3 2.4 3 5.2" />,
   promotions: <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01" />,
+  audit: <path d="M9 4h6M8 4H6v17h12V4h-2M9 10h6M9 14h6M9 18h3" />,
   assistant: <path d="M4 5h16v11H9l-5 4zM8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01" />,
   staff: <path d="M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" />,
 };
@@ -57,6 +58,7 @@ export default function AppShell({
   onNavigateToStaff,
   onNavigateToShifts,
   onNavigateToPromotions,
+  onNavigateToAudit,
   assistantEnabled = false,
   children,
 }) {
@@ -69,6 +71,7 @@ export default function AppShell({
     { key: 'partners', label: 'Đối tác', onClick: onNavigateToPartners },
     { key: 'promotions', label: 'Khuyến mãi', onClick: onNavigateToPromotions },
     { key: 'staff', label: 'Tài khoản', onClick: onNavigateToStaff },
+    { key: 'audit', label: 'Nhật ký', onClick: onNavigateToAudit },
   ].filter((item) => item.onClick);
 
   const displayName = currentUser?.fullName || currentUser?.username || '';

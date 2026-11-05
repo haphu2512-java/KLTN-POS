@@ -1,5 +1,8 @@
 package com.pos.approval;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import com.pos.audit.AuditService;
+import com.pos.audit.AuditAction;
 import com.pos.auth.LoginAttemptService;
 import com.pos.common.BusinessException;
 import com.pos.user.Role;
@@ -37,6 +40,14 @@ public class ApprovalService {
     private final PasswordEncoder passwordEncoder;
     private final LoginAttemptService loginAttemptService;
     private final BigDecimal cashierMaxDiscountPercent;
+
+    /** Nhật ký thao tác; để trống trong unit test dựng service bằng tay */
+    @Autowired(required = false)
+    private AuditService auditService;
+
+    private void audit(AuditAction action, String entityType, Object entityId, Long branchId, String summary) {
+        if (auditService != null) auditService.log(action, entityType, entityId, branchId, summary);
+    }
 
     public ApprovalService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                            LoginAttemptService loginAttemptService,
@@ -100,6 +111,10 @@ public class ApprovalService {
                 && passwordEncoder.matches(pin, approver.getApprovalPinHash());
         if (!valid) {
             loginAttemptService.recordFailure(lockKey);
+            if (auditService != null) {
+                auditService.logIndependent(AuditAction.DISCOUNT_PIN_FAILED, "USER", approver != null ? approver.getId() : null,
+                        requester.getCurrentBranchId(), "Sai PIN duyệt giảm giá, tài khoản quản lý: " + approverUsername.trim(), null);
+            }
             throw new BusinessException("APPROVAL_PIN_INVALID",
                     "Tài khoản quản lý hoặc PIN không đúng (hoặc quản lý chưa đặt PIN)", HttpStatus.FORBIDDEN);
         }
@@ -115,6 +130,8 @@ public class ApprovalService {
         String token = UUID.randomUUID().toString();
         Instant expiresAt = Instant.now().plus(GRANT_TTL);
         grants.put(token, new Grant(approver.getId(), requester.getId(), branchId, amount, expiresAt));
+        audit(AuditAction.DISCOUNT_APPROVED, "USER", requester.getId(), branchId,
+                displayName(approver) + " duyệt cho " + displayName(requester) + " giảm tối đa " + AuditService.money(amount));
         return new GrantResult(token, displayName(approver), amount, expiresAt);
     }
 

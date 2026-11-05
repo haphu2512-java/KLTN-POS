@@ -17,6 +17,7 @@ export default function useAppNavigate() {
     onNavigateToStaff: () => navigate('/staff'),
     onNavigateToShifts: () => navigate('/shifts'),
     onNavigateToPromotions: () => navigate('/promotions'),
+    onNavigateToAudit: () => navigate('/audit'),
     // Mở trang Kho với phiếu nhập điền sẵn [{ productId, quantity }]; người dùng xem lại rồi mới lưu
     onCreateStockInDraft: (items) => navigate('/inventory', { state: { stockInDraft: items } }),
   };

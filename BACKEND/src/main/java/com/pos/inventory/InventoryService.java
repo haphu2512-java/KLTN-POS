@@ -1,5 +1,8 @@
 package com.pos.inventory;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import com.pos.audit.AuditService;
+import com.pos.audit.AuditAction;
 import com.pos.branch.Branch;
 import com.pos.branch.BranchRepository;
 import com.pos.common.BusinessException;
@@ -26,6 +29,14 @@ public class InventoryService {
     private final BranchRepository branchRepository;
     private final StockTransferRepository stockTransferRepository;
     private final SimpMessagingTemplate messagingTemplate;
+
+    /** Nhật ký thao tác; để trống trong unit test dựng service bằng tay */
+    @Autowired(required = false)
+    private AuditService auditService;
+
+    private void audit(AuditAction action, String entityType, Object entityId, Long branchId, String summary) {
+        if (auditService != null) auditService.log(action, entityType, entityId, branchId, summary);
+    }
 
     public List<Inventory> getInventoryByBranch(Long branchId) {
         return inventoryRepository.findByBranchId(branchId);
@@ -108,6 +119,9 @@ public class InventoryService {
                 .note(req.getNote())
                 .clientRequestId(clientRequestId)
                 .build());
+        audit(AuditAction.STOCK_TRANSFER, "PRODUCT", req.getProductId(), req.getFromBranchId(),
+                "Chuyển " + req.getQuantity() + " SP #" + req.getProductId() + " từ chi nhánh " + req.getFromBranchId()
+                        + " sang " + req.getToBranchId());
     }
 
     private void notifyInventoryUpdate(Long branchId, Long productId) {

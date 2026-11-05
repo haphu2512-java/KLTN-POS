@@ -1,5 +1,8 @@
 package com.pos.shift;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import com.pos.audit.AuditService;
+import com.pos.audit.AuditAction;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -73,6 +76,14 @@ public class ShiftService {
     private final StaffService staffService;
     private final StaffMemberRepository staffRepository;
     private final ObjectMapper objectMapper;
+
+    /** Nhật ký thao tác; để trống trong unit test dựng service bằng tay */
+    @Autowired(required = false)
+    private AuditService auditService;
+
+    private void audit(AuditAction action, String entityType, Object entityId, Long branchId, String summary) {
+        if (auditService != null) auditService.log(action, entityType, entityId, branchId, summary);
+    }
 
     /** true: thu ngân phải có ca mở ở chi nhánh mới bán được hàng */
     @Value("${pos.shift.require-open-shift:true}")
@@ -271,6 +282,8 @@ public class ShiftService {
         }
         log.info("{} mở {} cho {} tại chi nhánh {} với tiền đầu ca {}", actor.getUsername(), workShift.getName(),
                 session.getEmployeeName(), branchId, req.getOpeningCash());
+        audit(AuditAction.SHIFT_OPEN, "SHIFT", session.getId(), branchId,
+                workShift.getName() + " - " + session.getEmployeeName() + ", tiền đầu ca " + AuditService.money(req.getOpeningCash()));
         return toResponse(session);
     }
 
@@ -353,6 +366,11 @@ public class ShiftService {
 
         log.info("{} đóng ca #{}: dự kiến {}, đếm được {}, chênh lệch TM {} / QR {} / thẻ {}", actor.getUsername(), session.getId(),
                 expected, req.getClosingCash(), cashDiff, vietqrDiff, cardDiff);
+        audit(needsReview ? AuditAction.SHIFT_CASH_VARIANCE : AuditAction.SHIFT_CLOSE, "SHIFT", session.getId(), session.getBranchId(),
+                "Ca #" + session.getId() + ": tiền mặt dự kiến " + AuditService.money(expected) + ", đếm được "
+                        + AuditService.money(req.getClosingCash()) + ", chênh lệch " + AuditService.money(cashDiff)
+                        + (needsReview ? " (QR " + AuditService.money(vietqrDiff) + ", thẻ " + AuditService.money(cardDiff)
+                        + ") - lý do: " + differenceReason : ""));
         return toResponse(session, totals, branchNames(), userNames(session));
     }
 
@@ -397,6 +415,7 @@ public class ShiftService {
         session.setReviewNote(req.getNote().trim());
         shiftSessionRepository.save(session);
         log.info("{} duyệt ca #{}: {}", actor.getUsername(), id, session.getReviewNote());
+        audit(AuditAction.SHIFT_REVIEW, "SHIFT", id, session.getBranchId(), "Duyệt ca #" + id + ": " + session.getReviewNote());
         return toResponse(session);
     }
 
@@ -427,6 +446,8 @@ public class ShiftService {
         applyMovement(m, req);
         m = cashMovementRepository.save(m);
         log.info("{} ghi {} {} vào ca #{}: {}", actor.getUsername(), m.getType(), m.getAmount(), session.getId(), m.getReason());
+        audit(AuditAction.CASH_MOVEMENT, "SHIFT", session.getId(), session.getBranchId(),
+                m.getType() + " " + AuditService.money(m.getAmount()) + " - " + m.getReason());
         return CashMovementResponse.of(m);
     }
 
@@ -446,6 +467,8 @@ public class ShiftService {
         m.setDeletedBy(actor.getId());
         cashMovementRepository.save(m);
         log.info("{} xóa khoản {} {} của ca #{}", actor.getUsername(), m.getType(), m.getAmount(), m.getShiftSessionId());
+        audit(AuditAction.CASH_MOVEMENT, "SHIFT", m.getShiftSessionId(), null,
+                "Xóa khoản " + m.getType() + " " + AuditService.money(m.getAmount()));
     }
 
     private ShiftCashMovement editableMovement(Long id, User actor) {

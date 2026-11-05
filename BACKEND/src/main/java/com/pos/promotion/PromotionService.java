@@ -1,5 +1,8 @@
 package com.pos.promotion;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import com.pos.audit.AuditService;
+import com.pos.audit.AuditAction;
 import com.pos.branch.BranchRepository;
 import com.pos.common.BusinessException;
 import com.pos.customer.Customer;
@@ -34,6 +37,14 @@ public class PromotionService {
     private final ProductRepository productRepository;
     private final CustomerRepository customerRepository;
 
+    /** Nhật ký thao tác; để trống trong unit test dựng service bằng tay */
+    @Autowired(required = false)
+    private AuditService auditService;
+
+    private void audit(AuditAction action, String entityType, Object entityId, Long branchId, String summary) {
+        if (auditService != null) auditService.log(action, entityType, entityId, branchId, summary);
+    }
+
     /** Một dòng hàng của đơn: danh mục sản phẩm và thành tiền (đơn giá x số lượng) */
     public record Line(String category, BigDecimal lineTotal) {}
 
@@ -60,7 +71,9 @@ public class PromotionService {
         p.setActive(req.getActive() == null || req.getActive());
         p.setCreatedBy(actorId);
         p.setCreatedAt(LocalDateTime.now());
-        return promotionRepository.save(p);
+        Promotion saved = promotionRepository.save(p);
+        audit(AuditAction.PROMOTION_CHANGE, "PROMOTION", saved.getId(), null, "Tạo khuyến mãi: " + saved.getName());
+        return saved;
     }
 
     @Transactional
@@ -72,6 +85,7 @@ public class PromotionService {
         }
         p.setUpdatedBy(actorId);
         p.setUpdatedAt(LocalDateTime.now());
+        audit(AuditAction.PROMOTION_CHANGE, "PROMOTION", id, null, "Sửa khuyến mãi: " + p.getName());
         return promotionRepository.save(p);
     }
 
@@ -79,6 +93,7 @@ public class PromotionService {
     public Promotion setActive(Long id, boolean active, Long actorId) {
         Promotion p = getById(id);
         p.setActive(active);
+        audit(AuditAction.PROMOTION_CHANGE, "PROMOTION", id, null, (active ? "Bật" : "Tắt") + " khuyến mãi: " + p.getName());
         p.setUpdatedBy(actorId);
         p.setUpdatedAt(LocalDateTime.now());
         return promotionRepository.save(p);
@@ -87,7 +102,9 @@ public class PromotionService {
     /** Xóa hẳn chương trình. Hóa đơn cũ vẫn giữ tên và số tiền khuyến mãi đã lưu lúc bán. */
     @Transactional
     public void delete(Long id) {
-        promotionRepository.delete(getById(id));
+        Promotion p = getById(id);
+        promotionRepository.delete(p);
+        audit(AuditAction.PROMOTION_CHANGE, "PROMOTION", id, null, "Xóa khuyến mãi: " + p.getName());
     }
 
     private void apply(Promotion p, PromotionRequest req) {
