@@ -95,3 +95,5 @@ chat_history.md
 docs/chat_history.md
 .system_generated/
 scratch/
+# --- Bản sao lưu database ---
+backups/

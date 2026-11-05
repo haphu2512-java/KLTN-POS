@@ -183,7 +183,41 @@ Nếu database trống mà chưa đặt `SEED_DEFAULT_PASSWORD`, backend dừng 
 ### Kiểm tra backend đã chạy
 
 - Mở <http://localhost:8080/swagger-ui/index.html>: thấy trang Swagger là được.
-- Hoặc `curl http://localhost:8080/api/scanner/ping` (endpoint không cần đăng nhập).
+- Hoặc `curl http://localhost:8080/actuator/health`: trả `{"status":"UP"}` khi backend và MySQL đều chạy. Docker Compose dùng chính endpoint này làm health check (`docker compose ps` hiện `healthy`). Đăng nhập ADMIN sẽ thấy thêm chi tiết DB và dung lượng đĩa.
+
+### Sao lưu và khôi phục database
+
+**Tự động (Docker).** `docker compose up -d` chạy thêm container `pos-mysql-backup`. Container này sao lưu một bản ngay khi khởi động, sau đó mỗi ngày một bản lúc `BACKUP_TIME` (mặc định 02:00), giữ `BACKUP_KEEP_DAYS` bản gần nhất (mặc định 7). File nằm ở `backups/pos_inventory_YYYYMMDD_HHMMSS.sql.gz`. Xem log bằng `docker compose logs mysql-backup`.
+
+- Dùng `mysqldump --single-transaction` nên không khóa bảng, quầy vẫn bán bình thường trong lúc sao lưu.
+- Bản sao lưu nằm cùng máy với database thì không chống được hỏng ổ cứng. Nên đặt `BACKUP_DIR` trỏ sang ổ khác, ổ USB, hoặc thư mục đồng bộ Google Drive/OneDrive.
+
+**Sao lưu ngay bằng tay** (trước khi cập nhật phiên bản, trước khi demo):
+
+```bash
+./scripts/backup/backup.sh            # Docker (Linux/macOS/Git Bash)
+./scripts/backup/backup.sh --local    # MySQL cài trực tiếp, cần mysqldump trong PATH
+```
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\backup\backup.ps1   # Windows + Docker
+```
+
+**Khôi phục** (ghi đè toàn bộ dữ liệu hiện tại; script hỏi xác nhận `YES` và tự sao lưu trạng thái hiện tại trước khi ghi đè):
+
+```bash
+docker compose stop backend
+./scripts/backup/restore.sh backups/pos_inventory_20261106_020000.sql.gz
+docker compose start backend
+```
+```powershell
+docker compose stop backend
+powershell -ExecutionPolicy Bypass -File scripts\backup\restore.ps1 backups\pos_inventory_20261106_020000.sql.gz
+docker compose start backend
+```
+
+Bản sao lưu có `DROP DATABASE` ở đầu, nên khôi phục đưa database về đúng trạng thái lúc sao lưu (bảng tạo sau thời điểm đó cũng bị xóa).
+
+Nên thử khôi phục định kỳ (ví dụ mỗi tháng) vào một máy khác để chắc bản sao lưu dùng được.
 
 ---
 

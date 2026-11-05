@@ -106,6 +106,16 @@ class ApiSecurityIntegrationTest {
     }
 
     @Test
+    @DisplayName("Health check mở công khai nhưng không lộ chi tiết khi chưa đăng nhập; các endpoint actuator khác bị chặn")
+    void healthEndpointPublicWithoutDetails() throws Exception {
+        mvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.components").doesNotExist());
+        mvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     @DisplayName("Trợ lý: cần đăng nhập; thu ngân hỏi doanh thu bị từ chối trong câu trả lời, admin xem được")
     void assistantChatRespectsRole() throws Exception {
         String body = "{\"message\":\"Doanh thu hôm nay\"}";
