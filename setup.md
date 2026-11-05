@@ -238,7 +238,7 @@ Nên thử khôi phục định kỳ (ví dụ mỗi tháng) vào một máy kh�
 
 ## Bước 5. Nạp dữ liệu 1.949 sản phẩm Bách Hóa Xanh (tùy chọn)
 
-Database mới chỉ có 8 sản phẩm mẫu. File `import_bhx_data.sql` ở thư mục gốc chứa 1.949 sản phẩm thật và tồn kho cho 2 chi nhánh.
+Database mới chỉ có 8 sản phẩm mẫu. File `data/bhx/import_bhx_data.sql` chứa 1.949 sản phẩm thật và tồn kho cho 2 chi nhánh.
 
 > ⚠️ **Script này xóa sạch bảng `product` và `inventory`** (`TRUNCATE` khi đã tắt kiểm tra khóa ngoại) rồi nạp lại với id từ 1 đến 1949. Chỉ chạy trên **database mới dựng**, trước khi có hóa đơn hay phiếu nhập. Chạy trên database đã có giao dịch thì các hóa đơn cũ sẽ trỏ nhầm sang sản phẩm khác.
 
@@ -247,18 +247,18 @@ Database mới chỉ có 8 sản phẩm mẫu. File `import_bhx_data.sql` ở th
 Với Docker (gõ thẳng mật khẩu root thay cho chỗ trống, hoặc `export DB_ROOT_PASSWORD=...` trước):
 
 ```bash
-docker exec -i pos-mysql mysql -uroot -p"<DB_ROOT_PASSWORD>" pos_inventory < import_bhx_data.sql
+docker exec -i pos-mysql mysql -uroot -p"<DB_ROOT_PASSWORD>" pos_inventory < data/bhx/import_bhx_data.sql
 ```
 
 Với MySQL cài tay:
 
 ```bash
-mysql -uroot -p pos_inventory < import_bhx_data.sql
+mysql -uroot -p pos_inventory < data/bhx/import_bhx_data.sql
 ```
 
 Sau khi nạp, **khởi động lại backend** để bước đồng bộ mã vạch chạy lại. Mã vạch trong file đã ở dạng mã nội bộ `20...` nên thường không đổi gì.
 
-Các file đi kèm: `bhx_products_scraped.json` là dữ liệu thô, `scrape_bhx.py` là script đã dùng để lấy dữ liệu. Không cần chạy lại chúng.
+Các file đi kèm trong `data/bhx/`: `bhx_products_scraped.json` là dữ liệu thô, `scrape_bhx.py` là script đã dùng để lấy dữ liệu (chạy trong thư mục đó). Không cần chạy lại chúng.
 
 ---
 
@@ -434,7 +434,7 @@ Khi đổi công thức dự báo ở Java hoặc Python, phải đổi bên cò
 | `Communications link failure` | MySQL chưa chạy hoặc sai `DB_HOST`/`DB_PORT` | `docker compose ps`; chờ `pos-mysql` healthy |
 | Cổng 3306 hoặc 8080 đã bị chiếm | Đã có MySQL/ứng dụng khác chạy | Tắt chương trình đó, hoặc đổi `DB_PORT` / `SERVER_PORT` trong `.env` (nhớ đổi `DEV_PROXY_TARGET` theo) |
 | Quên mật khẩu `admin` sau khi đã có dữ liệu | Tài khoản mẫu chỉ được tạo khi database trống | Đổi `SEED_DEFAULT_PASSWORD` **không** có tác dụng. Dựng lại database mới (`docker compose down -v` sẽ **xóa toàn bộ dữ liệu**), hoặc nhờ một ADMIN khác đổi mật khẩu |
-| Nạp `import_bhx_data.sql` báo lỗi bảng không tồn tại | Backend chưa chạy lần nào nên chưa có bảng | Chạy backend một lần rồi nạp lại |
+| Nạp `data/bhx/import_bhx_data.sql` báo lỗi bảng không tồn tại | Backend chưa chạy lần nào nên chưa có bảng | Chạy backend một lần rồi nạp lại |
 | Frontend đăng nhập báo lỗi mạng | Backend chưa chạy, hoặc `DEV_PROXY_TARGET` sai | Kiểm tra <http://localhost:8080/swagger-ui/index.html> |
 | Bản Electron đã đóng gói không gọi được API | Thiếu `VITE_API_BASE_URL` / `VITE_WS_URL` lúc build | Điền vào `FRONTEND/.env` rồi build lại |
 | Không bán được, hiện hộp nhắc mở ca | Thu ngân chưa mở ca (`POS_REQUIRE_OPEN_SHIFT=true`) | Mở ca ở tab Ca làm với tiền đầu ca |
