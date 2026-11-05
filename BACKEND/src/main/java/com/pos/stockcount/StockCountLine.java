@@ -30,6 +30,8 @@ public class StockCountLine {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "stock_count_id", nullable = false)
     @JsonBackReference
+    @lombok.ToString.Exclude
+    @lombok.EqualsAndHashCode.Exclude
     private StockCount stockCount;
 
     @Column(name = "product_id", nullable = false)

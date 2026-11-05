@@ -25,6 +25,8 @@ public class InvoiceReturnDetail {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "return_id", nullable = false)
     @JsonBackReference
+    @lombok.ToString.Exclude
+    @lombok.EqualsAndHashCode.Exclude
     private InvoiceReturn invoiceReturn;
 
     @Column(name = "invoice_detail_id", nullable = false)

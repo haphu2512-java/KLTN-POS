@@ -35,6 +35,8 @@ public class InvoiceReturn {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "invoice_id", nullable = false)
     @JsonIgnore
+    @lombok.ToString.Exclude
+    @lombok.EqualsAndHashCode.Exclude
     private Invoice invoice;
 
     @Column(name = "invoice_id", insertable = false, updatable = false)

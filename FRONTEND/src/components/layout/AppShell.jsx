@@ -11,6 +11,7 @@ const ICONS = {
   shifts: <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2" />,
   partners: <path d="M9 11.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5M16 5.5a3 3 0 0 1 0 5.6M18 14.8c1.7.7 3 2.4 3 5.2" />,
   promotions: <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01" />,
+  purchaseorder: <path d="M3 3h2l2.4 12.2a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.6L21 7H6M10 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM18 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM12 10h5M14.5 7.5v5" />,
   stockcount: <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 14l2 2 4-4" />,
   audit: <path d="M9 4h6M8 4H6v17h12V4h-2M9 10h6M9 14h6M9 18h3" />,
   assistant: <path d="M4 5h16v11H9l-5 4zM8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01" />,
@@ -61,6 +62,7 @@ export default function AppShell({
   onNavigateToPromotions,
   onNavigateToAudit,
   onNavigateToStockCount,
+  onNavigateToPurchaseOrders,
   assistantEnabled = false,
   children,
 }) {
@@ -68,6 +70,7 @@ export default function AppShell({
     { key: 'pos', label: 'Bán hàng', onClick: onNavigateToPos },
     { key: 'inventory', label: 'Kho hàng', onClick: onNavigateToInventory },
     { key: 'stockcount', label: 'Kiểm kê', onClick: onNavigateToStockCount },
+    { key: 'purchaseorder', label: 'Đặt hàng', onClick: onNavigateToPurchaseOrders },
     { key: 'forecast', label: 'Dự báo', onClick: onNavigateToForecast },
     { key: 'shifts', label: 'Ca làm', onClick: onNavigateToShifts },
     { key: 'report', label: 'Báo cáo', onClick: onNavigateToReport },

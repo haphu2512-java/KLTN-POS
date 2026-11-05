@@ -14,6 +14,7 @@ import ShiftsPage from './pages/shifts/ShiftsPage';
 import PromotionPage from './pages/promotion/PromotionPage';
 import AuditLogPage from './pages/audit/AuditLogPage';
 import StockCountPage from './pages/stockcount/StockCountPage';
+import PurchaseOrderPage from './pages/purchaseorder/PurchaseOrderPage';
 import { PERMS, permissionsFor, homePathFor } from './utils/permissions';
 
 /**
@@ -78,6 +79,9 @@ function AppRoutes() {
     // Kiểm kê lưu trên máy chủ, không có ở chế độ demo ngoại tuyến
     onNavigateToStockCount: !isOfflineDemo && can(PERMS.INVENTORY_EDIT) ? nav.onNavigateToStockCount : undefined,
     onCreateStockInDraft: can(PERMS.INVENTORY_EDIT) ? nav.onCreateStockInDraft : undefined,
+    // Đơn đặt hàng lưu trên máy chủ, không có ở chế độ demo ngoại tuyến
+    onNavigateToPurchaseOrders: !isOfflineDemo && can(PERMS.INVENTORY_EDIT) ? nav.onNavigateToPurchaseOrders : undefined,
+    onOpenPurchaseOrder: !isOfflineDemo && can(PERMS.INVENTORY_EDIT) ? nav.onOpenPurchaseOrder : undefined,
   };
 
   // Hàm trả về element (không phải component) để không bị mount lại mỗi lần render.
@@ -129,6 +133,10 @@ function AppRoutes() {
       <Route
         path="/stock-counts"
         element={shell("stockcount", !isOfflineDemo && can(PERMS.INVENTORY_EDIT), <StockCountPage {...sharedProps} />)}
+      />
+      <Route
+        path="/purchase-orders"
+        element={shell("purchaseorder", !isOfflineDemo && can(PERMS.INVENTORY_EDIT), <PurchaseOrderPage {...sharedProps} />)}
       />
       <Route
         path="/audit"

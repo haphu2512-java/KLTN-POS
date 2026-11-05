@@ -10,12 +10,14 @@ import { formatCurrency } from '../../utils/formatters';
 import { forecastService } from '../../services/forecastService';
 import { productService } from '../../services/productService';
 import { reportService } from '../../services/reportService';
+import { purchaseOrderService } from '../../services/purchaseOrderService';
 import './ForecastPage.css';
 
 export default function ForecastPage({
   branchId = 1,
   isOnline = true,
-  onCreateStockInDraft
+  onCreateStockInDraft,
+  onOpenPurchaseOrder
 }) {
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState([]);
@@ -232,6 +234,20 @@ export default function ForecastPage({
       return;
     }
     openStockInDraft(restockRows);
+  };
+
+  // Lập đơn đặt hàng nháp ở máy chủ từ đề xuất AI (mỗi nhà cung cấp một đơn) rồi mở trang Đặt hàng để duyệt
+  const [creatingPo, setCreatingPo] = useState(false);
+  const handleCreatePurchaseOrders = async () => {
+    setCreatingPo(true);
+    try {
+      const orders = await purchaseOrderService.fromForecast(forecastDays);
+      onOpenPurchaseOrder(orders[0]?.id, `Đã lập ${orders.length} đơn đặt hàng nháp từ đề xuất AI (${forecastDays} ngày). Kiểm tra số lượng, chọn nhà cung cấp rồi gửi đơn.`);
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Không lập được đơn đặt hàng');
+    } finally {
+      setCreatingPo(false);
+    }
   };
 
   // Restock Table Columns
@@ -504,6 +520,18 @@ export default function ForecastPage({
                 (Z × σ × √Lead time). Di chuột lên số đề xuất để xem lý do.
               </p>
             </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {onOpenPurchaseOrder && isOnline && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleCreatePurchaseOrders}
+                disabled={creatingPo}
+                title="Gom các mặt hàng cần nhập theo nhà cung cấp gần nhất, tạo đơn nháp để gửi NCC"
+              >
+                {creatingPo ? 'Đang lập đơn...' : 'Lập đơn đặt hàng từ đề xuất'}
+              </Button>
+            )}
             <Button
               variant="success"
               size="sm"
@@ -512,6 +540,7 @@ export default function ForecastPage({
             >
               + Tạo phiếu nhập tổng hợp ({restockRows.length} mặt hàng)
             </Button>
+            </div>
           </div>
 
           <Table
