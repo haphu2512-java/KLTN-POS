@@ -57,7 +57,7 @@ public class PurchaseOrderService {
 
     public record UpdateRequest(Long supplierId, String note, LocalDate expectedDate, List<LineRequest> lines) {}
 
-    public record ReceiveLine(Long productId, Integer quantity, BigDecimal unitCost) {}
+    public record ReceiveLine(Long productId, Integer quantity, BigDecimal unitCost, String lotNumber, LocalDate expiryDate) {}
 
     public record ReceiveRequest(List<ReceiveLine> lines, String note, String clientRequestId) {}
 
@@ -192,7 +192,7 @@ public class PurchaseOrderService {
 
         List<ReceiveLine> lines = req != null && req.lines() != null && !req.lines().isEmpty()
                 ? req.lines()
-                : o.getLines().stream().map(l -> new ReceiveLine(l.getProductId(), l.getRemainingQty(), l.getUnitCost())).toList();
+                : o.getLines().stream().map(l -> new ReceiveLine(l.getProductId(), l.getRemainingQty(), l.getUnitCost(), null, null)).toList();
 
         List<StockInRequest.Item> items = new ArrayList<>();
         for (ReceiveLine r : lines) {
@@ -209,6 +209,8 @@ public class PurchaseOrderService {
             item.setProductId(r.productId());
             item.setQuantity(r.quantity());
             item.setUnitCost(cost);
+            item.setLotNumber(r.lotNumber());
+            item.setExpiryDate(r.expiryDate());
             items.add(item);
             l.setReceivedQty(l.getReceivedQty() + r.quantity());
             if (cost != null) l.setUnitCost(cost);

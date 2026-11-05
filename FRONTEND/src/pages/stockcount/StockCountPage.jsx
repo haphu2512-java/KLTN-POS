@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Button, Badge, Table } from '../../components/common';
 import { stockCountService } from '../../services/stockCountService';
 import { productService } from '../../services/productService';
@@ -30,6 +31,7 @@ export default function StockCountPage({ currentUser }) {
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(false);
   const scanRef = useRef(null);
+  const location = useLocation();
 
   const loadList = async () => {
     try {
@@ -45,8 +47,14 @@ export default function StockCountPage({ currentUser }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadList();
     loadShrinkage();
+    // Mở sẵn phiếu vừa lập từ nơi khác (vd. phiếu hủy hàng hết hạn ở trang Kho)
+    if (location.state?.openCountId) {
+      stockCountService.get(location.state.openCountId).then(setCurrent).catch(() => {});
+      if (location.state.message) setMessage({ text: location.state.message });
+    }
     stockCountService.reasons().then(setReasons).catch(() => {});
     productService.getProducts().then(setProducts).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const editable = current?.status === 'DRAFT';

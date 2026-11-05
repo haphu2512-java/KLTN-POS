@@ -135,3 +135,17 @@
   border-bottom-color: var(--primary-600);
   font-weight: 600;
 }
+
+/* Cảnh báo hàng cận date / hết hạn */
+.inv-expiry-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid var(--warning-200, var(--border-subtle));
+  background: var(--warning-50, var(--bg-surface));
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}

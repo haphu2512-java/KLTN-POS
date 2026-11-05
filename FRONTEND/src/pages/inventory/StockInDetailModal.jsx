@@ -29,6 +29,20 @@ export default function StockInDetailModal({
       render: (val) => <span className="font-semibold tabular-nums">{val}</span>
     },
     {
+      key: 'expiryDate',
+      title: 'Lô / Hạn dùng',
+      width: '140px',
+      render: (val, row) =>
+        val || row.lotNumber ? (
+          <span className="tabular-nums">
+            {row.lotNumber || '—'}
+            {val ? ` · HSD ${new Date(val).toLocaleDateString('vi-VN')}` : ''}
+          </span>
+        ) : (
+          <span className="text-muted">—</span>
+        )
+    },
+    {
       key: 'unitCost',
       title: 'Đơn giá vốn',
       width: '130px',

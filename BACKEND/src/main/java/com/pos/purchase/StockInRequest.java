@@ -38,5 +38,12 @@ public class StockInRequest {
         private Integer quantity;
 
         private BigDecimal unitCost;
+
+        /** Số lô in trên bao bì (tùy chọn) */
+        @Size(max = 50, message = "Số lô tối đa 50 ký tự")
+        private String lotNumber;
+
+        /** Hạn sử dụng của lô (tùy chọn); có hạn thì hệ thống theo dõi cận date / hết hạn */
+        private java.time.LocalDate expiryDate;
     }
 }

@@ -31,6 +31,8 @@ export default function PurchaseOrderPage() {
   const [days, setDays] = useState(7);
   const [addTerm, setAddTerm] = useState('');
   const [receiveQty, setReceiveQty] = useState({});
+  // Hạn dùng của lô nhận lần này, theo productId (tùy chọn)
+  const [receiveExpiry, setReceiveExpiry] = useState({});
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -52,6 +54,7 @@ export default function PurchaseOrderPage() {
       qty[l.productId] = remainingOf(l);
     });
     setReceiveQty(qty);
+    setReceiveExpiry({});
   };
 
   useEffect(() => {
@@ -143,7 +146,12 @@ export default function PurchaseOrderPage() {
 
   const receive = async () => {
     const payload = lines
-      .map((l) => ({ productId: l.productId, quantity: Number(receiveQty[l.productId]) || 0, unitCost: l.unitCost }))
+      .map((l) => ({
+        productId: l.productId,
+        quantity: Number(receiveQty[l.productId]) || 0,
+        unitCost: l.unitCost,
+        expiryDate: receiveExpiry[l.productId] || undefined,
+      }))
       .filter((l) => l.quantity > 0);
     if (payload.length === 0) {
       setMessage({ error: true, text: 'Nhập số lượng nhận cho ít nhất một mặt hàng' });
@@ -258,6 +266,23 @@ export default function PurchaseOrderPage() {
                     [l.productId]: Math.min(remainingOf(l), Math.max(0, Math.floor(Number(e.target.value) || 0))),
                   }))
                 }
+              />
+            ),
+          },
+          {
+            key: 'expiry',
+            title: 'Hạn dùng',
+            width: 140,
+            render: (_, l) => (
+              <input
+                type="date"
+                className="mp-input"
+                min={new Date().toISOString().slice(0, 10)}
+                value={receiveExpiry[l.productId] || ''}
+                disabled={remainingOf(l) === 0}
+                aria-label={`Hạn dùng lô nhận ${l.productName}`}
+                title="Không bắt buộc; có hạn thì hệ thống cảnh báo cận date"
+                onChange={(e) => setReceiveExpiry((x) => ({ ...x, [l.productId]: e.target.value }))}
               />
             ),
           },

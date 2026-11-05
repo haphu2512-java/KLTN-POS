@@ -101,7 +101,13 @@ public class StockInService {
                     .product(product)
                     .quantity(itemReq.getQuantity())
                     .unitCost(unitCost)
+                    .lotNumber(itemReq.getLotNumber() != null && !itemReq.getLotNumber().isBlank()
+                            ? itemReq.getLotNumber().trim() : null)
+                    .expiryDate(itemReq.getExpiryDate())
                     .build();
+            if (itemReq.getExpiryDate() != null && itemReq.getExpiryDate().isBefore(java.time.LocalDate.now())) {
+                throw new BusinessException("EXPIRY_IN_PAST", product.getName() + ": hạn sử dụng đã qua, không nhập hàng hết hạn");
+            }
 
             stockIn.getDetails().add(detail);
             totalCost = totalCost.add(unitCost.multiply(BigDecimal.valueOf(itemReq.getQuantity())));

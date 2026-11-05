@@ -75,6 +75,14 @@ export default function StockInModal({
     setItems(updated);
   };
 
+  const handleLotChange = (index, field, value) => {
+    const updated = [...items];
+    updated[index] = { ...updated[index], [field]: value };
+    setItems(updated);
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+
   const handleRemoveRow = (index) => {
     if (items.length <= 1) {
       alert('Phiếu nhập phải có ít nhất 1 sản phẩm!');
@@ -131,7 +139,7 @@ export default function StockInModal({
       isOpen={isOpen}
       onClose={onClose}
       title="Tạo Phiếu Nhập Kho Hàng Hóa (Stock-In)"
-      maxWidth="780px"
+      maxWidth="960px"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -211,6 +219,7 @@ export default function StockInModal({
                   <th style={{ width: '40px' }}>STT</th>
                   <th>Sản phẩm / Mã vạch</th>
                   <th style={{ width: '100px', textAlign: 'center' }}>Số lượng</th>
+                  <th style={{ width: '200px' }} title="Không bắt buộc. Có hạn dùng thì hệ thống cảnh báo hàng cận date / hết hạn">Số lô / Hạn dùng</th>
                   <th style={{ width: '130px', textAlign: 'right' }}>Giá vốn nhập (₫)</th>
                   <th style={{ width: '130px', textAlign: 'right' }}>Thành tiền</th>
                   <th style={{ width: '50px' }}></th>
@@ -256,6 +265,28 @@ export default function StockInModal({
                           fontFamily: 'var(--font-mono)'
                         }}
                       />
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <input
+                          type="text"
+                          placeholder="Số lô"
+                          value={item.lotNumber || ''}
+                          maxLength={50}
+                          onChange={(e) => handleLotChange(idx, 'lotNumber', e.target.value)}
+                          aria-label={`Số lô dòng ${idx + 1}`}
+                          style={{ width: '70px', height: '30px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xs)', padding: '0 6px', fontSize: '12px' }}
+                        />
+                        <input
+                          type="date"
+                          min={today}
+                          value={item.expiryDate || ''}
+                          onChange={(e) => handleLotChange(idx, 'expiryDate', e.target.value)}
+                          aria-label={`Hạn dùng dòng ${idx + 1}`}
+                          title="Hạn sử dụng"
+                          style={{ width: '122px', height: '30px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xs)', padding: '0 4px', fontSize: '12px' }}
+                        />
+                      </div>
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <input

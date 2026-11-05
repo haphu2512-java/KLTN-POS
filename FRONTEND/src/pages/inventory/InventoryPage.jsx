@@ -6,6 +6,8 @@ import StockTransferModal from './StockTransferModal';
 import StockInDetailModal from './StockInDetailModal';
 import BarcodePrintModal from './BarcodePrintModal';
 import ProductFormModal from './ProductFormModal';
+import ExpiryModal from './ExpiryModal';
+import { expiryService } from '../../services/expiryService';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 import { productService } from '../../services/productService';
 import { inventoryService } from '../../services/inventoryService';
@@ -43,6 +45,9 @@ export default function InventoryPage({
   const viewingSessionBranch = Number(currentBranchId) === Number(branchId);
   const otherBranchHint = 'Đang xem chi nhánh khác. Đăng nhập vào chi nhánh đó để nhập kho hoặc điều chuyển.';
   const [activeTab, setActiveTab] = useState('inventory'); // 'inventory' | 'history'
+  // Cảnh báo hàng cận date / hết hạn (theo lô nhập có khai hạn dùng)
+  const [expirySummary, setExpirySummary] = useState(null);
+  const [isExpiryOpen, setIsExpiryOpen] = useState(false);
 
   // Barcode Printing State
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
@@ -98,19 +103,31 @@ export default function InventoryPage({
           }
 
           if (Array.isArray(slipList) && slipList.length > 0) {
-            const mappedHistory = slipList.map(s => ({
+            const mappedHistory = slipList.map(s => {
+              // Máy chủ trả chi tiết trong details (kèm product), thời gian createdAt, tổng totalCost
+              const items = (s.details || s.items || []).map((d) => ({
+                productId: d.product?.id ?? d.productId,
+                productName: d.product?.name ?? d.productName,
+                quantity: d.quantity,
+                unitCost: Number(d.unitCost) || 0,
+                lotNumber: d.lotNumber || '',
+                expiryDate: d.expiryDate || ''
+              }));
+              const created = s.createdAt || s.createdDate;
+              return {
               id: s.code || `NK-${s.id}`,
               supplierId: s.supplier?.id || s.supplierId,
               supplierName: s.supplier?.name || 'Nhà cung cấp',
               branchId: s.branch?.id || currentBranchId,
               branchName: s.branch?.name || `Chi nhánh ${currentBranchId}`,
-              createdDate: s.createdDate ? new Date(s.createdDate).toLocaleString('vi-VN') : new Date().toLocaleString('vi-VN'),
+              createdDate: created ? new Date(created).toLocaleString('vi-VN') : new Date().toLocaleString('vi-VN'),
               employeeName: s.employee?.fullName || currentUser?.fullName || 'Quản trị viên',
-              totalItems: s.items?.reduce((sum, it) => sum + it.quantity, 0) || 0,
-              totalCost: s.totalAmount || s.items?.reduce((sum, it) => sum + it.quantity * it.unitCost, 0) || 0,
-              items: s.items || [],
+              totalItems: items.reduce((sum, it) => sum + it.quantity, 0),
+              totalCost: Number(s.totalCost ?? s.totalAmount) || items.reduce((sum, it) => sum + it.quantity * it.unitCost, 0),
+              items,
               note: s.note || ''
-            }));
+              };
+            });
             setStockInHistory(mappedHistory);
           }
         }
@@ -136,6 +153,19 @@ export default function InventoryPage({
       unsubWs();
     };
   }, [currentBranchId, isOnline, currentUser?.fullName, canEdit, reloadKey]);
+
+  // Tải tóm tắt hạn dùng (chỉ khi có máy chủ và có quyền quản lý kho)
+  useEffect(() => {
+    if (!isOnline || !canEdit) return undefined;
+    let alive = true;
+    expiryService
+      .report(30, isAdmin ? currentBranchId : undefined)
+      .then((r) => alive && setExpirySummary(r))
+      .catch(() => alive && setExpirySummary(null));
+    return () => {
+      alive = false;
+    };
+  }, [currentBranchId, isOnline, canEdit, isAdmin, reloadKey]);
 
   const handleProductSaved = (saved, action) => {
     setProductForm({ open: false, product: null });
@@ -284,7 +314,9 @@ export default function InventoryPage({
           items: newStockIn.items.map(it => ({
             productId: it.productId,
             quantity: it.quantity,
-            unitCost: it.unitCost
+            unitCost: it.unitCost,
+            lotNumber: it.lotNumber?.trim() || undefined,
+            expiryDate: it.expiryDate || undefined
           }))
         };
         const created = await purchaseService.createStockIn(payload);
@@ -707,6 +739,20 @@ export default function InventoryPage({
 
       {/* Main Body */}
       <main className="inv-body">
+        {expirySummary && (expirySummary.expiredLots > 0 || expirySummary.nearLots > 0) && (
+          <div className="inv-expiry-banner" role="status">
+            <span>
+              {expirySummary.expiredLots > 0 && (
+                <strong className="text-danger">{expirySummary.expiredLots} lô đã hết hạn ({formatCurrency(expirySummary.expiredValue)})</strong>
+              )}
+              {expirySummary.expiredLots > 0 && expirySummary.nearLots > 0 && ' · '}
+              {expirySummary.nearLots > 0 && (
+                <strong style={{ color: 'var(--warning-700)' }}>{expirySummary.nearLots} lô sắp hết hạn trong {expirySummary.warnDays} ngày</strong>
+              )}
+            </span>
+            <Button size="sm" variant="secondary" onClick={() => setIsExpiryOpen(true)}>Xem lô hàng</Button>
+          </div>
+        )}
         {/* Metric Summary Cards */}
         <section className="inv-metrics-grid">
           <div
@@ -908,6 +954,17 @@ export default function InventoryPage({
       </main>
 
       {/* Modals */}
+      <ExpiryModal
+        isOpen={isExpiryOpen}
+        onClose={() => setIsExpiryOpen(false)}
+        branchId={isAdmin ? currentBranchId : undefined}
+        canDispose={viewingSessionBranch}
+        onDisposalCreated={(count) =>
+          navigate('/stock-counts', {
+            state: { openCountId: count?.id, message: 'Đã lập phiếu hủy hàng hết hạn. Kiểm lại số thực tế rồi gửi duyệt.' }
+          })
+        }
+      />
       <StockInModal
         key={showDraft ? `draft-${location.key}` : `empty-${stockInModalKey}`}
         initialItems={showDraft ? draftItems : null}
