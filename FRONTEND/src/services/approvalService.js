@@ -16,5 +16,10 @@ export const approvalService = {
   /** Quản lý nhập tài khoản + PIN trên máy POS; trả { token, approverName, maxDiscount, expiresAt } */
   async approveDiscount(approverUsername, pin, amount) {
     return unwrap(await api.post('/approvals/discount', { approverUsername, pin, amount }));
+  },
+
+  /** Quản lý duyệt cho thu ngân hoàn trả tối đa amount; trả { token, approverName, maxDiscount, expiresAt } */
+  async approveRefund(approverUsername, pin, amount) {
+    return unwrap(await api.post('/approvals/refund', { approverUsername, pin, amount }));
   }
 };

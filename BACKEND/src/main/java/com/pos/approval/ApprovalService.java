@@ -32,8 +32,19 @@ public class ApprovalService {
 
     private static final Duration GRANT_TTL = Duration.ofMinutes(5);
 
+    /** Việc cần quản lý duyệt; mã duyệt cho việc này không dùng được cho việc khác */
+    public enum Purpose {
+        DISCOUNT("giảm giá"), REFUND("hoàn trả");
+
+        final String label;
+
+        Purpose(String label) {
+            this.label = label;
+        }
+    }
+
     /** Một lần duyệt chưa dùng */
-    record Grant(Long approverId, Long requesterId, Long branchId, BigDecimal maxDiscount, Instant expiresAt) {}
+    record Grant(Purpose purpose, Long approverId, Long requesterId, Long branchId, BigDecimal maxDiscount, Instant expiresAt) {}
 
     private final Map<String, Grant> grants = new ConcurrentHashMap<>();
     private final UserRepository userRepository;
@@ -98,6 +109,15 @@ public class ApprovalService {
      * Sai PIN nhiều lần thì khóa như đăng nhập sai (khóa theo tài khoản quản lý).
      */
     public GrantResult approveDiscount(User requester, String approverUsername, String pin, BigDecimal amount) {
+        return approve(Purpose.DISCOUNT, requester, approverUsername, pin, amount);
+    }
+
+    /** Quản lý nhập PIN duyệt cho thu ngân hoàn trả tối đa amount */
+    public GrantResult approveRefund(User requester, String approverUsername, String pin, BigDecimal amount) {
+        return approve(Purpose.REFUND, requester, approverUsername, pin, amount);
+    }
+
+    private GrantResult approve(Purpose purpose, User requester, String approverUsername, String pin, BigDecimal amount) {
         if (approverUsername == null || approverUsername.isBlank() || pin == null || amount == null
                 || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException("INVALID_APPROVAL_REQUEST", "Thiếu tài khoản quản lý, PIN hoặc số tiền cần duyệt");
@@ -113,7 +133,7 @@ public class ApprovalService {
             loginAttemptService.recordFailure(lockKey);
             if (auditService != null) {
                 auditService.logIndependent(AuditAction.DISCOUNT_PIN_FAILED, "USER", approver != null ? approver.getId() : null,
-                        requester.getCurrentBranchId(), "Sai PIN duyệt giảm giá, tài khoản quản lý: " + approverUsername.trim(), null);
+                        requester.getCurrentBranchId(), "Sai PIN duyệt " + purpose.label + ", tài khoản quản lý: " + approverUsername.trim(), null);
             }
             throw new BusinessException("APPROVAL_PIN_INVALID",
                     "Tài khoản quản lý hoặc PIN không đúng (hoặc quản lý chưa đặt PIN)", HttpStatus.FORBIDDEN);
@@ -129,9 +149,11 @@ public class ApprovalService {
         purgeExpired();
         String token = UUID.randomUUID().toString();
         Instant expiresAt = Instant.now().plus(GRANT_TTL);
-        grants.put(token, new Grant(approver.getId(), requester.getId(), branchId, amount, expiresAt));
-        audit(AuditAction.DISCOUNT_APPROVED, "USER", requester.getId(), branchId,
-                displayName(approver) + " duyệt cho " + displayName(requester) + " giảm tối đa " + AuditService.money(amount));
+        grants.put(token, new Grant(purpose, approver.getId(), requester.getId(), branchId, amount, expiresAt));
+        if (purpose == Purpose.DISCOUNT) {
+            audit(AuditAction.DISCOUNT_APPROVED, "USER", requester.getId(), branchId,
+                    displayName(approver) + " duyệt cho " + displayName(requester) + " giảm tối đa " + AuditService.money(amount));
+        }
         return new GrantResult(token, displayName(approver), amount, expiresAt);
     }
 
@@ -141,7 +163,7 @@ public class ApprovalService {
      */
     public Long checkDiscountApproval(String token, User requester, Long branchId, BigDecimal discount) {
         Grant g = token == null ? null : grants.get(token);
-        if (g == null || Instant.now().isAfter(g.expiresAt())) {
+        if (g == null || g.purpose() != Purpose.DISCOUNT || Instant.now().isAfter(g.expiresAt())) {
             throw new BusinessException("DISCOUNT_APPROVAL_REQUIRED",
                     "Giảm giá vượt hạn mức " + cashierMaxDiscountPercent.stripTrailingZeros().toPlainString()
                             + "% của thu ngân, cần quản lý nhập PIN duyệt", HttpStatus.FORBIDDEN);
@@ -152,6 +174,23 @@ public class ApprovalService {
         if (discount.compareTo(g.maxDiscount()) > 0) {
             throw new BusinessException("DISCOUNT_APPROVAL_REQUIRED",
                     "Số tiền giảm lớn hơn số quản lý đã duyệt, cần duyệt lại", HttpStatus.FORBIDDEN);
+        }
+        return g.approverId();
+    }
+
+    /** Kiểm tra mã duyệt hoàn trả của thu ngân, trả id quản lý đã duyệt; gọi {@link #markUsed} sau khi hoàn trả xong */
+    public Long checkRefundApproval(String token, User requester, Long branchId, BigDecimal refundAmount) {
+        Grant g = token == null ? null : grants.get(token);
+        if (g == null || g.purpose() != Purpose.REFUND || Instant.now().isAfter(g.expiresAt())) {
+            throw new BusinessException("REFUND_APPROVAL_REQUIRED",
+                    "Thu ngân hoàn trả cần quản lý nhập PIN duyệt", HttpStatus.FORBIDDEN);
+        }
+        if (!g.requesterId().equals(requester.getId()) || !java.util.Objects.equals(g.branchId(), branchId)) {
+            throw new BusinessException("REFUND_APPROVAL_REQUIRED", "Mã duyệt không dành cho quầy này", HttpStatus.FORBIDDEN);
+        }
+        if (refundAmount.compareTo(g.maxDiscount()) > 0) {
+            throw new BusinessException("REFUND_APPROVAL_REQUIRED",
+                    "Số tiền hoàn lớn hơn số quản lý đã duyệt, cần duyệt lại", HttpStatus.FORBIDDEN);
         }
         return g.approverId();
     }

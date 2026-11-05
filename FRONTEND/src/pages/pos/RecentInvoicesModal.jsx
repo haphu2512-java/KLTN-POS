@@ -5,6 +5,7 @@ import { shiftService } from '../../services/shiftService';
 import { saleService } from '../../services/saleService';
 import { printInvoiceReceipt, receiptFromInvoice } from '../../utils/receiptPrinter';
 import { PAYMENT_LABELS } from '../shifts/shiftUtils';
+import ReturnModal from './ReturnModal';
 
 export default function RecentInvoicesModal({
   isOpen,
@@ -25,6 +26,9 @@ export default function RecentInvoicesModal({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [printStatus, setPrintStatus] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Trả hàng: id hóa đơn đang mở hộp thoại trả hàng; ô nhập số hóa đơn trên bill của khách
+  const [returnInvoiceId, setReturnInvoiceId] = useState(null);
+  const [returnLookup, setReturnLookup] = useState('');
 
   // Reset state khi mở modal
   const [prevOpen, setPrevOpen] = useState(isOpen);
@@ -221,8 +225,8 @@ export default function RecentInvoicesModal({
             Hoàn trả (ca khác)
           </Badge>
         ) : (
-          <Badge variant={val === 'REFUNDED' ? 'danger' : 'success'}>
-            {val === 'REFUNDED' ? 'Đã hoàn trả' : 'Đã thanh toán'}
+          <Badge variant={val === 'REFUNDED' ? 'danger' : val === 'PARTIALLY_REFUNDED' ? 'warning' : 'success'}>
+            {val === 'REFUNDED' ? 'Đã hoàn trả' : val === 'PARTIALLY_REFUNDED' ? 'Hoàn một phần' : 'Đã thanh toán'}
           </Badge>
         )
     },
@@ -264,6 +268,15 @@ export default function RecentInvoicesModal({
               ← Quay lại danh sách
             </Button>
             <div style={{ display: 'flex', gap: '8px' }}>
+              {selectedInvoice.status !== 'REFUNDED' && (
+                <Button
+                  variant="danger"
+                  onClick={() => setReturnInvoiceId(selectedInvoice.id)}
+                  title="Khách trả lại một số món hoặc cả hóa đơn"
+                >
+                  Trả hàng
+                </Button>
+              )}
               <Button
                 variant="primary"
                 onClick={handlePrintReceipt}
@@ -396,6 +409,11 @@ export default function RecentInvoicesModal({
                       </td>
                       <td style={{ padding: '8px 12px', textAlign: 'center' }} className="tabular-nums font-semibold">
                         {detail.quantity}
+                        {detail.returnedQuantity > 0 && (
+                          <div style={{ fontSize: '11px', color: 'var(--danger-600)', fontWeight: 400 }}>
+                            đã trả {detail.returnedQuantity}
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
                         {formatCurrency(detail.unitPrice)}
@@ -553,6 +571,27 @@ export default function RecentInvoicesModal({
             </div>
           </div>
 
+          {/* Trả hàng theo số hóa đơn in trên bill của khách (kể cả hóa đơn ca khác, còn hạn đổi trả) */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const id = Number.parseInt(returnLookup.replace(/\D/g, ''), 10);
+              if (id > 0) setReturnInvoiceId(id);
+            }}
+            style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '13px' }}
+          >
+            <span style={{ color: 'var(--text-muted)' }}>Khách mang hàng đến trả:</span>
+            <Input
+              placeholder="Số hóa đơn trên bill, vd. HD000123"
+              value={returnLookup}
+              onChange={(e) => setReturnLookup(e.target.value)}
+              style={{ fontSize: '13px', maxWidth: '260px' }}
+            />
+            <Button size="sm" variant="danger" type="submit" disabled={!returnLookup.trim()}>
+              Trả hàng
+            </Button>
+          </form>
+
           {loadingDetail && (
             <div style={{ textAlign: 'center', padding: '4px' }}>
               <Loading text="Đang tải chi tiết hóa đơn..." inline />
@@ -593,6 +632,17 @@ export default function RecentInvoicesModal({
           />
         </div>
       )}
+      <ReturnModal
+        isOpen={returnInvoiceId != null}
+        invoiceId={returnInvoiceId}
+        cashierName={cashierName}
+        onClose={() => setReturnInvoiceId(null)}
+        onDone={(res) => {
+          setReturnLookup('');
+          if (selectedInvoice?.id === res.invoice.id) setSelectedInvoice(res.invoice);
+          setReloadKey((k) => k + 1);
+        }}
+      />
     </Modal>
   );
 }

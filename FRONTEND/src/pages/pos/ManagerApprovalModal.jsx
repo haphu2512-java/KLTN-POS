@@ -4,10 +4,20 @@ import { approvalService } from '../../services/approvalService';
 import { formatCurrency } from '../../utils/formatters';
 
 /**
- * Quản lý nhập tài khoản + PIN ngay trên máy POS để duyệt khoản giảm giá vượt hạn mức của thu ngân.
+ * Quản lý nhập tài khoản + PIN ngay trên máy POS để duyệt cho thu ngân:
+ * purpose = 'discount' (giảm giá vượt hạn mức) hoặc 'refund' (hoàn trả hàng).
  * onApproved nhận { token, approverName, maxDiscount }.
  */
-export default function ManagerApprovalModal({ isOpen, onClose, amount, maxWithoutApproval, reason, onApproved }) {
+export default function ManagerApprovalModal({
+  isOpen,
+  onClose,
+  amount,
+  maxWithoutApproval,
+  reason,
+  onApproved,
+  purpose = 'discount'
+}) {
+  const isRefund = purpose === 'refund';
   const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -28,7 +38,9 @@ export default function ManagerApprovalModal({ isOpen, onClose, amount, maxWitho
     setLoading(true);
     setError('');
     try {
-      const grant = await approvalService.approveDiscount(username.trim(), pin, amount);
+      const grant = isRefund
+        ? await approvalService.approveRefund(username.trim(), pin, amount)
+        : await approvalService.approveDiscount(username.trim(), pin, amount);
       onApproved(grant);
     } catch (err) {
       setError(err.response?.data?.message || 'Không duyệt được, kiểm tra kết nối.');
@@ -42,7 +54,7 @@ export default function ManagerApprovalModal({ isOpen, onClose, amount, maxWitho
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Cần quản lý duyệt giảm giá"
+      title={isRefund ? 'Cần quản lý duyệt hoàn trả' : 'Cần quản lý duyệt giảm giá'}
       maxWidth="420px"
       footer={
         <>
@@ -55,7 +67,7 @@ export default function ManagerApprovalModal({ isOpen, onClose, amount, maxWitho
     >
       <form id="manager-approval-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div style={{ fontSize: '13px', lineHeight: 1.5 }}>
-          Giảm <strong>{formatCurrency(amount)}</strong>
+          {isRefund ? 'Hoàn cho khách' : 'Giảm'} <strong>{formatCurrency(amount)}</strong>
           {maxWithoutApproval != null && (
             <> (thu ngân được tự giảm tối đa {formatCurrency(maxWithoutApproval)})</>
           )}

@@ -29,6 +29,8 @@ public class ShiftInvoiceRow {
     private int itemCount;
     private String customerName;
     private LocalDateTime refundedAt;
+    /** Tiền hoàn chi từ két của ca này cho hóa đơn (hoàn cả đơn hoặc một phần); null nếu không có */
+    private BigDecimal refundAmountHere;
     /** Tiền hoàn trả của hóa đơn này được trừ vào két của ca đang xem */
     private boolean refundCountedHere;
     private String note;

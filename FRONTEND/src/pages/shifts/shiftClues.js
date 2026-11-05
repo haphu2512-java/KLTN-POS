@@ -33,7 +33,7 @@ export function findClues(shift, invoices) {
     if (inv.kind === 'SALE' && isCash && diff < 0 && Number(inv.changeAmount) > 0 && same(inv.changeAmount, gap)) {
       clues.push(`Thiếu đúng bằng tiền thối của hóa đơn ${code} (${formatCurrency(inv.changeAmount)}): có thể đã thối tiền hai lần.`);
     }
-    if (inv.refundCountedHere && isCash && diff > 0 && same(inv.totalAmount, gap)) {
+    if (inv.refundCountedHere && isCash && diff > 0 && same(inv.refundAmountHere ?? inv.totalAmount, gap)) {
       clues.push(`Dư đúng bằng tiền hoàn trả hóa đơn ${code}: kiểm tra đã chi tiền hoàn trả cho khách chưa.`);
     }
   });

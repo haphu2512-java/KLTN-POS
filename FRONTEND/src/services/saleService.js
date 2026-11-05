@@ -23,6 +23,18 @@ export const saleService = {
     return res?.data !== undefined ? res.data : res;
   },
 
+  /** Thông tin hoàn trả: { invoice, returns, returnDays, deadline, overdue, approvalRequired } */
+  async getReturnInfo(id) {
+    const res = await api.get(`/invoices/${id}/return-info`);
+    return res?.data !== undefined ? res.data : res;
+  },
+
+  /** Hoàn trả từng món: items [{ detailId, quantity }] (rỗng = trả hết). Trả { invoice, invoiceReturn } */
+  async createReturn(id, { items, reason, approvalToken }) {
+    const res = await api.post(`/invoices/${id}/returns`, { items, reason, approvalToken });
+    return res?.data !== undefined ? res.data : res;
+  },
+
   async refundInvoice(id, reason = '') {
     const res = await api.post(`/invoices/${id}/refund`, { reason });
     return res?.data !== undefined ? res.data : res;
