@@ -196,3 +196,8 @@
   color: var(--text-main);
   font-size: 15px;
 }
+
+.mp-empty-state svg {
+  color: var(--brand-400);
+  margin-bottom: 4px;
+}
