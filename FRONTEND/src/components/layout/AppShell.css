@@ -1,9 +1,14 @@
 .shell {
+  --rail-width: 216px;
   display: flex;
   width: 100%;
   height: 100%;
   background-color: var(--bg-canvas);
   overflow: hidden;
+}
+
+.shell.is-collapsed {
+  --rail-width: 64px;
 }
 
 .shell-main {
@@ -14,67 +19,199 @@
   flex-direction: column;
 }
 
+/* ---------- Thanh điều hướng ---------- */
 .shell-rail {
   width: var(--rail-width);
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px 8px;
+  min-height: 0;
   background-color: var(--brand-800);
+  color: #cfc8b8;
+  transition: width 0.15s ease;
 }
 
-.shell-rail-item {
+.shell-brand {
+  height: var(--header-height);
+  flex: none;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 16px;
+  border-bottom: 1px solid #36322a;
+}
+
+.shell-brand-mark {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  background-color: var(--primary-600);
+  color: #ffffff;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  height: 64px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.shell-brand-name {
+  flex: 1;
+  min-width: 0;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.shell-collapse {
+  width: 28px;
+  height: 28px;
+  flex: none;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: #cfc8b8;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 500;
+  color: #9a9384;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 
-.shell-rail-item:hover {
+.shell-collapse:hover {
   background-color: #322f28;
   color: #ffffff;
 }
 
-.shell-rail-item.is-active {
+.shell-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 10px 12px;
+}
+
+.shell-nav::-webkit-scrollbar-thumb {
+  background-color: #4a453a;
+}
+
+.shell-group + .shell-group {
+  margin-top: 12px;
+}
+
+.shell-group-title {
+  margin: 0;
+  padding: 6px 8px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a8475;
+  white-space: nowrap;
+}
+
+.shell-group ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shell-nav-item {
+  position: relative;
+  width: 100%;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: #cfc8b8;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-nav-item svg {
+  flex: none;
+}
+
+.shell-nav-label {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shell-nav-item:hover {
+  background-color: #322f28;
+  color: #ffffff;
+}
+
+.shell-nav-item.is-active {
   background-color: #3a362e;
   color: #ffffff;
+}
+
+.shell-nav-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background-color: #a8d5ba;
+}
+
+.shell-nav-item[aria-current='page'] {
   cursor: default;
 }
 
-.shell-rail-item:focus-visible {
+.shell-nav-item:focus-visible,
+.shell-collapse:focus-visible,
+.shell-user-btn:focus-visible,
+.shell-menu-item:focus-visible {
   outline: 2px solid #ffffff;
   outline-offset: -2px;
 }
 
-.shell-rail-spacer {
-  flex: 1;
+/* ---------- Khối tài khoản ở cuối ---------- */
+.shell-user {
+  position: relative;
+  flex: none;
+  padding: 8px 10px 10px;
+  border-top: 1px solid #36322a;
 }
 
-.shell-rail-user {
+.shell-user-btn {
+  width: 100%;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 8px 0 4px;
+  gap: 10px;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: #cfc8b8;
-  font-size: 12px;
-  text-align: center;
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-user-btn:hover,
+.shell-user-btn[aria-expanded='true'] {
+  background-color: #322f28;
 }
 
 .shell-avatar {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
+  flex: none;
   border-radius: 50%;
   background-color: #4a453a;
   color: #ffffff;
@@ -82,37 +219,144 @@
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
+}
+
+.shell-user-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
 }
 
 .shell-user-name {
-  max-width: 100%;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.shell-user-branch {
-  max-width: 100%;
-  font-size: 10px;
-  line-height: 1.3;
-  color: #a8d5ba;
+  color: #ffffff;
+  font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
 }
 
-.shell-logout {
-  height: 32px;
+.shell-user-meta {
+  font-size: 11.5px;
+  color: #a8d5ba;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shell-user-more {
+  flex: none;
+  color: #9a9384;
+  display: flex;
+}
+
+.shell-user-menu {
+  position: absolute;
+  left: 10px;
+  bottom: calc(100% - 2px);
+  z-index: 950;
+  width: 220px;
+  padding: 6px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-modal);
+  color: var(--text-main);
+}
+
+.shell-user-menu-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 13px;
+}
+
+.shell-user-menu-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.shell-menu-item {
   width: 100%;
-  flex-direction: row;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 0;
   border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-menu-item:hover {
+  background-color: var(--bg-subtle);
+}
+
+.shell-menu-item.is-danger {
+  color: var(--danger-600);
+}
+
+/* ---------- Chế độ thu gọn: chỉ còn biểu tượng ---------- */
+.shell.is-collapsed .shell-brand {
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 0;
+}
+
+.shell.is-collapsed .shell-brand-mark,
+.shell.is-collapsed .shell-brand-name,
+.shell.is-collapsed .shell-nav-label,
+.shell.is-collapsed .shell-user-text,
+.shell.is-collapsed .shell-user-more {
+  display: none;
+}
+
+.shell.is-collapsed .shell-nav {
+  padding: 8px;
+}
+
+.shell.is-collapsed .shell-group-title {
+  height: 1px;
+  padding: 0;
+  margin: 6px 8px 8px;
+  background-color: #36322a;
+  overflow: hidden;
+  color: transparent;
+}
+
+.shell.is-collapsed .shell-group + .shell-group {
+  margin-top: 0;
+}
+
+.shell.is-collapsed .shell-nav-item {
+  justify-content: center;
+  padding: 0;
+  height: 40px;
+}
+
+.shell.is-collapsed .shell-nav-item.is-active::before {
+  left: -8px;
+}
+
+.shell.is-collapsed .shell-user {
+  padding: 8px;
+}
+
+.shell.is-collapsed .shell-user-btn {
+  justify-content: center;
+  padding: 4px 0;
 }
 
 /* Thanh tiêu đề của từng màn hình, dùng chung */

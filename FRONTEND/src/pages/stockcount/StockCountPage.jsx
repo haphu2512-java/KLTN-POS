@@ -210,10 +210,21 @@ export default function StockCountPage({ currentUser }) {
   ];
 
   const listColumns = [
-    { key: 'id', title: 'Phiếu', width: 70, render: (v) => `#${v}` },
-    { key: 'createdAt', title: 'Ngày tạo', render: (v) => formatDateTime(v) },
-    { key: 'lines', title: 'Số mặt hàng', align: 'right', render: (v) => (v || []).length },
-    { key: 'status', title: 'Trạng thái', render: (v) => <Badge variant={STATUS[v]?.variant}>{STATUS[v]?.label || v}</Badge> },
+    {
+      key: 'id',
+      title: 'Phiếu',
+      render: (v, c) => (
+        <div>
+          <div>
+            <strong>#{v}</strong>
+            {c.note && <span className="mp-muted"> · {c.note}</span>}
+          </div>
+          <div className="mp-muted">{formatDateTime(c.createdAt)}</div>
+        </div>
+      ),
+    },
+    { key: 'lines', title: 'Mặt hàng', align: 'right', width: 84, render: (v) => (v || []).length },
+    { key: 'status', title: 'Trạng thái', width: 110, render: (v) => <Badge variant={STATUS[v]?.variant}>{STATUS[v]?.label || v}</Badge> },
   ];
 
   return (
@@ -248,7 +259,7 @@ export default function StockCountPage({ currentUser }) {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 360px) 1fr', gap: 16, alignItems: 'start' }}>
+        <div className="mp-split">
           <div className="mp-card">
             <div className="mp-card-pad" style={{ display: 'flex', gap: 8 }}>
               <input
@@ -271,7 +282,15 @@ export default function StockCountPage({ currentUser }) {
 
           <div className="mp-card">
             {!current ? (
-              <div className="mp-card-pad mp-muted">Chọn một phiếu bên trái hoặc tạo phiếu mới.</div>
+              <div className="mp-empty">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 14l2 2 4-4" />
+                </svg>
+                <div className="mp-empty-title">Chưa chọn phiếu kiểm kê</div>
+                <div className="mp-empty-text">
+                  Chọn một phiếu ở danh sách bên trái, hoặc nhập ghi chú rồi bấm “Tạo phiếu” để bắt đầu quét mã đếm hàng.
+                </div>
+              </div>
             ) : (
               <>
                 <div className="mp-toolbar" style={{ border: 'none', borderRadius: 0 }}>
