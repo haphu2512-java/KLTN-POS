@@ -119,6 +119,13 @@ public class Invoice {
     @Column(name = "refund_shift_session_id")
     private Long refundShiftSessionId;
 
+    /**
+     * Tổng tiền đã hoàn qua các phiếu hoàn trả (InvoiceReturn). Null: chưa hoàn lần nào, hoặc hóa đơn hoàn
+     * cả đơn theo cách cũ (trước khi có hoàn trả từng món) — khi đó dùng status REFUNDED và totalAmount.
+     */
+    @Column(name = "refunded_amount", precision = 14, scale = 2)
+    private BigDecimal refundedAmount;
+
     @Builder.Default
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -139,6 +146,14 @@ public class Invoice {
     /** Tên người bấm hoàn trả, chỉ điền khi trả về cho ADMIN/MANAGER */
     @Transient
     private String refundedByName;
+
+    /** Doanh thu thực còn lại sau hoàn trả (hoàn cả đơn = 0) */
+    @Transient
+    public BigDecimal getNetAmount() {
+        if (status == InvoiceStatus.REFUNDED) return BigDecimal.ZERO;
+        BigDecimal total = totalAmount != null ? totalAmount : BigDecimal.ZERO;
+        return refundedAmount != null ? total.subtract(refundedAmount) : total;
+    }
 
     /** Tên quản lý duyệt giảm giá, chỉ điền khi trả về cho ADMIN/MANAGER */
     @Transient

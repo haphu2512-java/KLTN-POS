@@ -1,5 +1,8 @@
 package com.pos.sale;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import com.pos.audit.AuditService;
+import com.pos.audit.AuditAction;
 import com.pos.approval.ApprovalService;
 import com.pos.branch.Branch;
 import com.pos.branch.BranchRepository;
@@ -16,6 +19,7 @@ import com.pos.shift.ShiftService;
 import com.pos.user.Role;
 import com.pos.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +28,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +50,19 @@ public class InvoiceService {
     private final ApprovalService approvalService;
     private final LoyaltyService loyaltyService;
     private final PromotionService promotionService;
+    private final InvoiceReturnRepository invoiceReturnRepository;
+
+    /** Số ngày khách được đổi trả (in trên bill). Quá hạn chỉ quản lý hoàn trả được, phải ghi lý do. */
+    @Value("${pos.return.days:3}")
+    private int returnDays = 3;
+
+    /** Nhật ký thao tác; để trống trong unit test dựng service bằng tay */
+    @Autowired(required = false)
+    private AuditService auditService;
+
+    private void audit(AuditAction action, String entityType, Object entityId, Long branchId, String summary) {
+        if (auditService != null) auditService.log(action, entityType, entityId, branchId, summary);
+    }
 
     public Page<Invoice> getInvoices(Long branchId, Pageable pageable) {
         Page<Invoice> page = branchId != null
@@ -262,11 +282,78 @@ public class InvoiceService {
             saved.setCustomerPointsBalance(customer.getPoints());
         }
         approvalService.markUsed(approvalToken);
+        if (discount.signum() > 0) {
+            audit(AuditAction.INVOICE_DISCOUNT, "INVOICE", saved.getId(), branchId,
+                    "Hóa đơn #" + saved.getId() + " giảm tay " + AuditService.money(discount)
+                            + " / tiền hàng " + AuditService.money(subtotal)
+                            + (discountReason != null ? " - lý do: " + discountReason : "")
+                            + (saved.getDiscountApprovedBy() != null ? " (quản lý #" + saved.getDiscountApprovedBy() + " duyệt)" : ""));
+        }
         return saved;
     }
 
+    /** Hoàn trả cả hóa đơn (mọi món còn lại); giữ cho API cũ /refund */
     @Transactional
     public Invoice refundInvoice(Long id, String reason, User actor) {
+        return createReturn(id, null, reason, null, actor).invoice();
+    }
+
+    public int getReturnDays() {
+        return returnDays;
+    }
+
+    /** Hạn đổi trả của hóa đơn (hết ngày thứ returnDays kể từ ngày mua) */
+    public LocalDateTime returnDeadline(Invoice invoice) {
+        LocalDateTime created = invoice.getCreatedAt() != null ? invoice.getCreatedAt() : LocalDateTime.now();
+        return created.toLocalDate().plusDays(returnDays + 1L).atStartOfDay();
+    }
+
+    public record ReturnLine(Long detailId, Integer quantity) {}
+
+    public record ReturnResult(Invoice invoice, InvoiceReturn invoiceReturn) {}
+
+    public record ReturnInfo(Invoice invoice, List<InvoiceReturn> returns, int returnDays,
+                             LocalDateTime deadline, boolean overdue, boolean approvalRequired) {}
+
+    /**
+     * Thông tin để hoàn trả tại quầy: thu ngân tra hóa đơn theo số trên bill của khách (cùng chi nhánh,
+     * còn trong hạn đổi trả); ADMIN/MANAGER theo quyền xem hóa đơn thông thường.
+     */
+    public ReturnInfo getReturnInfo(Long id, User actor) {
+        Invoice invoice;
+        if (actor.getRole() == Role.CASHIER) {
+            invoice = getInvoiceById(id);
+            if (invoice.getBranch() == null || !invoice.getBranch().getId().equals(actor.getCurrentBranchId())) {
+                throw new BusinessException("INVOICE_FORBIDDEN", "Hóa đơn không thuộc chi nhánh đang đăng nhập", HttpStatus.FORBIDDEN);
+            }
+            if (LocalDateTime.now().isAfter(returnDeadline(invoice))) {
+                throw new BusinessException("RETURN_EXPIRED", "Hóa đơn đã quá hạn đổi trả " + returnDays
+                        + " ngày, cần quản lý xử lý", HttpStatus.FORBIDDEN);
+            }
+            invoice.setEmployeeName(shiftService.userDisplayName(invoice.getEmployeeId()));
+        } else {
+            invoice = getInvoiceForViewer(id, actor);
+        }
+        List<InvoiceReturn> returns = invoiceReturnRepository.findByInvoiceIdOrderByCreatedAtAsc(id);
+        for (InvoiceReturn r : returns) {
+            r.setCreatedByName(r.getCreatedBy() != null ? shiftService.userDisplayName(r.getCreatedBy()) : null);
+            r.setApprovedByName(r.getApprovedBy() != null ? shiftService.userDisplayName(r.getApprovedBy()) : null);
+        }
+        return new ReturnInfo(invoice, returns, returnDays, returnDeadline(invoice),
+                LocalDateTime.now().isAfter(returnDeadline(invoice)), actor.getRole() == Role.CASHIER);
+    }
+
+    /**
+     * Hoàn trả một số món (hoặc cả hóa đơn khi lines rỗng).
+     * <ul>
+     *   <li>Tiền hoàn = giá trị các món trả × (khách thực trả / tạm tính), tức là chia đều khuyến mãi, giảm giá
+     *       và tiền đổi điểm theo giá trị món. Lần trả cuối hoàn nốt phần còn lại để tổng hoàn đúng bằng tiền khách trả.</li>
+     *   <li>Điểm: trả lại điểm đã dùng và thu hồi điểm đã cộng theo cùng tỷ lệ (làm tròn xuống, lần cuối lấy hết).</li>
+     *   <li>Thu ngân cần mã duyệt PIN của quản lý; quá hạn đổi trả thì chỉ ADMIN/MANAGER làm được và phải ghi lý do.</li>
+     * </ul>
+     */
+    @Transactional
+    public ReturnResult createReturn(Long id, List<ReturnLine> lines, String reason, String approvalToken, User actor) {
         // Khóa dòng hóa đơn để 2 yêu cầu hoàn trả đồng thời không cùng cộng kho
         Invoice invoice = invoiceRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new BusinessException("INVOICE_NOT_FOUND", "Không tìm thấy hóa đơn với ID: " + id));
@@ -279,38 +366,169 @@ public class InvoiceService {
             throw new BusinessException("BRANCH_FORBIDDEN",
                     "Chỉ hoàn trả được hóa đơn của chi nhánh đang đăng nhập", HttpStatus.FORBIDDEN);
         }
-
-        // 1. Hoàn tồn kho nguyên tử cho từng sản phẩm trong hóa đơn
-        if (invoice.getDetails() != null) {
-            for (InvoiceDetail detail : invoice.getDetails()) {
-                inventoryService.addStockAtomic(
-                        detail.getProduct().getId(),
-                        invoice.getBranch().getId(),
-                        detail.getQuantity()
-                );
-            }
+        String cleanReason = reason != null && !reason.isBlank() ? reason.trim() : null;
+        boolean overdue = LocalDateTime.now().isAfter(returnDeadline(invoice));
+        if (overdue && actor.getRole() != Role.ADMIN && actor.getRole() != Role.MANAGER) {
+            throw new BusinessException("RETURN_EXPIRED", "Hóa đơn đã quá hạn đổi trả " + returnDays
+                    + " ngày, cần quản lý xử lý", HttpStatus.FORBIDDEN);
+        }
+        if ((overdue || actor.getRole() == Role.CASHIER) && cleanReason == null) {
+            throw new BusinessException("RETURN_REASON_REQUIRED", overdue
+                    ? "Hóa đơn quá hạn đổi trả, cần ghi lý do" : "Nhập lý do khách trả hàng");
         }
 
-        // 2. Trả lại điểm khách đã dùng và thu hồi đúng số điểm đã cộng cho hóa đơn này.
-        // Hóa đơn cũ chưa lưu points_earned thì tính lại theo công thức hiện hành.
+        // 1. Món và số lượng trả
+        List<InvoiceDetail> details = invoice.getDetails() != null ? invoice.getDetails() : List.of();
+        // Khóa theo vị trí dòng (không dùng InvoiceDetail làm khóa: equals/hashCode của entity đi vòng qua hóa đơn)
+        Map<Integer, Integer> picked = new java.util.TreeMap<>();
+        if (lines == null || lines.isEmpty()) {
+            for (int i = 0; i < details.size(); i++) {
+                if (details.get(i).getRemainingQuantity() > 0) picked.put(i, details.get(i).getRemainingQuantity());
+            }
+        } else {
+            Map<Long, Integer> indexById = new HashMap<>();
+            for (int i = 0; i < details.size(); i++) indexById.put(details.get(i).getId(), i);
+            for (ReturnLine line : lines) {
+                if (line == null || line.quantity() == null || line.quantity() <= 0) continue;
+                Integer idx = line.detailId() != null ? indexById.get(line.detailId()) : null;
+                if (idx == null) {
+                    throw new BusinessException("RETURN_INVALID_ITEM", "Món trả không thuộc hóa đơn này");
+                }
+                InvoiceDetail d = details.get(idx);
+                int qty = picked.getOrDefault(idx, 0) + line.quantity();
+                if (qty > d.getRemainingQuantity()) {
+                    throw new BusinessException("RETURN_QTY_EXCEEDED", d.getProduct().getName() + ": chỉ còn "
+                            + d.getRemainingQuantity() + " có thể trả");
+                }
+                picked.put(idx, qty);
+            }
+        }
+        if (picked.isEmpty() && !details.isEmpty()) {
+            throw new BusinessException("RETURN_EMPTY", "Chọn ít nhất một món để trả");
+        }
+
+        // 2. Tiền hoàn: phân bổ theo tỷ lệ tiền khách thực trả trên tạm tính
+        BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+        BigDecimal alreadyRefunded = invoice.getRefundedAmount() != null ? invoice.getRefundedAmount() : BigDecimal.ZERO;
+        BigDecimal subtotal = details.stream().map(d -> d.getTotalPrice() != null ? d.getTotalPrice() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        boolean finalReturn = true;
+        for (int i = 0; i < details.size(); i++) {
+            if (picked.getOrDefault(i, 0) != details.get(i).getRemainingQuantity()) finalReturn = false;
+        }
+
+        InvoiceReturn ret = InvoiceReturn.builder()
+                .invoice(invoice)
+                .branchId(invoiceBranchId)
+                .paymentMethod(invoice.getPaymentMethod() != null ? invoice.getPaymentMethod() : PaymentMethod.CASH)
+                .reason(cleanReason)
+                .createdAt(LocalDateTime.now())
+                .createdBy(actor.getId())
+                .build();
+        BigDecimal refund = BigDecimal.ZERO;
+        for (Map.Entry<Integer, Integer> e : picked.entrySet()) {
+            InvoiceDetail d = details.get(e.getKey());
+            BigDecimal unit = d.getUnitPrice() != null ? d.getUnitPrice() : BigDecimal.ZERO;
+            BigDecimal gross = unit.multiply(BigDecimal.valueOf(e.getValue()));
+            BigDecimal lineRefund = subtotal.signum() > 0
+                    ? gross.multiply(total).divide(subtotal, 0, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            refund = refund.add(lineRefund);
+            ret.getDetails().add(InvoiceReturnDetail.builder()
+                    .invoiceReturn(ret)
+                    .invoiceDetailId(d.getId() != null ? d.getId() : 0L)
+                    .productId(d.getProduct().getId())
+                    .productName(d.getProduct().getName())
+                    .quantity(e.getValue())
+                    .unitPrice(unit)
+                    .refundAmount(lineRefund)
+                    .build());
+        }
+        BigDecimal remainingMoney = total.subtract(alreadyRefunded).max(BigDecimal.ZERO);
+        if (finalReturn || refund.compareTo(remainingMoney) > 0) {
+            // Dồn phần lệch do làm tròn vào dòng cuối để tổng các dòng khớp tiền hoàn
+            BigDecimal adjust = remainingMoney.subtract(refund);
+            refund = remainingMoney;
+            if (!ret.getDetails().isEmpty()) {
+                InvoiceReturnDetail last = ret.getDetails().get(ret.getDetails().size() - 1);
+                last.setRefundAmount(last.getRefundAmount().add(adjust).max(BigDecimal.ZERO));
+            }
+        }
+        ret.setRefundAmount(refund);
+
+        // 3. Thu ngân: kiểm tra mã duyệt PIN của quản lý (đủ số tiền hoàn)
+        if (actor.getRole() == Role.CASHIER) {
+            ret.setApprovedBy(approvalService.checkRefundApproval(approvalToken, actor, invoiceBranchId, refund));
+        }
+
+        // 4. Cộng lại kho và đánh dấu số lượng đã trả
+        for (Map.Entry<Integer, Integer> e : picked.entrySet()) {
+            InvoiceDetail d = details.get(e.getKey());
+            inventoryService.addStockAtomic(d.getProduct().getId(), invoiceBranchId, e.getValue());
+            d.setReturnedQuantity((d.getReturnedQuantity() != null ? d.getReturnedQuantity() : 0) + e.getValue());
+        }
+
+        // 5. Điểm: trả lại điểm đã dùng và thu hồi điểm đã cộng theo tỷ lệ tiền đã hoàn (cộng dồn các lần)
         if (invoice.getCustomer() != null) {
             int redeemed = invoice.getPointsRedeemed() != null ? invoice.getPointsRedeemed() : 0;
             int earned = invoice.getPointsEarned() != null
                     ? invoice.getPointsEarned()
-                    : loyaltyService.getPolicy().pointsEarnedFor(invoice.getTotalAmount());
-            loyaltyService.reverseForRefund(invoice.getCustomer(), invoice.getId(), redeemed, earned, actor.getId());
+                    : loyaltyService.getPolicy().pointsEarnedFor(total);
+            List<InvoiceReturn> previous = invoiceReturnRepository.findByInvoiceIdOrderByCreatedAtAsc(id);
+            int prevReturned = previous.stream().mapToInt(r -> r.getPointsReturned() != null ? r.getPointsReturned() : 0).sum();
+            int prevRevoked = previous.stream().mapToInt(r -> r.getPointsRevoked() != null ? r.getPointsRevoked() : 0).sum();
+            BigDecimal cumulative = alreadyRefunded.add(refund);
+            int targetReturned = finalReturn ? redeemed : proportion(redeemed, cumulative, total);
+            int targetRevoked = finalReturn ? earned : proportion(earned, cumulative, total);
+            int giveBack = Math.max(0, targetReturned - prevReturned);
+            int revoke = Math.max(0, targetRevoked - prevRevoked);
+            loyaltyService.reverseForRefund(invoice.getCustomer(), invoice.getId(), giveBack, revoke, actor.getId());
+            ret.setPointsReturned(giveBack);
+            ret.setPointsRevoked(revoke);
         }
 
-        // 3. Cập nhật trạng thái hóa đơn
-        invoice.setStatus(InvoiceStatus.REFUNDED);
-        invoice.setRefundedAt(java.time.LocalDateTime.now());
-        invoice.setRefundedBy(actor.getId());
-        invoice.setRefundShiftSessionId(shiftService.resolveShiftForRefund(actor, invoiceBranchId));
-        String noteReason = (reason != null && !reason.trim().isEmpty()) ? " | Lý do trả: " + reason.trim() : "";
-        String existingNote = invoice.getNote() != null ? invoice.getNote() : "";
-        invoice.setNote((existingNote + " [ĐÃ HOÀN TRẢ" + noteReason + "]").trim());
+        // 6. Két chi tiền: ca đang mở ở chi nhánh (không có thì tính vào ca đã bán)
+        Long refundShift = shiftService.resolveShiftForRefund(actor, invoiceBranchId);
+        ret.setShiftSessionId(refundShift);
+        InvoiceReturn savedReturn = invoiceReturnRepository.save(ret);
 
-        return invoiceRepository.save(invoice);
+        // 7. Trạng thái hóa đơn
+        invoice.setRefundedAmount(alreadyRefunded.add(refund));
+        String noteReason = cleanReason != null ? " | Lý do trả: " + cleanReason : "";
+        String existingNote = invoice.getNote() != null ? invoice.getNote() : "";
+        if (finalReturn) {
+            invoice.setStatus(InvoiceStatus.REFUNDED);
+            invoice.setRefundedAt(LocalDateTime.now());
+            invoice.setRefundedBy(actor.getId());
+            invoice.setRefundShiftSessionId(refundShift);
+            invoice.setNote(truncateNote((existingNote + " [ĐÃ HOÀN TRẢ" + noteReason + "]").trim()));
+        } else {
+            invoice.setStatus(InvoiceStatus.PARTIALLY_REFUNDED);
+            invoice.setNote(truncateNote((existingNote + " [HOÀN TRẢ MỘT PHẦN " + AuditService.money(refund) + noteReason + "]").trim()));
+        }
+        Invoice saved = invoiceRepository.save(invoice);
+        approvalService.markUsed(approvalToken);
+
+        String items = savedReturn.getDetails().stream()
+                .map(d -> d.getQuantity() + " x " + d.getProductName())
+                .collect(java.util.stream.Collectors.joining(", "));
+        audit(AuditAction.REFUND, "INVOICE", invoice.getId(), invoiceBranchId,
+                "Hóa đơn #" + invoice.getId() + (finalReturn ? " hoàn hết" : " hoàn một phần") + ": " + items
+                        + " - hoàn " + AuditService.money(refund)
+                        + (overdue ? " (quá hạn đổi trả)" : "")
+                        + (cleanReason != null ? " - lý do: " + cleanReason : "")
+                        + (savedReturn.getApprovedBy() != null ? " (quản lý #" + savedReturn.getApprovedBy() + " duyệt PIN)" : ""));
+        return new ReturnResult(saved, savedReturn);
+    }
+
+    /** floor(points × part / whole), không vượt points */
+    private static int proportion(int points, BigDecimal part, BigDecimal whole) {
+        if (points <= 0 || whole.signum() <= 0) return 0;
+        int v = BigDecimal.valueOf(points).multiply(part).divide(whole, 0, RoundingMode.FLOOR).intValue();
+        return Math.min(points, Math.max(0, v));
+    }
+
+    private static String truncateNote(String note) {
+        return note.length() <= 255 ? note : note.substring(note.length() - 255);
     }
 
     /**

@@ -20,6 +20,22 @@ public class ReportController {
 
     private final ReportService reportService;
     private final CurrentUserService currentUserService;
+    private final ReportExportService reportExportService;
+
+    @GetMapping("/export")
+    @Operation(summary = "Xuất báo cáo Excel (.xlsx): tổng quan, theo ngày, sản phẩm bán chạy, hóa đơn, hao hụt kho")
+    public ResponseEntity<byte[]> exportExcel(@RequestParam(required = false) Long branchId,
+                                              @RequestParam(defaultValue = "30") int days) {
+        Long branch = currentUserService.branchForRead(branchId, true);
+        byte[] file = reportExportService.exportXlsx(branch, days);
+        String name = "BaoCao_" + (branch != null ? "CN" + branch : "TatCa") + "_" + days + "ngay_"
+                + java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE) + ".xlsx";
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + name + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(file);
+    }
 
     @GetMapping("/revenue")
     @Operation(summary = "Báo cáo tổng kết doanh thu và lợi nhuận theo chi nhánh & khoảng ngày")

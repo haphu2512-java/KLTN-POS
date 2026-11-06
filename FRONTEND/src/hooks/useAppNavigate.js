@@ -17,6 +17,11 @@ export default function useAppNavigate() {
     onNavigateToStaff: () => navigate('/staff'),
     onNavigateToShifts: () => navigate('/shifts'),
     onNavigateToPromotions: () => navigate('/promotions'),
+    onNavigateToAudit: () => navigate('/audit'),
+    onNavigateToStockCount: () => navigate('/stock-counts'),
+    onNavigateToPurchaseOrders: () => navigate('/purchase-orders'),
+    // Mở trang Đặt hàng với đơn vừa lập từ trang Dự báo
+    onOpenPurchaseOrder: (orderId, message) => navigate('/purchase-orders', { state: { openOrderId: orderId, message } }),
     // Mở trang Kho với phiếu nhập điền sẵn [{ productId, quantity }]; người dùng xem lại rồi mới lưu
     onCreateStockInDraft: (items) => navigate('/inventory', { state: { stockInDraft: items } }),
   };

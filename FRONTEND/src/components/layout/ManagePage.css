@@ -1,0 +1,141 @@
+/* Khung chung cho các trang quản lý dạng bảng (Nhật ký, Kiểm kê, Đơn đặt hàng...) */
+.mp-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-canvas);
+  color: var(--text-main);
+  overflow: hidden;
+}
+
+.mp-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mp-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background-color: var(--bg-surface);
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+}
+
+.mp-toolbar-left {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.mp-input,
+.mp-select {
+  background-color: var(--bg-canvas);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text-main);
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.mp-input:focus,
+.mp-select:focus {
+  border-color: var(--text-main);
+}
+
+.mp-input-wide {
+  width: 100%;
+  font-size: 14px;
+}
+
+.mp-qty {
+  width: 90px;
+  text-align: right;
+}
+
+.mp-card {
+  background-color: var(--bg-surface);
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.mp-card-pad {
+  padding: 16px;
+}
+
+.mp-muted {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.mp-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.mp-form-group {
+  margin-bottom: 12px;
+}
+
+.mp-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.mp-row > * {
+  flex: 1;
+  min-width: 140px;
+}
+
+.mp-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.mp-pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 13px;
+}
+
+.mp-diff-pos {
+  color: var(--success, #15803d);
+  font-weight: 600;
+}
+
+.mp-diff-neg {
+  color: var(--danger, #b91c1c);
+  font-weight: 600;
+}
+
+.mp-summary {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.mp-summary strong {
+  font-size: 15px;
+}

@@ -1,5 +1,12 @@
 package com.pos.user;
 
+import java.util.stream.Stream;
+import java.util.stream.Collectors;
+import java.util.Objects;
+import java.util.TreeSet;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.pos.audit.AuditService;
+import com.pos.audit.AuditAction;
 import com.pos.branch.BranchRepository;
 import com.pos.common.BusinessException;
 import com.pos.shift.ShiftSession;
@@ -16,7 +23,6 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +33,14 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final ShiftSessionRepository shiftSessionRepository;
     private final BranchRepository branchRepository;
+
+    /** Nhật ký thao tác; để trống trong unit test dựng service bằng tay */
+    @Autowired(required = false)
+    private AuditService auditService;
+
+    private void audit(AuditAction action, String entityType, Object entityId, Long branchId, String summary) {
+        if (auditService != null) auditService.log(action, entityType, entityId, branchId, summary);
+    }
 
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
@@ -59,6 +73,8 @@ public class UserService {
 
         User saved = userRepository.save(user);
         log.info("Tạo mới nhân viên thành công: username={}, role={}", saved.getUsername(), saved.getRole());
+        audit(AuditAction.USER_CREATE, "USER", saved.getId(), null,
+                "Tạo tài khoản " + saved.getUsername() + " (" + saved.getRole() + "), chi nhánh " + saved.getBranchIds());
         return UserResponse.fromEntity(saved);
     }
 
@@ -68,6 +84,9 @@ public class UserService {
                 .orElseThrow(() -> new BusinessException("USER_NOT_FOUND", "Không tìm thấy người dùng với ID: " + id));
 
         Set<Long> branchIds = validBranches(req.getRole(), req.getBranchIds());
+        Role oldRole = user.getRole();
+        Set<Long> oldBranches = new TreeSet<>(user.getBranchIds());
+        Boolean oldActive = user.getActive();
 
         // Bỏ phân công ở chi nhánh đang có ca mở thì nhân viên mất phiên ở đó (token hết hiệu lực)
         // và không còn đăng nhập vào để đóng ca được, nên phải đóng ca trước
@@ -98,6 +117,14 @@ public class UserService {
 
         User updated = userRepository.save(user);
         log.info("Cập nhật thông tin nhân viên ID={}: role={}, active={}", id, updated.getRole(), updated.getActive());
+        String changes = Stream.of(
+                        AuditService.diff("Vai trò", oldRole, updated.getRole()),
+                        AuditService.diff("Chi nhánh", oldBranches, new TreeSet<>(updated.getBranchIds())),
+                        AuditService.diff("Hoạt động", oldActive, updated.getActive()),
+                        req.getNewPassword() != null && !req.getNewPassword().isBlank() ? "Đặt lại mật khẩu" : null)
+                .filter(Objects::nonNull).collect(Collectors.joining("; "));
+        audit(AuditAction.USER_UPDATE, "USER", id, null,
+                updated.getUsername() + (changes.isEmpty() ? ": sửa thông tin" : ": " + changes));
         return UserResponse.fromEntity(updated);
     }
 
@@ -127,6 +154,8 @@ public class UserService {
         user.setActive(!Boolean.TRUE.equals(user.getActive()));
         User updated = userRepository.save(user);
         log.info("Thay đổi trạng thái tài khoản ID={}: active={}", id, updated.getActive());
+        audit(AuditAction.USER_STATUS, "USER", id, null,
+                (Boolean.TRUE.equals(updated.getActive()) ? "Mở khóa " : "Khóa ") + updated.getUsername());
         return UserResponse.fromEntity(updated);
     }
 
@@ -142,5 +171,6 @@ public class UserService {
         user.setPassword(passwordEncoder.encode(newPassword.trim()));
         userRepository.save(user);
         log.info("Đổi mật khẩu thành công cho tài khoản ID={}", id);
+        audit(AuditAction.PASSWORD_RESET, "USER", id, null, "Đặt lại mật khẩu cho " + user.getUsername());
     }
 }

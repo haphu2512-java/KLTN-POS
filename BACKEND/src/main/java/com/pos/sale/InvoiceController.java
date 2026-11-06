@@ -55,6 +55,25 @@ public class InvoiceController {
         return ResponseEntity.ok(ApiResponse.ok("Tạo hóa đơn thành công", invoice));
     }
 
+    @GetMapping("/{id}/return-info")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @Operation(summary = "Thông tin hoàn trả: hóa đơn, các phiếu đã hoàn, hạn đổi trả. Thu ngân tra được hóa đơn cùng chi nhánh còn hạn đổi trả")
+    public ResponseEntity<ApiResponse<InvoiceService.ReturnInfo>> returnInfo(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(invoiceService.getReturnInfo(id, currentUserService.getCurrentUser())));
+    }
+
+    @PostMapping("/{id}/returns")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @Operation(summary = "Hoàn trả từng món / một phần số lượng (items rỗng = trả hết). Thu ngân cần approvalToken từ /api/approvals/refund")
+    public ResponseEntity<ApiResponse<InvoiceService.ReturnResult>> createReturn(@PathVariable Long id,
+                                                                                @RequestBody ReturnRequest req) {
+        InvoiceService.ReturnResult result = invoiceService.createReturn(id, req.items(), req.reason(),
+                req.approvalToken(), currentUserService.getCurrentUser());
+        return ResponseEntity.ok(ApiResponse.ok("Đã hoàn trả", result));
+    }
+
+    public record ReturnRequest(java.util.List<InvoiceService.ReturnLine> items, String reason, String approvalToken) {}
+
     @PostMapping("/{id}/refund")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Hoàn trả hàng / Hủy hóa đơn (tự động hoàn kho nguyên tử và thu hồi điểm)")

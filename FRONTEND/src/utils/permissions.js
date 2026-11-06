@@ -16,6 +16,7 @@ export const PERMS = {
   ACCOUNT_MANAGE: 'account.manage', // Tài khoản, chi nhánh
   PROMOTION_VIEW: 'promotion.view', // Xem chương trình khuyến mãi
   PROMOTION_MANAGE: 'promotion.manage', // Tạo, sửa, bật/tắt, xóa khuyến mãi
+  AUDIT_VIEW: 'audit.view', // Xem nhật ký thao tác (MANAGER: chi nhánh của mình)
 };
 
 const ALL = Object.values(PERMS);

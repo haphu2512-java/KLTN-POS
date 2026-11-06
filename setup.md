@@ -167,7 +167,22 @@ docker compose logs -f backend   # xem log, Ctrl+C để thoát
    mvn spring-boot:run
    ```
 
-Không cần chạy file SQL nào để tạo bảng: Hibernate tự tạo bảng từ entity (`JPA_DDL_AUTO=update`). File `BACKEND/src/main/resources/schema.sql` chỉ là tài liệu tham khảo cấu trúc bảng.
+Không cần chạy file SQL nào để tạo bảng: khi chạy thử, Hibernate tự tạo bảng từ entity (`JPA_DDL_AUTO=update`).
+
+### Quản lý cấu trúc database bằng Flyway (môi trường thật)
+
+Cấu trúc đầy đủ của database nằm ở `BACKEND/src/main/resources/db/migration/V1__baseline.sql`. Khi triển khai thật, đặt trong `.env`:
+
+```
+FLYWAY_ENABLED=true
+JPA_DDL_AUTO=validate
+```
+
+- Database trống: Flyway chạy V1 tạo toàn bộ bảng, sau đó backend tạo dữ liệu mẫu như bình thường.
+- Database đã có bảng (trước đây chạy với `update`): lần đầu Flyway chỉ đánh dấu database là V1 (bảng `flyway_schema_history`), không tạo lại bảng. Hibernate `validate` kiểm tra entity khớp với bảng, lệch thì backend dừng ngay lúc khởi động thay vì lỗi giữa ca bán hàng.
+- Khi thêm hoặc sửa entity (thêm cột, thêm bảng, thêm giá trị enum), viết thêm file `V2__mo_ta.sql`, `V3__...` trong cùng thư mục. File đã chạy thì không sửa lại.
+
+Đã thử cả hai trường hợp trên MySQL 8: database trống lên V1 rồi tạo dữ liệu mẫu, database đang dùng được đánh dấu V1 và qua bước `validate`.
 
 ### Lần chạy đầu tiên backend tự làm gì
 
@@ -183,13 +198,47 @@ Nếu database trống mà chưa đặt `SEED_DEFAULT_PASSWORD`, backend dừng 
 ### Kiểm tra backend đã chạy
 
 - Mở <http://localhost:8080/swagger-ui/index.html>: thấy trang Swagger là được.
-- Hoặc `curl http://localhost:8080/api/scanner/ping` (endpoint không cần đăng nhập).
+- Hoặc `curl http://localhost:8080/actuator/health`: trả `{"status":"UP"}` khi backend và MySQL đều chạy. Docker Compose dùng chính endpoint này làm health check (`docker compose ps` hiện `healthy`). Đăng nhập ADMIN sẽ thấy thêm chi tiết DB và dung lượng đĩa.
+
+### Sao lưu và khôi phục database
+
+**Tự động (Docker).** `docker compose up -d` chạy thêm container `pos-mysql-backup`. Container này sao lưu một bản ngay khi khởi động, sau đó mỗi ngày một bản lúc `BACKUP_TIME` (mặc định 02:00), giữ `BACKUP_KEEP_DAYS` bản gần nhất (mặc định 7). File nằm ở `backups/pos_inventory_YYYYMMDD_HHMMSS.sql.gz`. Xem log bằng `docker compose logs mysql-backup`.
+
+- Dùng `mysqldump --single-transaction` nên không khóa bảng, quầy vẫn bán bình thường trong lúc sao lưu.
+- Bản sao lưu nằm cùng máy với database thì không chống được hỏng ổ cứng. Nên đặt `BACKUP_DIR` trỏ sang ổ khác, ổ USB, hoặc thư mục đồng bộ Google Drive/OneDrive.
+
+**Sao lưu ngay bằng tay** (trước khi cập nhật phiên bản, trước khi demo):
+
+```bash
+./scripts/backup/backup.sh            # Docker (Linux/macOS/Git Bash)
+./scripts/backup/backup.sh --local    # MySQL cài trực tiếp, cần mysqldump trong PATH
+```
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\backup\backup.ps1   # Windows + Docker
+```
+
+**Khôi phục** (ghi đè toàn bộ dữ liệu hiện tại; script hỏi xác nhận `YES` và tự sao lưu trạng thái hiện tại trước khi ghi đè):
+
+```bash
+docker compose stop backend
+./scripts/backup/restore.sh backups/pos_inventory_20261106_020000.sql.gz
+docker compose start backend
+```
+```powershell
+docker compose stop backend
+powershell -ExecutionPolicy Bypass -File scripts\backup\restore.ps1 backups\pos_inventory_20261106_020000.sql.gz
+docker compose start backend
+```
+
+Bản sao lưu có `DROP DATABASE` ở đầu, nên khôi phục đưa database về đúng trạng thái lúc sao lưu (bảng tạo sau thời điểm đó cũng bị xóa).
+
+Nên thử khôi phục định kỳ (ví dụ mỗi tháng) vào một máy khác để chắc bản sao lưu dùng được.
 
 ---
 
 ## Bước 5. Nạp dữ liệu 1.949 sản phẩm Bách Hóa Xanh (tùy chọn)
 
-Database mới chỉ có 8 sản phẩm mẫu. File `import_bhx_data.sql` ở thư mục gốc chứa 1.949 sản phẩm thật và tồn kho cho 2 chi nhánh.
+Database mới chỉ có 8 sản phẩm mẫu. File `data/bhx/import_bhx_data.sql` chứa 1.949 sản phẩm thật và tồn kho cho 2 chi nhánh.
 
 > ⚠️ **Script này xóa sạch bảng `product` và `inventory`** (`TRUNCATE` khi đã tắt kiểm tra khóa ngoại) rồi nạp lại với id từ 1 đến 1949. Chỉ chạy trên **database mới dựng**, trước khi có hóa đơn hay phiếu nhập. Chạy trên database đã có giao dịch thì các hóa đơn cũ sẽ trỏ nhầm sang sản phẩm khác.
 
@@ -198,18 +247,18 @@ Database mới chỉ có 8 sản phẩm mẫu. File `import_bhx_data.sql` ở th
 Với Docker (gõ thẳng mật khẩu root thay cho chỗ trống, hoặc `export DB_ROOT_PASSWORD=...` trước):
 
 ```bash
-docker exec -i pos-mysql mysql -uroot -p"<DB_ROOT_PASSWORD>" pos_inventory < import_bhx_data.sql
+docker exec -i pos-mysql mysql -uroot -p"<DB_ROOT_PASSWORD>" pos_inventory < data/bhx/import_bhx_data.sql
 ```
 
 Với MySQL cài tay:
 
 ```bash
-mysql -uroot -p pos_inventory < import_bhx_data.sql
+mysql -uroot -p pos_inventory < data/bhx/import_bhx_data.sql
 ```
 
 Sau khi nạp, **khởi động lại backend** để bước đồng bộ mã vạch chạy lại. Mã vạch trong file đã ở dạng mã nội bộ `20...` nên thường không đổi gì.
 
-Các file đi kèm: `bhx_products_scraped.json` là dữ liệu thô, `scrape_bhx.py` là script đã dùng để lấy dữ liệu. Không cần chạy lại chúng.
+Các file đi kèm trong `data/bhx/`: `bhx_products_scraped.json` là dữ liệu thô, `scrape_bhx.py` là script đã dùng để lấy dữ liệu (chạy trong thư mục đó). Không cần chạy lại chúng.
 
 ---
 
@@ -385,7 +434,7 @@ Khi đổi công thức dự báo ở Java hoặc Python, phải đổi bên cò
 | `Communications link failure` | MySQL chưa chạy hoặc sai `DB_HOST`/`DB_PORT` | `docker compose ps`; chờ `pos-mysql` healthy |
 | Cổng 3306 hoặc 8080 đã bị chiếm | Đã có MySQL/ứng dụng khác chạy | Tắt chương trình đó, hoặc đổi `DB_PORT` / `SERVER_PORT` trong `.env` (nhớ đổi `DEV_PROXY_TARGET` theo) |
 | Quên mật khẩu `admin` sau khi đã có dữ liệu | Tài khoản mẫu chỉ được tạo khi database trống | Đổi `SEED_DEFAULT_PASSWORD` **không** có tác dụng. Dựng lại database mới (`docker compose down -v` sẽ **xóa toàn bộ dữ liệu**), hoặc nhờ một ADMIN khác đổi mật khẩu |
-| Nạp `import_bhx_data.sql` báo lỗi bảng không tồn tại | Backend chưa chạy lần nào nên chưa có bảng | Chạy backend một lần rồi nạp lại |
+| Nạp `data/bhx/import_bhx_data.sql` báo lỗi bảng không tồn tại | Backend chưa chạy lần nào nên chưa có bảng | Chạy backend một lần rồi nạp lại |
 | Frontend đăng nhập báo lỗi mạng | Backend chưa chạy, hoặc `DEV_PROXY_TARGET` sai | Kiểm tra <http://localhost:8080/swagger-ui/index.html> |
 | Bản Electron đã đóng gói không gọi được API | Thiếu `VITE_API_BASE_URL` / `VITE_WS_URL` lúc build | Điền vào `FRONTEND/.env` rồi build lại |
 | Không bán được, hiện hộp nhắc mở ca | Thu ngân chưa mở ca (`POS_REQUIRE_OPEN_SHIFT=true`) | Mở ca ở tab Ca làm với tiền đầu ca |

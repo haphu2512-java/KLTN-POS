@@ -6,7 +6,7 @@
   - **Backend:** Java 21 + Spring Boot 3.3.3 (REST API + WebSocket STOMP), Spring Data JPA, Spring Security (JWT HS512), Spring Scheduler
   - **Frontend (Desktop):** Electron 44 + React 19 + Vite 8, giao tiếp backend qua Vite Proxy `/api` + STOMP WebSocket
   - **Mobile:** React Native + Expo 58, máy quét mã vạch không dây và tra cứu giá/tồn kho (`MOBILE/`)
-  - **Database:** MySQL 8.0 (dữ liệu mẫu 1.949 sản phẩm thực tế lấy từ Bách Hóa Xanh, 2 chi nhánh)
+  - **Database:** MySQL 8.0 (dữ liệu mẫu 1.949 sản phẩm thực tế lấy từ Bách Hóa Xanh, 2 chi nhánh), Flyway quản lý phiên bản cấu trúc, sao lưu tự động hằng ngày
   - **Realtime:** Spring WebSocket STOMP, kênh `/topic/inventory-updates` (tồn kho) và `/topic/terminals/{id}/scans` (mã quét từ điện thoại)
   - **Phần cứng:** In hóa đơn nhiệt K80 qua Electron silent print, máy quét mã vạch HID (buffer < 50ms)
   - **Dự báo AI:** Exponential Smoothing (α = 0.35) + Moving Average 7 ngày, tồn kho an toàn, điểm đặt hàng lại (ROP), đánh giá MAE/RMSE, chạy trong Spring Boot với job hằng đêm; bản Python trong `AI_FORECAST/` dùng để kiểm chứng (xem [`AI_for_POS.md`](AI_for_POS.md))
@@ -23,11 +23,12 @@
 | [`FRONTEND/README.md`](FRONTEND/README.md) | Ứng dụng desktop Electron |
 | [`MOBILE/README.md`](MOBILE/README.md) | App điện thoại quét mã vạch, API ghép cặp với quầy |
 | [`docs/tich-diem-doi-diem.md`](docs/tich-diem-doi-diem.md) | Khuyến mãi / Thành viên: quy trình tích điểm, đổi điểm, hoàn điểm, sổ điểm |
+| [`setup.md` › Sao lưu và khôi phục](setup.md#sao-lưu-và-khôi-phục-database) | Sao lưu tự động, khôi phục, kiểm tra bản sao lưu |
 | `.agents/`, `skills/`, `MOBILE/AGENTS.md` | Hướng dẫn cho trợ lý AI khi lập trình (không phải tài liệu người dùng) |
 
 ---
 
-## Trạng thái dự án (Cập nhật: 27/10/2026)
+## Trạng thái dự án (Cập nhật: 05/11/2026)
 
 ```
 ✅ XONG   Giai đoạn 0 — Chuẩn bị & Lập kế hoạch
@@ -37,11 +38,12 @@
 ✅ XONG   Giai đoạn 4 — Đồng bộ đa chi nhánh (WebSocket STOMP)
 ✅ XONG   Giai đoạn 5 — Báo cáo & Dự báo AI
 ✅ XONG   Giai đoạn 6 — Kiểm thử & Mở rộng nghiệp vụ (ca làm, app quét mã, tài khoản)
+✅ XONG   Giai đoạn 6b — Vận hành & bảo mật (sao lưu, nhật ký, trả hàng một phần, kiểm kê, đặt hàng từ AI, hạn dùng, Excel)
 ⏳ CẦN   Giai đoạn 7 — Triển khai thử nghiệm thực tế
 ⏳ CẦN   Giai đoạn 8 — Hoàn thiện báo cáo đề tài
 ```
 
-CI (`.github/workflows/ci.yml`) chạy trên mọi PR: `mvn test` cho backend, `lint + build` cho frontend, `expo export` cho mobile và `pytest` cho `AI_FORECAST`.
+CI (`.github/workflows/ci.yml`) chạy trên mọi PR: `mvn test` cho backend (174 test), `lint + test (Vitest) + build` cho frontend, `expo export` cho mobile và `pytest` cho `AI_FORECAST`.
 
 ---
 
@@ -85,10 +87,10 @@ Tạo tự động khi database còn trống, mật khẩu là giá trị `SEED_
 Bốn vai trò: `ADMIN`, `MANAGER`, `CASHIER`, `WAREHOUSE`. Báo cáo dành cho ADMIN/MANAGER; Dự báo dành cho ADMIN/MANAGER/WAREHOUSE.
 
 ### Dữ liệu sản phẩm và mã vạch
-Database mới chỉ có 8 sản phẩm mẫu. Muốn có 1.949 sản phẩm Bách Hóa Xanh thì nạp `import_bhx_data.sql` sau khi backend đã chạy lần đầu (script này **xóa sạch** bảng `product` và `inventory` rồi nạp lại):
+Database mới chỉ có 8 sản phẩm mẫu. Muốn có 1.949 sản phẩm Bách Hóa Xanh thì nạp `data/bhx/import_bhx_data.sql` sau khi backend đã chạy lần đầu (script này **xóa sạch** bảng `product` và `inventory` rồi nạp lại):
 
 ```bash
-docker exec -i pos-mysql mysql -uroot -p"$DB_ROOT_PASSWORD" pos_inventory < import_bhx_data.sql
+docker exec -i pos-mysql mysql -uroot -p"$DB_ROOT_PASSWORD" pos_inventory < data/bhx/import_bhx_data.sql
 ```
 
 Quy tắc mã vạch (`BarcodeRules.java`):
@@ -165,8 +167,8 @@ cd AI_FORECAST && pip install -r requirements-dev.txt && python -m pytest   # xe
 ## Giai đoạn 5 — Báo cáo & Dự báo AI ✅
 - [x] Báo cáo doanh thu theo ngày/chi nhánh, biểu đồ SVG doanh thu & lợi nhuận (`ReportPage.jsx`)
 - [x] Top sản phẩm bán chạy kèm tỷ trọng doanh thu
-- [x] Lịch sử hóa đơn, xem chi tiết, trả hàng & hoàn tiền (`REFUNDED`)
-- [x] Xuất báo cáo doanh thu & danh sách hóa đơn ra CSV
+- [x] Lịch sử hóa đơn, xem chi tiết, trả hàng & hoàn tiền (trả cả đơn hoặc từng món, xem Giai đoạn 6b)
+- [x] Xuất báo cáo ra CSV và Excel nhiều trang (tổng quan, theo ngày, bán chạy, hóa đơn, hao hụt kho)
 - [x] Dự báo theo `AI_for_POS.md`: Exponential Smoothing α = 0.35, Moving Average 7 ngày, tồn kho an toàn, ROP, số lượng đề xuất, MAE/RMSE (`ForecastCalculator.java`)
 - [x] Job `@Scheduled` 02:00 hằng đêm tính dự báo mọi chi nhánh, lưu bảng `forecast_result`
 - [x] Trang Dự báo (`ForecastPage.jsx`): biểu đồ thực tế 30 ngày và dự báo, MAE/RMSE, bảng đề xuất kèm lý do, nút mở phiếu nhập điền sẵn
@@ -179,6 +181,17 @@ cd AI_FORECAST && pip install -r requirements-dev.txt && python -m pytest   # xe
 - [x] Ca làm (`ShiftsPage.jsx`): lịch ca theo chi nhánh, xếp ca, mở/đóng ca, thu chi két, đối soát và duyệt ca lệch tiền
 - [x] Đối tác (`PartnerPage.jsx`): khách hàng thân thiết + tích điểm, nhà cung cấp
 - [x] App điện thoại (`MOBILE/`): quét mã gửi vào giỏ của quầy đã ghép, tra giá/tồn kho, hàng đợi ngoại tuyến, gán mã vạch cho sản phẩm
+
+## Giai đoạn 6b — Vận hành, bảo mật & hoàn thiện nghiệp vụ ✅
+- [x] **Sao lưu database tự động:** container `mysql-backup` chạy `mysqldump` hằng ngày (giờ đặt bằng `BACKUP_TIME`, giữ `BACKUP_KEEP_DAYS` bản), script khôi phục có xác nhận và tự sao lưu trạng thái hiện tại trước khi ghi đè (`scripts/backup/`, bản `.sh` và `.ps1`)
+- [x] **Bảo mật vận hành:** giới hạn số request mỗi IP (`API_RATE_LIMIT_PER_MINUTE`, trả 429), khóa tài khoản khi đăng nhập/nhập PIN sai nhiều lần, tắt Swagger ở môi trường thật (`SWAGGER_ENABLED=false`), health check `/actuator/health` không lộ chi tiết
+- [x] **Nhật ký thao tác (audit log):** ghi ai làm gì, lúc nào, ở chi nhánh nào cho các thao tác nhạy cảm (đổi giá, giảm giá vượt hạn mức, duyệt PIN, hoàn trả, mở/đóng ca lệch tiền, nhập/điều chuyển/điều chỉnh kho, đơn đặt hàng, tài khoản, đăng nhập sai); trang **Nhật ký** lọc theo thời gian, loại, người làm
+- [x] **Trả hàng một phần:** trả từng món / từng số lượng, tiền hoàn chia theo tỉ lệ giảm giá của hóa đơn, hoàn và thu hồi điểm tương ứng, giới hạn số ngày được trả (`POS_RETURN_DAYS`), thu ngân cần quản lý nhập PIN duyệt; in phiếu hoàn trả; ca và báo cáo tính đúng doanh thu thuần
+- [x] **Kiểm kê kho:** tạo phiếu, quét mã để đếm, chênh lệch phải có lý do (hỏng, hết hạn, mất, đếm sai...), quản lý duyệt thì tồn được điều chỉnh; báo cáo hao hụt theo lý do
+- [x] **Đặt hàng nhà cung cấp từ đề xuất AI:** một nút lập đơn nháp theo đề xuất nhập hàng của dự báo (mỗi nhà cung cấp một đơn), sửa số lượng, gửi, nhận hàng đủ hoặc từng phần; mỗi lần nhận tạo phiếu nhập kho. Khép kín vòng *dự báo → đặt hàng → nhận hàng → tồn kho*
+- [x] **Lô hàng và hạn sử dụng:** khai số lô, hạn dùng khi nhập; cảnh báo hàng cận date / hết hạn ở trang Kho (giả định bán theo FEFO); lập phiếu hủy hàng hết hạn qua kiểm kê
+- [x] **Xuất báo cáo Excel** (`GET /api/reports/export`, Apache POI)
+- [x] **Kiểm thử frontend** bằng Vitest (tính tiền trả hàng, công thức dự báo, in hóa đơn, phân quyền); **Flyway** (`db/migration/V1__baseline.sql`) cho môi trường thật với `JPA_DDL_AUTO=validate`
 
 ## Giai đoạn 7 — Triển khai thử nghiệm thực tế
 - [ ] Cài đặt & triển khai tại 1 cửa hàng bán lẻ thực tế
@@ -221,6 +234,9 @@ cd AI_FORECAST && pip install -r requirements-dev.txt && python -m pytest   # xe
 ├── MOBILE/         # Expo / React Native
 ├── AI_FORECAST/    # Python: kiểm chứng mô hình dự báo
 ├── AI_for_POS.md   # Tài liệu module dự báo AI
+├── data/bhx/       # Dữ liệu 1.949 sản phẩm Bách Hóa Xanh: file SQL nạp sẵn, dữ liệu thô, script lấy dữ liệu
+├── docs/           # Tài liệu nghiệp vụ
+├── scripts/backup/ # Sao lưu / khôi phục MySQL
 └── docker-compose.yml, .env.example
 ```
 
@@ -228,21 +244,29 @@ cd AI_FORECAST && pip install -r requirements-dev.txt && python -m pytest   # xe
 ```
 BACKEND/src/main/java/com/pos/
 ├── PosBackendApplication.java
+├── approval/     # Quản lý nhập PIN duyệt tại quầy (giảm giá vượt hạn mức, hoàn trả)
+├── assistant/    # Trợ lý hỏi đáp theo từ khóa
+├── audit/        # AuditLog, AuditService (nhật ký thao tác), AuditController
 ├── auth/         # AuthController, LoginService (chọn chi nhánh khi đăng nhập), UserProfileResponse
 ├── branch/       # Branch, BranchController, BranchService, BranchAccessService
 ├── common/       # ApiResponse<T>, BusinessException, GlobalExceptionHandler
 ├── config/       # CorsConfig, DatabaseInitializer, OpenApiConfig, WebSocketConfig
 ├── customer/     # Customer, CustomerController, CustomerService
+├── expiry/       # Hạn sử dụng theo lô, cảnh báo cận date, phiếu hủy hàng hết hạn
 ├── forecast/     # ForecastCalculator (công thức), ForecastService (job đêm, cache), ForecastController
 ├── inventory/    # Inventory, InventoryController, InventoryService (trừ/cộng kho nguyên tử, điều chuyển)
+├── loyalty/      # Tích điểm, đổi điểm, sổ điểm
 ├── product/      # Product, ProductController, ProductService
-├── purchase/     # StockIn, StockInService, Supplier, SupplierService
-├── report/       # ReportController, ReportService
-├── sale/         # Invoice, InvoiceDetail, InvoiceService (bán + hoàn trả)
+├── promotion/    # Chương trình khuyến mãi
+├── purchase/     # StockIn (kèm số lô, hạn dùng), StockInService, Supplier, SupplierService
+├── purchaseorder/# Đơn đặt hàng nhà cung cấp (lập từ đề xuất AI, gửi, nhận hàng)
+├── report/       # ReportController, ReportService, ReportExportService (Excel)
+├── sale/         # Invoice, InvoiceDetail, InvoiceReturn (trả hàng một phần), InvoiceService
 ├── scanner/      # Ghép cặp điện thoại với quầy (PosTerminal, ScannerPairing), tra cứu, gửi mã quét
 ├── security/     # JwtTokenProvider, JwtAuthFilter, SecurityConfig, CurrentUserService, BranchSession
 ├── shift/        # WorkShift (lịch ca), ShiftAssignment (xếp ca), ShiftSession (mở/đóng ca), ShiftCashMovement
 ├── staff/        # StaffMember: nhân viên được xếp ca
+├── stockcount/   # Phiếu kiểm kê, lý do chênh lệch, báo cáo hao hụt
 └── user/         # User, Role, UserController, UserService (tài khoản đăng nhập)
 ```
 
@@ -262,15 +286,19 @@ FRONTEND/
     ├── pages/
     │   ├── auth/         # LoginPage
     │   ├── pos/          # PosPage, giỏ hàng, thanh toán, VietQR, khách hàng, ca, ghép điện thoại
-    │   ├── inventory/    # InventoryPage, nhập kho, điều chuyển, in tem mã vạch
-    │   ├── forecast/     # ForecastPage (dự báo + đề xuất nhập hàng)
+    │   ├── inventory/    # InventoryPage, nhập kho (số lô, hạn dùng), điều chuyển, in tem, hàng cận date
+    │   ├── stockcount/   # StockCountPage (kiểm kê, duyệt điều chỉnh, hao hụt)
+    │   ├── purchaseorder/# PurchaseOrderPage (đơn đặt hàng nhà cung cấp)
+    │   ├── forecast/     # ForecastPage (dự báo + đề xuất nhập hàng + lập đơn đặt hàng)
+    │   ├── audit/        # AuditLogPage (nhật ký thao tác)
     │   ├── shifts/       # ShiftsPage (lịch ca, xếp ca, lịch sử ca, đối soát)
-    │   ├── report/       # ReportPage (doanh thu, hóa đơn, hoàn trả)
+    │   ├── report/       # ReportPage (doanh thu, hóa đơn, trả hàng, xuất Excel)
     │   ├── partner/      # PartnerPage (khách hàng + nhà cung cấp)
     │   └── admin/        # StaffPage (tab Tài khoản)
     ├── services/         # api, auth, branch, customer, forecast, inventory, product, purchase,
     │                     # report, sale, scannerPairing, shift, staff, user, websocket
-    └── utils/            # audio, exportCsv, forecasting (công thức khi ngoại tuyến), formatters, receiptPrinter
+    └── utils/            # audio, exportCsv, forecasting, formatters, receiptPrinter, returnCalc, permissions
+                          # (__tests__/: test Vitest)
 ```
 
 ---
@@ -318,7 +346,12 @@ Mọi API (trừ đăng nhập và `/api/scanner/ping`) cần header `Authorizat
 | GET | `/api/invoices?branchId=&page=&size=` | Danh sách hóa đơn (phân trang) |
 | GET | `/api/invoices/{id}` | Chi tiết hóa đơn |
 | POST | `/api/invoices` | Tạo hóa đơn (trừ kho nguyên tử, cần ca đang mở) |
-| POST | `/api/invoices/{id}/refund` | Hoàn trả hóa đơn (cộng kho, thu hồi điểm) |
+| POST | `/api/invoices/{id}/refund` | Hoàn trả cả hóa đơn (cộng kho, thu hồi điểm) |
+| GET | `/api/invoices/{id}/return-info` | Số lượng còn trả được từng món, hạn trả, tiền đã hoàn |
+| POST | `/api/invoices/{id}/returns` | Trả hàng một phần: `{ items: [{ detailId, quantity }], reason, approvalToken }` |
+| GET | `/api/approvals/policy` | Hạn mức giảm giá của thu ngân |
+| PUT | `/api/approvals/pin` | Quản lý đặt PIN duyệt |
+| POST | `/api/approvals/discount`, `/api/approvals/refund` | Quản lý nhập PIN trên máy quầy, trả mã duyệt dùng một lần |
 
 ### Stock-In & Suppliers
 | Method | Endpoint | Mô tả |
@@ -327,6 +360,20 @@ Mọi API (trừ đăng nhập và `/api/scanner/ping`) cần header `Authorizat
 | POST | `/api/stock-in` | Tạo phiếu nhập (cộng tồn kho) |
 | GET | `/api/suppliers`, `/api/suppliers/{id}` | Nhà cung cấp |
 | POST | `/api/suppliers` | Tạo nhà cung cấp |
+
+### Purchase orders, kiểm kê, hạn dùng
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| GET / POST | `/api/purchase-orders` | Danh sách / tạo đơn đặt hàng tay |
+| POST | `/api/purchase-orders/from-forecast?days=` | Lập đơn nháp từ đề xuất AI, mỗi nhà cung cấp một đơn |
+| PUT | `/api/purchase-orders/{id}` | Sửa đơn nháp (NCC, số lượng, đơn giá, ngày giao) |
+| POST | `/api/purchase-orders/{id}/send`, `/receive`, `/cancel` | Gửi đơn, nhận hàng (đủ hoặc từng phần, tạo phiếu nhập), hủy |
+| GET / POST | `/api/stock-counts` | Danh sách / tạo phiếu kiểm kê |
+| PUT / DELETE | `/api/stock-counts/{id}/lines[/{productId}]` | Ghi số đếm (quét mã cộng dồn), lý do chênh lệch |
+| POST | `/api/stock-counts/{id}/submit`, `/approve`, `/cancel` | Gửi duyệt, quản lý duyệt (điều chỉnh tồn), hủy |
+| GET | `/api/stock-counts/shrinkage?from=&to=` | Hao hụt theo lý do |
+| GET | `/api/expiry?days=` | Lô còn hàng đã hết hạn / sắp hết hạn |
+| POST | `/api/expiry/disposal-count` | Lập phiếu kiểm kê hủy hàng hết hạn |
 
 ### Customers
 | Method | Endpoint | Mô tả |
@@ -340,6 +387,13 @@ Mọi API (trừ đăng nhập và `/api/scanner/ping`) cần header `Authorizat
 |--------|----------|-------|
 | GET | `/api/reports/revenue?branchId=&days=` | Doanh thu theo ngày |
 | GET | `/api/reports/top-products?branchId=&days=&limit=` | Top sản phẩm bán chạy |
+| GET | `/api/reports/export?branchId=&days=` | Tải file Excel (.xlsx) nhiều trang |
+
+### Audit log
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| GET | `/api/audit-logs?from=&to=&action=&username=&page=` | Nhật ký thao tác (ADMIN mọi chi nhánh, MANAGER chi nhánh của mình) |
+| GET | `/api/audit-logs/actions` | Danh sách loại thao tác |
 
 ### Forecast AI
 | Method | Endpoint | Mô tả |
@@ -396,3 +450,5 @@ Danh sách đầy đủ ở [`MOBILE/README.md`](MOBILE/README.md): ghép cặp 
 - Đóng gói & phân phối Electron (`electron-builder`) cho nhiều máy cần quy trình cài đặt hoặc auto-update rõ ràng.
 - Độ chính xác dự báo phụ thuộc lượng dữ liệu lịch sử; với cửa hàng mới, kết quả cần diễn giải thận trọng (trang Dự báo hiện độ tin cậy cho từng sản phẩm).
 - Mất mạng giữa chi nhánh và máy chủ: POS chưa có hàng đợi đồng bộ hóa đơn ngoại tuyến (hướng mở rộng).
+- Số còn lại của từng lô hàng được suy ra từ tồn kho theo giả định bán hàng hết hạn trước (FEFO), không theo dõi lô của từng món bán ra.
+- Bản sao lưu nằm cùng máy với database; môi trường thật nên chép thư mục `backups/` sang ổ khác hoặc dịch vụ lưu trữ ngoài.

@@ -1,5 +1,10 @@
 package com.pos.shift;
 
+import com.pos.sale.InvoiceReturn;
+import com.pos.sale.InvoiceReturnRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.pos.audit.AuditService;
+import com.pos.audit.AuditAction;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -68,11 +73,20 @@ public class ShiftService {
     private final ShiftCashMovementRepository cashMovementRepository;
     private final ShiftAssignmentRepository assignmentRepository;
     private final InvoiceRepository invoiceRepository;
+    private final InvoiceReturnRepository invoiceReturnRepository;
     private final BranchRepository branchRepository;
     private final UserRepository userRepository;
     private final StaffService staffService;
     private final StaffMemberRepository staffRepository;
     private final ObjectMapper objectMapper;
+
+    /** Nhật ký thao tác; để trống trong unit test dựng service bằng tay */
+    @Autowired(required = false)
+    private AuditService auditService;
+
+    private void audit(AuditAction action, String entityType, Object entityId, Long branchId, String summary) {
+        if (auditService != null) auditService.log(action, entityType, entityId, branchId, summary);
+    }
 
     /** true: thu ngân phải có ca mở ở chi nhánh mới bán được hàng */
     @Value("${pos.shift.require-open-shift:true}")
@@ -226,8 +240,9 @@ public class ShiftService {
         }
         if (!staffId.equals(assigned)) {
             if (!manager) {
-                throw new BusinessException("SHIFT_ASSIGNED_TO_OTHER",
-                        "Ca này đã xếp cho " + staffName(assigned) + ". Chỉ quản lý được đổi người trực.", HttpStatus.FORBIDDEN);
+                throw new BusinessException("SHIFT_ASSIGNED_TO_OTHER", assigned == null
+                        ? workShift.getName() + " hôm nay chưa xếp cho ai. Nhờ quản lý xếp ca hoặc mở ca trực thay."
+                        : "Ca này đã xếp cho " + staffName(assigned) + ". Chỉ quản lý được đổi người trực.", HttpStatus.FORBIDDEN);
             }
             if (overrideReason == null) {
                 throw new BusinessException("OVERRIDE_REASON_REQUIRED",
@@ -271,6 +286,8 @@ public class ShiftService {
         }
         log.info("{} mở {} cho {} tại chi nhánh {} với tiền đầu ca {}", actor.getUsername(), workShift.getName(),
                 session.getEmployeeName(), branchId, req.getOpeningCash());
+        audit(AuditAction.SHIFT_OPEN, "SHIFT", session.getId(), branchId,
+                workShift.getName() + " - " + session.getEmployeeName() + ", tiền đầu ca " + AuditService.money(req.getOpeningCash()));
         return toResponse(session);
     }
 
@@ -353,6 +370,11 @@ public class ShiftService {
 
         log.info("{} đóng ca #{}: dự kiến {}, đếm được {}, chênh lệch TM {} / QR {} / thẻ {}", actor.getUsername(), session.getId(),
                 expected, req.getClosingCash(), cashDiff, vietqrDiff, cardDiff);
+        audit(needsReview ? AuditAction.SHIFT_CASH_VARIANCE : AuditAction.SHIFT_CLOSE, "SHIFT", session.getId(), session.getBranchId(),
+                "Ca #" + session.getId() + ": tiền mặt dự kiến " + AuditService.money(expected) + ", đếm được "
+                        + AuditService.money(req.getClosingCash()) + ", chênh lệch " + AuditService.money(cashDiff)
+                        + (needsReview ? " (QR " + AuditService.money(vietqrDiff) + ", thẻ " + AuditService.money(cardDiff)
+                        + ") - lý do: " + differenceReason : ""));
         return toResponse(session, totals, branchNames(), userNames(session));
     }
 
@@ -397,6 +419,7 @@ public class ShiftService {
         session.setReviewNote(req.getNote().trim());
         shiftSessionRepository.save(session);
         log.info("{} duyệt ca #{}: {}", actor.getUsername(), id, session.getReviewNote());
+        audit(AuditAction.SHIFT_REVIEW, "SHIFT", id, session.getBranchId(), "Duyệt ca #" + id + ": " + session.getReviewNote());
         return toResponse(session);
     }
 
@@ -427,6 +450,8 @@ public class ShiftService {
         applyMovement(m, req);
         m = cashMovementRepository.save(m);
         log.info("{} ghi {} {} vào ca #{}: {}", actor.getUsername(), m.getType(), m.getAmount(), session.getId(), m.getReason());
+        audit(AuditAction.CASH_MOVEMENT, "SHIFT", session.getId(), session.getBranchId(),
+                m.getType() + " " + AuditService.money(m.getAmount()) + " - " + m.getReason());
         return CashMovementResponse.of(m);
     }
 
@@ -446,6 +471,8 @@ public class ShiftService {
         m.setDeletedBy(actor.getId());
         cashMovementRepository.save(m);
         log.info("{} xóa khoản {} {} của ca #{}", actor.getUsername(), m.getType(), m.getAmount(), m.getShiftSessionId());
+        audit(AuditAction.CASH_MOVEMENT, "SHIFT", m.getShiftSessionId(), null,
+                "Xóa khoản " + m.getType() + " " + AuditService.money(m.getAmount()));
     }
 
     private ShiftCashMovement editableMovement(Long id, User actor) {
@@ -530,7 +557,11 @@ public class ShiftService {
     public List<ShiftInvoiceRow> getShiftInvoices(Long id, User actor) {
         ShiftSession session = find(id);
         checkCanView(session, actor);
-        return invoiceRepository.findForShift(id).stream().map(inv -> toInvoiceRow(inv, id)).toList();
+        Map<Long, BigDecimal> returnedHere = new java.util.HashMap<>();
+        for (InvoiceReturn r : invoiceReturnRepository.findByShift(id)) {
+            returnedHere.merge(r.getInvoiceId(), r.getRefundAmount(), BigDecimal::add);
+        }
+        return invoiceRepository.findForShift(id).stream().map(inv -> toInvoiceRow(inv, id, returnedHere.get(inv.getId()))).toList();
     }
 
     // ---------- Gắn hóa đơn vào ca ----------
@@ -666,7 +697,10 @@ public class ShiftService {
 
     private Totals totalsOf(ShiftSession session) {
         Map<PaymentMethod, BigDecimal[]> sold = byMethod(invoiceRepository.sumSoldByShift(session.getId()));
+        // Hoàn cả đơn theo cách cũ + các phiếu hoàn trả (từng món) chi từ két của ca này
         Map<PaymentMethod, BigDecimal[]> refunded = byMethod(invoiceRepository.sumRefundedByShift(session.getId()));
+        byMethod(invoiceReturnRepository.sumByShift(session.getId())).forEach((method, v) ->
+                refunded.merge(method, v, (a, b) -> new BigDecimal[]{a[0].add(b[0]), a[1].add(b[1])}));
         Map<CashMovementType, BigDecimal> moves = new java.util.EnumMap<>(CashMovementType.class);
         for (Object[] row : cashMovementRepository.sumByType(session.getId())) {
             moves.put((CashMovementType) row[0], row[1] != null ? new BigDecimal(row[1].toString()) : BigDecimal.ZERO);
@@ -808,11 +842,13 @@ public class ShiftService {
         }
     }
 
-    private static ShiftInvoiceRow toInvoiceRow(Invoice inv, Long shiftId) {
+    private static ShiftInvoiceRow toInvoiceRow(Invoice inv, Long shiftId, BigDecimal returnedHere) {
         boolean soldHere = shiftId.equals(inv.getShiftSessionId());
-        boolean refunded = inv.getStatus() == InvoiceStatus.REFUNDED;
-        boolean refundHere = refunded && (shiftId.equals(inv.getRefundShiftSessionId())
-                || (inv.getRefundShiftSessionId() == null && soldHere));
+        // Hoàn cả đơn theo cách cũ: cả tổng tiền; hoàn theo phiếu: tổng các phiếu chi từ két ca này
+        boolean legacyRefund = inv.getStatus() == InvoiceStatus.REFUNDED && inv.getRefundedAmount() == null
+                && (shiftId.equals(inv.getRefundShiftSessionId()) || (inv.getRefundShiftSessionId() == null && soldHere));
+        BigDecimal refundAmountHere = legacyRefund ? inv.getTotalAmount() : returnedHere;
+        boolean refundHere = refundAmountHere != null && refundAmountHere.signum() > 0;
         return ShiftInvoiceRow.builder()
                 .id(inv.getId())
                 .kind(soldHere ? ShiftInvoiceRow.Kind.SALE : ShiftInvoiceRow.Kind.REFUND_OTHER_SHIFT)
@@ -827,6 +863,7 @@ public class ShiftService {
                 .customerName(inv.getCustomer() != null ? inv.getCustomer().getName() : null)
                 .refundedAt(inv.getRefundedAt())
                 .refundCountedHere(refundHere)
+                .refundAmountHere(refundHere ? refundAmountHere : null)
                 .note(inv.getNote())
                 .build();
     }

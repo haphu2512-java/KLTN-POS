@@ -46,4 +46,15 @@ public class InvoiceDetail {
 
     @Column(name = "total_price", nullable = false, precision = 14, scale = 2)
     private BigDecimal totalPrice;
+
+    /** Số lượng khách đã trả lại qua các phiếu hoàn trả (null với dữ liệu cũ = 0) */
+    @Column(name = "returned_quantity")
+    @Builder.Default
+    private Integer returnedQuantity = 0;
+
+    /** Số lượng còn có thể hoàn trả */
+    @Transient
+    public int getRemainingQuantity() {
+        return (quantity != null ? quantity : 0) - (returnedQuantity != null ? returnedQuantity : 0);
+    }
 }

@@ -47,5 +47,13 @@ public class ApprovalController {
                 currentUserService.getCurrentUser(), req.approverUsername(), req.pin(), req.amount())));
     }
 
+    @PostMapping("/refund")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @Operation(summary = "Quản lý nhập tài khoản + PIN trên máy POS để duyệt thu ngân hoàn trả tối đa amount; trả mã duyệt dùng một lần (5 phút)")
+    public ResponseEntity<ApiResponse<ApprovalService.GrantResult>> approveRefund(@RequestBody DiscountApprovalRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Quản lý đã duyệt", approvalService.approveRefund(
+                currentUserService.getCurrentUser(), req.approverUsername(), req.pin(), req.amount())));
+    }
+
     public record DiscountApprovalRequest(String approverUsername, String pin, BigDecimal amount) {}
 }

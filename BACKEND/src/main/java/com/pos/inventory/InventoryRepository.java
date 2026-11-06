@@ -43,4 +43,12 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
     int incrementStockAtomic(@Param("productId") Long productId,
                              @Param("branchId") Long branchId,
                              @Param("qty") int qty);
+
+    /** Cộng/trừ tồn theo chênh lệch kiểm kê; trừ quá số đang có thì về 0 (không âm) */
+    @Modifying
+    @Query("UPDATE Inventory i SET i.quantity = CASE WHEN i.quantity + :delta < 0 THEN 0 ELSE i.quantity + :delta END " +
+           "WHERE i.product.id = :productId AND i.branch.id = :branchId")
+    int adjustStockAtomic(@Param("productId") Long productId,
+                          @Param("branchId") Long branchId,
+                          @Param("delta") int delta);
 }

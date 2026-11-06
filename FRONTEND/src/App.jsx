@@ -12,6 +12,9 @@ import PartnerPage from './pages/partner/PartnerPage';
 import StaffPage from './pages/admin/StaffPage';
 import ShiftsPage from './pages/shifts/ShiftsPage';
 import PromotionPage from './pages/promotion/PromotionPage';
+import AuditLogPage from './pages/audit/AuditLogPage';
+import StockCountPage from './pages/stockcount/StockCountPage';
+import PurchaseOrderPage from './pages/purchaseorder/PurchaseOrderPage';
 import { PERMS, permissionsFor, homePathFor } from './utils/permissions';
 
 /**
@@ -71,7 +74,14 @@ function AppRoutes() {
     onNavigateToStaff: can(PERMS.ACCOUNT_MANAGE) ? nav.onNavigateToStaff : undefined,
     // Khuyến mãi lưu trên máy chủ, không có ở chế độ demo ngoại tuyến
     onNavigateToPromotions: !isOfflineDemo && can(PERMS.PROMOTION_VIEW) ? nav.onNavigateToPromotions : undefined,
+    // Nhật ký lưu trên máy chủ, không có ở chế độ demo ngoại tuyến
+    onNavigateToAudit: !isOfflineDemo && can(PERMS.AUDIT_VIEW) ? nav.onNavigateToAudit : undefined,
+    // Kiểm kê lưu trên máy chủ, không có ở chế độ demo ngoại tuyến
+    onNavigateToStockCount: !isOfflineDemo && can(PERMS.INVENTORY_EDIT) ? nav.onNavigateToStockCount : undefined,
     onCreateStockInDraft: can(PERMS.INVENTORY_EDIT) ? nav.onCreateStockInDraft : undefined,
+    // Đơn đặt hàng lưu trên máy chủ, không có ở chế độ demo ngoại tuyến
+    onNavigateToPurchaseOrders: !isOfflineDemo && can(PERMS.INVENTORY_EDIT) ? nav.onNavigateToPurchaseOrders : undefined,
+    onOpenPurchaseOrder: !isOfflineDemo && can(PERMS.INVENTORY_EDIT) ? nav.onOpenPurchaseOrder : undefined,
   };
 
   // Hàm trả về element (không phải component) để không bị mount lại mỗi lần render.
@@ -119,6 +129,18 @@ function AppRoutes() {
           !isOfflineDemo && can(PERMS.PROMOTION_VIEW),
           <PromotionPage {...sharedProps} />
         )}
+      />
+      <Route
+        path="/stock-counts"
+        element={shell("stockcount", !isOfflineDemo && can(PERMS.INVENTORY_EDIT), <StockCountPage {...sharedProps} />)}
+      />
+      <Route
+        path="/purchase-orders"
+        element={shell("purchaseorder", !isOfflineDemo && can(PERMS.INVENTORY_EDIT), <PurchaseOrderPage {...sharedProps} />)}
+      />
+      <Route
+        path="/audit"
+        element={shell("audit", !isOfflineDemo && can(PERMS.AUDIT_VIEW), <AuditLogPage {...sharedProps} />)}
       />
       {/* Fallback: đường dẫn lạ về trang mở đầu của vai trò */}
       <Route path="*" element={<Navigate to={homePath} replace />} />
