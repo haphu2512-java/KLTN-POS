@@ -347,15 +347,15 @@ export default function PurchaseOrderPage() {
 
           <div className="mp-card">
             {!current ? (
-              <div className="mp-empty">
+              <div className="mp-empty-state">
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M3 3h2l2.4 12.2a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.6L21 7H6M10 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM18 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" />
                 </svg>
-                <div className="mp-empty-title">Chưa chọn đơn đặt hàng</div>
-                <div className="mp-empty-text">
+                <strong>Chưa chọn đơn đặt hàng</strong>
+                <span>
                   Chọn một đơn bên trái, hoặc bấm “Lập đơn từ đề xuất AI” để hệ thống gom các mặt hàng cần nhập theo nhà
                   cung cấp gần nhất.
-                </div>
+                </span>
               </div>
             ) : (
               <>

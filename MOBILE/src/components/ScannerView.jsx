@@ -162,7 +162,7 @@ export default function ScannerView({ onBarcodeDetected, isScanningActive, isPro
         {/* Camera nằm gọn trong thẻ có kích thước cố định; tắt hẳn khi rời tab Quét */}
         <CameraView
           key={cameraKey}
-          style={StyleSheet.absoluteFill}
+          style={fill}
           facing={facing}
           enableTorch={enableTorch}
           barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
@@ -267,6 +267,10 @@ function ControlButton({ icon, label, active, onPress }) {
   );
 }
 
+// Phủ kín thẻ camera bằng toạ độ tường minh. Trước đây spread StyleSheet.absoluteFillObject
+// thì trên máy thật lớp phủ co về đầu thẻ, khiến khung ngắm bị đẩy lên trên thay vì nằm giữa.
+const fill = { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 };
+
 const styles = StyleSheet.create({
   cameraCard: {
     borderRadius: radius.xl,
@@ -276,7 +280,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...fill,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -303,7 +307,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#7FC8A0'
   },
   cameraState: {
-    ...StyleSheet.absoluteFillObject,
+    ...fill,
     backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
