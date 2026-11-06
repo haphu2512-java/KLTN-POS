@@ -210,10 +210,28 @@ export default function StockCountPage({ currentUser }) {
   ];
 
   const listColumns = [
-    { key: 'id', title: 'Phiếu', width: 70, render: (v) => `#${v}` },
-    { key: 'createdAt', title: 'Ngày tạo', render: (v) => formatDateTime(v) },
-    { key: 'lines', title: 'Số mặt hàng', align: 'right', render: (v) => (v || []).length },
-    { key: 'status', title: 'Trạng thái', render: (v) => <Badge variant={STATUS[v]?.variant}>{STATUS[v]?.label || v}</Badge> },
+    { key: 'id', title: 'Phiếu', width: 64, render: (v) => <strong>#{v}</strong> },
+    {
+      key: 'createdAt',
+      title: 'Ngày tạo',
+      render: (v, c) => (
+        <div>
+          <div className="mp-nowrap">{formatDateTime(v)}</div>
+          {c.note && <div className="mp-muted">{c.note}</div>}
+        </div>
+      ),
+    },
+    { key: 'lines', title: 'Mặt hàng', align: 'right', width: 90, render: (v) => (v || []).length },
+    {
+      key: 'status',
+      title: 'Trạng thái',
+      width: 120,
+      render: (v) => (
+        <span className="mp-nowrap">
+          <Badge variant={STATUS[v]?.variant}>{STATUS[v]?.label || v}</Badge>
+        </span>
+      ),
+    },
   ];
 
   return (
@@ -248,8 +266,12 @@ export default function StockCountPage({ currentUser }) {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 360px) 1fr', gap: 16, alignItems: 'start' }}>
+        <div className="mp-split">
           <div className="mp-card">
+            <div className="mp-card-head">
+              <strong>Phiếu kiểm kê</strong>
+              <span className="mp-muted">{counts.length} phiếu</span>
+            </div>
             <div className="mp-card-pad" style={{ display: 'flex', gap: 8 }}>
               <input
                 className="mp-input"
@@ -264,6 +286,8 @@ export default function StockCountPage({ currentUser }) {
               columns={listColumns}
               data={counts}
               onRowClick={open}
+              selectedKey={current?.id}
+              className="mp-flush-table"
               emptyText="Chưa có phiếu kiểm kê"
               maxHeight="60vh"
             />
@@ -271,7 +295,10 @@ export default function StockCountPage({ currentUser }) {
 
           <div className="mp-card">
             {!current ? (
-              <div className="mp-card-pad mp-muted">Chọn một phiếu bên trái hoặc tạo phiếu mới.</div>
+              <div className="mp-empty-state">
+                <strong>Chưa chọn phiếu kiểm kê</strong>
+                <span>Chọn một phiếu trong danh sách bên trái hoặc tạo phiếu mới để bắt đầu đếm hàng.</span>
+              </div>
             ) : (
               <>
                 <div className="mp-toolbar" style={{ border: 'none', borderRadius: 0 }}>
@@ -327,7 +354,7 @@ export default function StockCountPage({ currentUser }) {
                   </form>
                 )}
 
-                <Table columns={lineColumns} data={lines} rowKey="productId" emptyText="Chưa đếm mặt hàng nào" maxHeight="55vh" />
+                <Table columns={lineColumns} data={lines} rowKey="productId" className="mp-flush-table" emptyText="Chưa đếm mặt hàng nào" maxHeight="55vh" />
 
                 <div className="mp-pager">
                   <span className="mp-muted">

@@ -14,7 +14,8 @@ export default function Table({
   loadingText = 'Đang tải dữ liệu...',
   onRowClick,
   className = '',
-  maxHeight
+  maxHeight,
+  selectedKey // giá trị rowKey của dòng đang chọn (tô nền)
 }) {
   const finalEmptyText = emptyMessage || emptyText;
 
@@ -54,6 +55,7 @@ export default function Table({
             data.map((row, idx) => (
               <tr
                 key={row[rowKey] || idx}
+                className={selectedKey != null && row[rowKey] === selectedKey ? 'selected' : undefined}
                 onClick={() => onRowClick && onRowClick(row, idx)}
                 style={{ cursor: onRowClick ? 'pointer' : 'default' }}
               >
