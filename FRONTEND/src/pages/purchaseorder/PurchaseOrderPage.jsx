@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Button, Badge, Table } from '../../components/common';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
@@ -6,6 +6,7 @@ import { purchaseService } from '../../services/purchaseService';
 import { productService } from '../../services/productService';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import '../../components/layout/ManagePage.css';
+import { confirmDialog } from '../../components/common/toastStore';
 
 const STATUS = {
   DRAFT: { label: 'Nháp', variant: 'brand' },
@@ -24,6 +25,7 @@ const remainingOf = (l) => Math.max(0, (l.orderedQty || 0) - (l.receivedQty || 0
  */
 export default function PurchaseOrderPage() {
   const location = useLocation();
+  const openedFromKey = useRef(null);
   const [orders, setOrders] = useState([]);
   const [current, setCurrent] = useState(null);
   const [suppliers, setSuppliers] = useState([]);
@@ -68,10 +70,25 @@ export default function PurchaseOrderPage() {
     if (location.state?.message) {
       setMessage({ text: location.state.message });
     }
+    openedFromKey.current = location.key;
     purchaseService.getSuppliers().then(setSuppliers).catch(() => {});
     productService.getProducts().then(setProducts).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Trang được giữ lại khi chuyển màn hình: lần sau đến từ trang Dự báo thì tải lại và mở đơn vừa lập
+  useEffect(() => {
+    if (openedFromKey.current === location.key || !location.state?.openOrderId) return;
+    openedFromKey.current = location.key;
+    const openId = location.state.openOrderId;
+    loadList().then((list) => {
+      const found = list.find((o) => o.id === openId);
+      if (found) select(found);
+    });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (location.state.message) setMessage({ text: location.state.message });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
 
   const run = async (fn, okText) => {
     setBusy(true);
@@ -165,7 +182,7 @@ export default function PurchaseOrderPage() {
   };
 
   const cancel = async () => {
-    if (!window.confirm(`Hủy đơn đặt hàng #${current.id}?`)) return;
+    if (!(await confirmDialog(`Hủy đơn đặt hàng #${current.id}?`, { title: 'Hủy đơn đặt hàng', confirmText: 'Hủy đơn', cancelText: 'Không', danger: true }))) return;
     const o = await run(() => purchaseOrderService.cancel(current.id), 'Đã hủy đơn');
     if (o) await refreshWith(o);
   };

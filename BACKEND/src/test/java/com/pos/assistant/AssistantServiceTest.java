@@ -74,7 +74,7 @@ class AssistantServiceTest {
     @Test
     @DisplayName("Thu ngân hỏi doanh thu hay gợi ý nhập: từ chối, không đọc báo cáo")
     void cashierCannotSeeReports() {
-        loginAs(Role.CASHIER);
+        loginAs(Role.STAFF);
 
         assertTrue(service.chat("doanh thu tuần này").getReply().contains("không có quyền"));
         assertTrue(service.chat("nên nhập thêm gì").getReply().contains("không có quyền"));
@@ -85,7 +85,7 @@ class AssistantServiceTest {
     @Test
     @DisplayName("Tra tồn kho theo tên: trả số lượng tại chi nhánh và giá bán")
     void stockLookup() {
-        loginAs(Role.CASHIER);
+        loginAs(Role.STAFF);
         Product p = Product.builder().id(9L).name("Mì Hảo Hảo tôm chua cay").unit("Gói")
                 .salePrice(BigDecimal.valueOf(4500)).barcode("8934563138165").active(true).build();
         when(productRepository.searchProducts("Mì Hảo Hảo")).thenReturn(List.of(p));
@@ -101,7 +101,7 @@ class AssistantServiceTest {
     @Test
     @DisplayName("Hàng sắp hết: liệt kê theo số lượng tăng dần, bỏ sản phẩm ngừng bán")
     void lowStock() {
-        loginAs(Role.WAREHOUSE);
+        loginAs(Role.MANAGER);
         Product a = Product.builder().name("Nước suối").unit("Chai").active(true).build();
         Product b = Product.builder().name("Bánh mì").unit("Cái").active(true).build();
         Product off = Product.builder().name("Ngừng bán").active(false).build();
@@ -118,9 +118,9 @@ class AssistantServiceTest {
     }
 
     @Test
-    @DisplayName("Thủ kho hỏi gợi ý nhập: chỉ liệt kê sản phẩm có số lượng đề xuất > 0")
+    @DisplayName("Quản lý hỏi gợi ý nhập: chỉ liệt kê sản phẩm có số lượng đề xuất > 0")
     void restock() {
-        loginAs(Role.WAREHOUSE);
+        loginAs(Role.MANAGER);
         when(forecastService.getCachedOrComputeForecast(eq(2L), eq(7), eq("EXP_SMOOTH"))).thenReturn(List.of(
                 ForecastResponse.builder().productName("Sữa chua").unit("Hộp").currentStock(3)
                         .suggestedRestockQty(20).urgencyLabel("Khẩn cấp").build(),

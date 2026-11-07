@@ -86,7 +86,7 @@ class ShiftIntegrationTest {
     @Test
     @DisplayName("Mở ca → bán → đóng ca: tiền mặt dự kiến, chênh lệch và gợi ý bàn giao cho ca sau")
     void fullShiftCycle() throws Exception {
-        String cashier = newUser("shift_cashier", Role.CASHIER, 1L);
+        String cashier = newUser("shift_cashier", Role.STAFF, 1L);
 
         // Chưa mở ca thì không bán được
         mvc.perform(post("/api/invoices").header("Authorization", cashier)
@@ -145,7 +145,7 @@ class ShiftIntegrationTest {
                 .andExpect(status().isConflict());
 
         // Ca sau ở cùng chi nhánh nhận tiền và ghi chú bàn giao của ca trước
-        String next = newUser("shift_next", Role.CASHIER, 1L);
+        String next = newUser("shift_next", Role.STAFF, 1L);
         mvc.perform(get("/api/shifts/current").header("Authorization", next))
                 .andExpect(jsonPath("$.data.session").doesNotExist())
                 .andExpect(jsonPath("$.data.shiftRequired").value(true))
@@ -156,7 +156,7 @@ class ShiftIntegrationTest {
     @Test
     @DisplayName("Quản lý chỉ đóng hộ ca trong chi nhánh của mình; tài khoản quầy không xem lịch sử ca")
     void managerScopedToBranch() throws Exception {
-        String cashier = newUser("forgetful_cashier", Role.CASHIER, 1L);
+        String cashier = newUser("forgetful_cashier", Role.STAFF, 1L);
         ShiftTestData.assignNewStaff(staffRepository, assignmentRepository, 1L, 3, "Nhân viên quên đóng ca");
         String body = mvc.perform(post("/api/shifts/open").header("Authorization", cashier)
                         .contentType(MediaType.APPLICATION_JSON)

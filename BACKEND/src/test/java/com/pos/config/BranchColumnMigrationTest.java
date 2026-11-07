@@ -40,7 +40,7 @@ class BranchColumnMigrationTest {
     void movesLegacyBranchColumn() {
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN branch_id BIGINT");
         User old = userRepository.save(User.builder().username("legacy_cashier").password("x")
-                .fullName("Thu ngân cũ").role(Role.CASHIER).active(true).build());
+                .fullName("Thu ngân cũ").role(Role.STAFF).active(true).build());
         User oldAdmin = userRepository.save(User.builder().username("legacy_admin").password("x")
                 .fullName("Quản trị cũ").role(Role.ADMIN).active(true).build());
         jdbcTemplate.update("UPDATE users SET branch_id = 2 WHERE id IN (?, ?)", old.getId(), oldAdmin.getId());
@@ -51,5 +51,28 @@ class BranchColumnMigrationTest {
         assertEquals(Set.of(2L), userRepository.findById(old.getId()).orElseThrow().getBranchIds());
         assertTrue(userRepository.findById(oldAdmin.getId()).orElseThrow().getBranchIds().isEmpty());
         assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users WHERE branch_id IS NOT NULL", Integer.class));
+    }
+
+    @Test
+    @DisplayName("Gộp vai trò cũ Thu ngân / Thủ kho thành STAFF, giữ nguyên ADMIN / MANAGER")
+    void mergesLegacyRolesIntoStaff() {
+        jdbcTemplate.execute("ALTER TABLE users ALTER COLUMN role SET DATA TYPE VARCHAR(20)");
+        User cashier = userRepository.save(User.builder().username("old_cashier").password("x")
+                .fullName("Thu ngân cũ").role(Role.STAFF).active(true).build());
+        User warehouse = userRepository.save(User.builder().username("old_warehouse").password("x")
+                .fullName("Thủ kho cũ").role(Role.STAFF).active(true).build());
+        User manager = userRepository.save(User.builder().username("old_manager").password("x")
+                .fullName("Quản lý").role(Role.MANAGER).active(true).build());
+        jdbcTemplate.update("UPDATE users SET role = 'CASHIER' WHERE id = ?", cashier.getId());
+        jdbcTemplate.update("UPDATE users SET role = 'WAREHOUSE' WHERE id = ?", warehouse.getId());
+
+        initializer.migrateRolesToStaff();
+        initializer.migrateRolesToStaff();
+
+        assertEquals(Role.STAFF, userRepository.findById(cashier.getId()).orElseThrow().getRole());
+        assertEquals(Role.STAFF, userRepository.findById(warehouse.getId()).orElseThrow().getRole());
+        assertEquals(Role.MANAGER, userRepository.findById(manager.getId()).orElseThrow().getRole());
+        assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM users WHERE role IN ('CASHIER', 'WAREHOUSE')", Integer.class));
     }
 }

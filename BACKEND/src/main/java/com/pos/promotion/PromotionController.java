@@ -18,7 +18,7 @@ import java.util.Map;
 
 /**
  * Chương trình khuyến mãi: ADMIN tạo, sửa, bật/tắt, xóa; MANAGER xem;
- * máy POS (ADMIN, MANAGER, CASHIER) hỏi khuyến mãi áp được cho giỏ hàng đang bán.
+ * máy POS (ADMIN, MANAGER, STAFF) hỏi khuyến mãi áp được cho giỏ hàng đang bán.
  */
 @RestController
 @RequestMapping("/api/promotions")
@@ -80,7 +80,7 @@ public class PromotionController {
     }
 
     @PostMapping("/applicable")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Khuyến mãi áp được cho giỏ hàng tại chi nhánh đang đăng nhập, giảm nhiều nhất trước")
     public ResponseEntity<ApiResponse<List<PromotionService.Quote>>> applicable(@RequestBody PreviewRequest req) {
         User actor = currentUserService.getCurrentUser();

@@ -84,7 +84,7 @@ class InvoiceServiceTest {
                 inventoryService, shiftService, approvalService, loyaltyService, promotionService, invoiceReturnRepository);
     }
 
-    private final User cashier = User.builder().id(7L).username("cashier").role(Role.CASHIER).currentBranchId(1L).build();
+    private final User cashier = User.builder().id(7L).username("cashier").role(Role.STAFF).currentBranchId(1L).build();
     private final User manager = User.builder().id(8L).username("manager").role(Role.MANAGER).currentBranchId(1L).build();
 
     private Product milk() {

@@ -12,6 +12,7 @@ import { productService } from '../../services/productService';
 import { reportService } from '../../services/reportService';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import './ForecastPage.css';
+import { toast } from '../../components/common/toastStore';
 
 export default function ForecastPage({
   branchId = 1,
@@ -219,7 +220,7 @@ export default function ForecastPage({
   // Mở phiếu nhập điền sẵn ở trang Kho. Dự báo chỉ đề xuất, quản lý xem lại và quyết định lưu phiếu.
   const openStockInDraft = (rows) => {
     if (!onCreateStockInDraft) {
-      alert('Không mở được phiếu nhập từ trang này.');
+      toast.error('Không mở được phiếu nhập từ trang này.');
       return;
     }
     onCreateStockInDraft(rows.map((r) => ({ productId: r.id, quantity: r.suggestedQty > 0 ? r.suggestedQty : 1 })));
@@ -230,7 +231,7 @@ export default function ForecastPage({
   const restockRows = replenishmentList.filter((r) => r.suggestedQty > 0);
   const handleBulkRestockClick = () => {
     if (restockRows.length === 0) {
-      alert('Hiện chưa có mặt hàng nào cần nhập thêm.');
+      toast.info('Hiện chưa có mặt hàng nào cần nhập thêm.');
       return;
     }
     openStockInDraft(restockRows);
@@ -244,7 +245,7 @@ export default function ForecastPage({
       const orders = await purchaseOrderService.fromForecast(forecastDays);
       onOpenPurchaseOrder(orders[0]?.id, `Đã lập ${orders.length} đơn đặt hàng nháp từ đề xuất AI (${forecastDays} ngày). Kiểm tra số lượng, chọn nhà cung cấp rồi gửi đơn.`);
     } catch (err) {
-      alert(err?.response?.data?.message || 'Không lập được đơn đặt hàng');
+      toast.error(err?.response?.data?.message || 'Không lập được đơn đặt hàng');
     } finally {
       setCreatingPo(false);
     }

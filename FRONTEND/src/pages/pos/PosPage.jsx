@@ -13,6 +13,8 @@ import ManagerApprovalModal from './ManagerApprovalModal';
 import { Modal, Button } from '../../components/common';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { useHotkeys } from '../../hooks/useHotkeys';
+import usePageActive from '../../hooks/usePageActive';
+import { normalizeRole } from '../../utils/permissions';
 import { playBeepSuccess, playBeepWarning } from '../../utils/audio';
 import { formatCurrency } from '../../utils/formatters';
 import { printInvoiceReceipt, receiptFromInvoice } from '../../utils/receiptPrinter';
@@ -28,6 +30,7 @@ import { loyaltyService, maxRedeemablePoints } from '../../services/loyaltyServi
 import { promotionService } from '../../services/promotionService';
 import { newRequestId } from '../../utils/requestId';
 import './PosPage.css';
+import { toast, confirmDialog } from '../../components/common/toastStore';
 
 
 function emptyOrder() {
@@ -231,7 +234,7 @@ export default function PosPage({
   }, [afterDiscount, pointsDiscount]);
 
   // Hạn mức giảm giá của thu ngân (ADMIN/MANAGER không giới hạn)
-  const isCashier = currentUser?.role === 'CASHIER';
+  const isCashier = normalizeRole(currentUser?.role) === 'STAFF';
   const [cashierMaxDiscountPercent, setCashierMaxDiscountPercent] = useState(null);
   const discountLimit = isCashier && cashierMaxDiscountPercent != null
     ? Math.floor((subtotal * cashierMaxDiscountPercent) / 100)
@@ -284,7 +287,7 @@ export default function PosPage({
       }
       if (product.stock <= 0) {
         playBeepWarning();
-        alert(`Sản phẩm "${product.name}" đã hết hàng trong kho!`);
+        toast.warning(`Sản phẩm "${product.name}" đã hết hàng trong kho!`);
         return;
       }
 
@@ -298,7 +301,7 @@ export default function PosPage({
           const currentQty = prev.items[existingIndex].quantity;
           if (currentQty >= product.stock) {
             playBeepWarning();
-            alert(
+            toast.warning(
               `Kho chỉ còn ${product.stock} ${product.unit}. Không thể thêm vượt quá tồn kho!`
             );
             return prev;
@@ -354,19 +357,23 @@ export default function PosPage({
         handleAddProduct(found);
       } else {
         playBeepWarning();
-        alert(`Không tìm thấy sản phẩm có mã vạch: ${scannedCode}`);
+        toast.warning(`Không tìm thấy sản phẩm có mã vạch: ${scannedCode}`);
       }
     },
     [products, handleAddProduct]
   );
 
+  // Màn hình POS được giữ lại khi chuyển sang trang khác: chỉ nghe máy quét/phím tắt khi đang hiển thị
+  const isPageActive = usePageActive();
+
   // Hook Barcode scanner
   useBarcodeScanner(handleBarcodeScanned, {
-    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !isPairingOpen && !isShiftOpen && !isCashOpen && !isRecentInvoicesOpen && !isApprovalOpen && !remoteBatch
+    enabled: isPageActive && !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !isPairingOpen && !isShiftOpen && !isCashOpen && !isRecentInvoicesOpen && !isApprovalOpen && !remoteBatch
   });
 
   // Listen to simulated scan events (e.g. from BarcodePrintModal or mock tester)
   useEffect(() => {
+    if (!isPageActive) return undefined;
     const handleCustomScan = (e) => {
       if (e.detail?.barcode) {
         handleBarcodeScanned(e.detail.barcode);
@@ -374,7 +381,7 @@ export default function PosPage({
     };
     window.addEventListener('pos:barcode_scanned', handleCustomScan);
     return () => window.removeEventListener('pos:barcode_scanned', handleCustomScan);
-  }, [handleBarcodeScanned]);
+  }, [handleBarcodeScanned, isPageActive]);
 
   // Hỏi máy chủ khuyến mãi áp được mỗi khi giỏ hoặc khách đổi (chờ 300ms để quét liên tục không gọi dồn)
   useEffect(() => {
@@ -543,7 +550,7 @@ export default function PosPage({
             const nextQty = item.quantity + delta;
             if (nextQty > item.stock) {
               playBeepWarning();
-              alert(`Số lượng vượt quá tồn kho hiện tại (${item.stock})!`);
+              toast.warning(`Số lượng vượt quá tồn kho hiện tại (${item.stock})!`);
               return item;
             }
             return nextQty > 0 ? { ...item, quantity: nextQty } : null;
@@ -576,9 +583,9 @@ export default function PosPage({
   };
 
   // Cancel Order (F9)
-  const handleCancelOrder = () => {
+  const handleCancelOrder = async () => {
     if (isProcessing || currentOrder.items.length === 0) return;
-    if (window.confirm('Bạn có chắc chắn muốn hủy đơn hàng hiện tại?')) {
+    if ((await confirmDialog('Bạn có chắc chắn muốn hủy đơn hàng hiện tại?', { title: 'Hủy đơn hàng', confirmText: 'Hủy đơn', cancelText: 'Không', danger: true }))) {
       updateCurrentOrder({
         items: [],
         discount: 0,
@@ -603,12 +610,12 @@ export default function PosPage({
       return;
     }
     if (finalAmount <= 0 && order.items.length === 0) {
-      alert('Đơn hàng chưa có sản phẩm để thanh toán!');
+      toast.warning('Đơn hàng chưa có sản phẩm để thanh toán!');
       return;
     }
     if (!promotionsReady) {
       playBeepWarning();
-      alert('Đang tính khuyến mãi cho đơn hàng, vui lòng bấm thanh toán lại sau giây lát.');
+      toast.info('Đang tính khuyến mãi cho đơn hàng, vui lòng bấm thanh toán lại sau giây lát.');
       return;
     }
 
@@ -616,7 +623,7 @@ export default function PosPage({
     if (isOverDiscountLimit(order)) {
       if (!order.discountReason?.trim()) {
         playBeepWarning();
-        alert('Giảm giá vượt hạn mức, vui lòng nhập lý do giảm giá.');
+        toast.warning('Giảm giá vượt hạn mức, vui lòng nhập lý do giảm giá.');
         return;
       }
       if (!isDiscountApproved(order)) {
@@ -632,7 +639,7 @@ export default function PosPage({
 
     if (currentOrder.paymentMethod === 'CASH' && changeAmount < 0) {
       playBeepWarning();
-      alert('Số tiền khách đưa chưa đủ để hoàn tất đơn hàng!');
+      toast.warning('Số tiền khách đưa chưa đủ để hoàn tất đơn hàng!');
       return;
     }
 
@@ -682,17 +689,18 @@ export default function PosPage({
           } else if (err.response?.data?.code === 'PROMOTION_NOT_APPLICABLE') {
             // Khuyến mãi vừa bị tắt/hết hạn: tải lại danh sách để thu ngân xem số tiền mới trước khi thu
             setPromotionRefresh((n) => n + 1);
-            alert(`${err.response.data.message}\n\nĐã cập nhật lại khuyến mãi, vui lòng kiểm tra số tiền rồi thanh toán lại.`);
+            toast.warning(`${err.response.data.message}\n\nĐã cập nhật lại khuyến mãi, vui lòng kiểm tra số tiền rồi thanh toán lại.`);
           } else if (err.response) {
             // Server từ chối (sai giá, giảm giá không hợp lệ, hết hàng, không có quyền...)
-            alert(`Không thể thanh toán: ${err.response.data?.message || 'Máy chủ từ chối hóa đơn'}`);
+            toast.error(`Không thể thanh toán: ${err.response.data?.message || 'Máy chủ từ chối hóa đơn'}`);
           } else {
             // Mất kết nối / hết thời gian chờ: chưa biết server đã lưu hay chưa.
             // Giữ nguyên giỏ và mã đơn; bấm thanh toán lại sẽ không tạo hóa đơn trùng.
-            alert(
+            toast.error(
               'Không nhận được phản hồi từ máy chủ, hóa đơn CHƯA được xác nhận.\n\n' +
                 'Đơn hàng vẫn được giữ nguyên. Kiểm tra kết nối mạng rồi bấm Thanh toán lại ' +
-                '(hệ thống sẽ không ghi trùng hóa đơn). Chưa giao hàng hoặc in hóa đơn cho khách.'
+                '(hệ thống sẽ không ghi trùng hóa đơn). Chưa giao hàng hoặc in hóa đơn cho khách.',
+              { duration: 15000 }
             );
           }
           return;
@@ -759,7 +767,7 @@ export default function PosPage({
       // In hóa đơn K80 từ dữ liệu server đã ghi nhận
       const printResult = await printInvoiceReceipt(receipt);
 
-      alert(
+      toast.success(
         `Thanh toán thành công [${receipt.code}]!\n\n` +
           `• Khách hàng: ${receipt.customerName}\n` +
           (receipt.pointsBalance != null
@@ -772,7 +780,8 @@ export default function PosPage({
           `• Tiền thừa trả khách: ${formatCurrency(receipt.change)}\n\n` +
           (printResult?.success
             ? 'Hóa đơn K80 đã được gửi đến máy in.'
-            : `Hóa đơn đã lưu nhưng KHÔNG in được: ${printResult?.error || 'lỗi máy in'}.`)
+            : `Hóa đơn đã lưu nhưng KHÔNG in được: ${printResult?.error || 'lỗi máy in'}.`),
+        { duration: printResult?.success ? 6000 : 12000 }
       );
     } finally {
       processingRef.current = false;
@@ -829,7 +838,7 @@ export default function PosPage({
       setIsRecentInvoicesOpen(false);
       setRemoteBatch(null);
     }
-  });
+  }, isPageActive);
 
   return (
     <div className="pos-container">
@@ -837,7 +846,7 @@ export default function PosPage({
       <PosHeader
         branchName={branchLabel}
         cashierName={currentUser?.fullName || currentUser?.username || 'Thu ngân'}
-        role={currentUser?.role || 'CASHIER'}
+        role={normalizeRole(currentUser?.role) || 'STAFF'}
         shiftName={
           shiftInfo?.session
             ? `${shiftInfo.session.workShiftName} · ${shiftInfo.session.employeeName}`

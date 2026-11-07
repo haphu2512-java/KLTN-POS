@@ -86,7 +86,7 @@ class BranchLoginIntegrationTest {
     @Test
     @DisplayName("Chỉ được gán một chi nhánh: vào thẳng chi nhánh đó, không cần chọn")
     void singleBranchLogsInDirectly() throws Exception {
-        newUser("one_branch", Role.CASHIER, 2L);
+        newUser("one_branch", Role.STAFF, 2L);
         ResultActions res = login("one_branch", PASSWORD, null)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.branchId").value(2))
@@ -99,7 +99,7 @@ class BranchLoginIntegrationTest {
     @Test
     @DisplayName("Nhiều chi nhánh: phải chọn, chỉ chọn được chi nhánh được gán; ADMIN chọn được mọi chi nhánh")
     void multipleBranchesMustChoose() throws Exception {
-        newUser("two_branches", Role.CASHIER, 1L, 2L);
+        newUser("two_branches", Role.STAFF, 1L, 2L);
         login("two_branches", PASSWORD, null)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("BRANCH_SELECTION_REQUIRED"))
@@ -109,7 +109,7 @@ class BranchLoginIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.branchId").value(2));
 
-        newUser("only_first", Role.WAREHOUSE, 1L);
+        newUser("only_first", Role.STAFF, 1L);
         login("only_first", PASSWORD, 2L)
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("BRANCH_NOT_ALLOWED"));
@@ -125,12 +125,12 @@ class BranchLoginIntegrationTest {
     @Test
     @DisplayName("Sai mật khẩu thì không lộ danh sách chi nhánh; chưa gán chi nhánh thì không đăng nhập được")
     void wrongPasswordAndNoBranch() throws Exception {
-        newUser("secret_branches", Role.CASHIER, 1L, 2L);
+        newUser("secret_branches", Role.STAFF, 1L, 2L);
         login("secret_branches", "sai-mat-khau", null)
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.data").doesNotExist());
 
-        newUser("unassigned", Role.CASHIER);
+        newUser("unassigned", Role.STAFF);
         login("unassigned", PASSWORD, null)
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("NO_BRANCH_ASSIGNED"));
@@ -139,7 +139,7 @@ class BranchLoginIntegrationTest {
     @Test
     @DisplayName("Đang có ca mở ở chi nhánh 1 thì không đăng nhập vào chi nhánh 2 được")
     void openShiftPinsLoginToItsBranch() throws Exception {
-        newUser("busy_cashier", Role.CASHIER, 1L, 2L);
+        newUser("busy_cashier", Role.STAFF, 1L, 2L);
         String atFirst = tokenOf(login("busy_cashier", PASSWORD, 1L).andExpect(status().isOk()));
         ShiftTestData.assignNewStaff(staffRepository, assignmentRepository, 1L, 1, "NV ca 1");
         mvc.perform(post("/api/shifts/open").header("Authorization", atFirst)
@@ -216,7 +216,7 @@ class BranchLoginIntegrationTest {
     @Test
     @DisplayName("Token ghi chi nhánh không được gán, hoặc chi nhánh vừa bị bỏ phân công, đều bị từ chối")
     void tokenBranchMustStillBeAllowed() throws Exception {
-        User user = newUser("moved_cashier", Role.CASHIER, 1L, 2L);
+        User user = newUser("moved_cashier", Role.STAFF, 1L, 2L);
         String token = tokenOf(login("moved_cashier", PASSWORD, 2L).andExpect(status().isOk()));
         mvc.perform(get("/api/products").header("Authorization", token)).andExpect(status().isOk());
 
@@ -225,12 +225,12 @@ class BranchLoginIntegrationTest {
         mvc.perform(get("/api/products").header("Authorization", token)).andExpect(status().isUnauthorized());
 
         // Token tự ký với chi nhánh không được gán (hoặc token cũ không có chi nhánh)
-        newUser("forger", Role.CASHIER, 1L);
+        newUser("forger", Role.STAFF, 1L);
         String forged = "Bearer " + tokenProvider.generateToken(userDetailsService.loadUserByUsername("forger"),
-                2L, "CASHIER", "forger");
+                2L, "STAFF", "forger");
         mvc.perform(get("/api/products").header("Authorization", forged)).andExpect(status().isUnauthorized());
         String noBranch = "Bearer " + tokenProvider.generateToken(userDetailsService.loadUserByUsername("forger"),
-                null, "CASHIER", "forger");
+                null, "STAFF", "forger");
         mvc.perform(get("/api/products").header("Authorization", noBranch)).andExpect(status().isUnauthorized());
     }
 
@@ -240,7 +240,7 @@ class BranchLoginIntegrationTest {
         String admin = tokenOf(login("admin", "test-seed-password", 1L));
         mvc.perform(post("/api/users").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"multi_staff\",\"password\":\"" + PASSWORD + "\",\"fullName\":\"Nhân viên 2 chi nhánh\","
-                                + "\"role\":\"CASHIER\",\"branchIds\":[1,2]}"))
+                                + "\"role\":\"STAFF\",\"branchIds\":[1,2]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.branchIds.length()").value(2));
         org.junit.jupiter.api.Assertions.assertEquals(Set.of(1L, 2L),

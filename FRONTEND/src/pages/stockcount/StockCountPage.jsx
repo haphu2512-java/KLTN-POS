@@ -32,6 +32,7 @@ export default function StockCountPage({ currentUser }) {
   const [busy, setBusy] = useState(false);
   const scanRef = useRef(null);
   const location = useLocation();
+  const openedFromKey = useRef(null);
 
   const loadList = async () => {
     try {
@@ -52,10 +53,22 @@ export default function StockCountPage({ currentUser }) {
       stockCountService.get(location.state.openCountId).then(setCurrent).catch(() => {});
       if (location.state.message) setMessage({ text: location.state.message });
     }
+    openedFromKey.current = location.key;
     stockCountService.reasons().then(setReasons).catch(() => {});
     productService.getProducts().then(setProducts).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Trang được giữ lại khi chuyển màn hình: lần sau được mở kèm phiếu thì tải lại danh sách và mở phiếu đó
+  useEffect(() => {
+    if (openedFromKey.current === location.key || !location.state?.openCountId) return;
+    openedFromKey.current = location.key;
+    loadList();
+    stockCountService.get(location.state.openCountId).then(setCurrent).catch(() => {});
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (location.state.message) setMessage({ text: location.state.message });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
 
   const editable = current?.status === 'DRAFT';
   const run = async (fn, okText) => {

@@ -6,6 +6,7 @@ import { formatNumber, formatDateTime } from '../../utils/formatters';
 import { PERMS } from '../../utils/permissions';
 import PointHistoryModal from './PointHistoryModal';
 import './PartnerPage.css';
+import { toast } from '../../components/common/toastStore';
 
 export default function PartnerPage({
   isOnline = true,
@@ -78,34 +79,34 @@ export default function PartnerPage({
   const handleCreateCustomer = async (e) => {
     e.preventDefault();
     if (!customerForm.name.trim() || !customerForm.phone.trim()) {
-      alert('Vui lòng nhập tên và số điện thoại');
+      toast.warning('Vui lòng nhập tên và số điện thoại');
       return;
     }
     try {
       await customerService.createCustomer(customerForm);
-      alert('Thêm khách hàng thành công!');
+      toast.success('Thêm khách hàng thành công!');
       setShowAddCustomerModal(false);
       setCustomerForm({ name: '', phone: '' });
       fetchCustomers(searchTerm);
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi khi tạo khách hàng');
+      toast.error(err.response?.data?.message || 'Lỗi khi tạo khách hàng');
     }
   };
 
   const handleCreateSupplier = async (e) => {
     e.preventDefault();
     if (!supplierForm.name.trim()) {
-      alert('Vui lòng nhập tên nhà cung cấp');
+      toast.warning('Vui lòng nhập tên nhà cung cấp');
       return;
     }
     try {
       await purchaseService.createSupplier(supplierForm);
-      alert('Thêm nhà cung cấp thành công!');
+      toast.success('Thêm nhà cung cấp thành công!');
       setShowAddSupplierModal(false);
       setSupplierForm({ name: '', phone: '', email: '', address: '' });
       fetchSuppliers();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi khi tạo nhà cung cấp');
+      toast.error(err.response?.data?.message || 'Lỗi khi tạo nhà cung cấp');
     }
   };
 

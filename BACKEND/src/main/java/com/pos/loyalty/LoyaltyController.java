@@ -15,7 +15,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/loyalty")
-@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
 @RequiredArgsConstructor
 @Tag(name = "Loyalty", description = "Tích điểm, đổi điểm và sổ điểm thành viên")
 public class LoyaltyController {

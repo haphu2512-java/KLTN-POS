@@ -99,7 +99,7 @@ public class InvoiceService {
 
     /**
      * Xem chi tiết hóa đơn theo quyền: ADMIN mọi hóa đơn; MANAGER hóa đơn của chi nhánh đang đăng nhập;
-     * CASHIER chỉ hóa đơn bán (hoặc hoàn trả) trong ca do chính mình mở.
+     * STAFF chỉ hóa đơn bán (hoặc hoàn trả) trong ca do chính mình mở.
      */
     public Invoice getInvoiceForViewer(Long id, User actor) {
         Invoice invoice = getInvoiceById(id);
@@ -107,14 +107,14 @@ public class InvoiceService {
             case ADMIN -> true;
             case MANAGER -> invoice.getBranch() != null
                     && invoice.getBranch().getId().equals(actor.getCurrentBranchId());
-            case CASHIER -> shiftService.isOwnShift(invoice.getShiftSessionId(), actor)
+            case STAFF -> shiftService.isOwnShift(invoice.getShiftSessionId(), actor)
                     || shiftService.isOwnShift(invoice.getRefundShiftSessionId(), actor);
             default -> false;
         };
         if (!allowed) {
             throw new BusinessException("INVOICE_FORBIDDEN", "Bạn không có quyền xem hóa đơn này", HttpStatus.FORBIDDEN);
         }
-        if (actor.getRole() == Role.CASHIER) {
+        if (actor.getRole() == Role.STAFF) {
             invoice.setEmployeeName(shiftService.userDisplayName(invoice.getEmployeeId()));
         } else {
             fillStaffNames(List.of(invoice));
@@ -321,7 +321,7 @@ public class InvoiceService {
      */
     public ReturnInfo getReturnInfo(Long id, User actor) {
         Invoice invoice;
-        if (actor.getRole() == Role.CASHIER) {
+        if (actor.getRole() == Role.STAFF) {
             invoice = getInvoiceById(id);
             if (invoice.getBranch() == null || !invoice.getBranch().getId().equals(actor.getCurrentBranchId())) {
                 throw new BusinessException("INVOICE_FORBIDDEN", "Hóa đơn không thuộc chi nhánh đang đăng nhập", HttpStatus.FORBIDDEN);
@@ -340,7 +340,7 @@ public class InvoiceService {
             r.setApprovedByName(r.getApprovedBy() != null ? shiftService.userDisplayName(r.getApprovedBy()) : null);
         }
         return new ReturnInfo(invoice, returns, returnDays, returnDeadline(invoice),
-                LocalDateTime.now().isAfter(returnDeadline(invoice)), actor.getRole() == Role.CASHIER);
+                LocalDateTime.now().isAfter(returnDeadline(invoice)), actor.getRole() == Role.STAFF);
     }
 
     /**
@@ -372,7 +372,7 @@ public class InvoiceService {
             throw new BusinessException("RETURN_EXPIRED", "Hóa đơn đã quá hạn đổi trả " + returnDays
                     + " ngày, cần quản lý xử lý", HttpStatus.FORBIDDEN);
         }
-        if ((overdue || actor.getRole() == Role.CASHIER) && cleanReason == null) {
+        if ((overdue || actor.getRole() == Role.STAFF) && cleanReason == null) {
             throw new BusinessException("RETURN_REASON_REQUIRED", overdue
                     ? "Hóa đơn quá hạn đổi trả, cần ghi lý do" : "Nhập lý do khách trả hàng");
         }
@@ -456,7 +456,7 @@ public class InvoiceService {
         ret.setRefundAmount(refund);
 
         // 3. Thu ngân: kiểm tra mã duyệt PIN của quản lý (đủ số tiền hoàn)
-        if (actor.getRole() == Role.CASHIER) {
+        if (actor.getRole() == Role.STAFF) {
             ret.setApprovedBy(approvalService.checkRefundApproval(approvalToken, actor, invoiceBranchId, refund));
         }
 

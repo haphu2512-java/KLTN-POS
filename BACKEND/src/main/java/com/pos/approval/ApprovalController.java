@@ -40,7 +40,7 @@ public class ApprovalController {
     }
 
     @PostMapping("/discount")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Quản lý nhập tài khoản + PIN trên máy POS để duyệt giảm giá vượt hạn mức; trả mã duyệt dùng một lần (5 phút)")
     public ResponseEntity<ApiResponse<ApprovalService.GrantResult>> approveDiscount(@RequestBody DiscountApprovalRequest req) {
         return ResponseEntity.ok(ApiResponse.ok("Quản lý đã duyệt", approvalService.approveDiscount(
@@ -48,7 +48,7 @@ public class ApprovalController {
     }
 
     @PostMapping("/refund")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Quản lý nhập tài khoản + PIN trên máy POS để duyệt thu ngân hoàn trả tối đa amount; trả mã duyệt dùng một lần (5 phút)")
     public ResponseEntity<ApiResponse<ApprovalService.GrantResult>> approveRefund(@RequestBody DiscountApprovalRequest req) {
         return ResponseEntity.ok(ApiResponse.ok("Quản lý đã duyệt", approvalService.approveRefund(

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Badge } from '../../components/common';
 import { shiftService } from '../../services/shiftService';
+import { confirmDialog } from '../../components/common/toastStore';
 
 const toTime = (t) => (t ? String(t).slice(0, 5) : '');
 
@@ -58,7 +59,7 @@ export default function WorkShiftEditor({ branches = [] }) {
   };
 
   const remove = async (row) => {
-    if (!window.confirm(`Xoá ${row.name}?`)) return;
+    if (!(await confirmDialog(`Xoá ${row.name}?`, { title: 'Xóa ca', confirmText: 'Xóa', danger: true }))) return;
     reset();
     try {
       await shiftService.deleteWorkShift(row.id);

@@ -53,6 +53,7 @@ public class DatabaseInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) {
         seedWorkShifts();
+        migrateRolesToStaff();
         migrateSingleBranchColumn();
 
         if (branchRepository.count() == 0) {
@@ -90,7 +91,7 @@ public class DatabaseInitializer implements CommandLineRunner {
                     .username("cashier")
                     .password(passwordEncoder.encode(seedPassword))
                     .fullName("Nguyễn Văn A")
-                    .role(Role.CASHIER)
+                    .role(Role.STAFF)
                     .branchIds(new HashSet<>(Set.of(branch1.getId())))
                     .active(true)
                     .build());
@@ -148,6 +149,34 @@ public class DatabaseInitializer implements CommandLineRunner {
      * nhiều chi nhánh (bảng user_branch) và chọn chi nhánh lúc đăng nhập: chuyển giá trị cũ sang
      * bảng mới rồi xóa ở cột cũ để lần chạy sau không chép lại. Database mới không có cột này thì bỏ qua.
      */
+    /**
+     * Gộp vai trò cũ: CASHIER (thu ngân) và WAREHOUSE (thủ kho) thành STAFF.
+     * Cột users.role trên MySQL cũ là enum('ADMIN','CASHIER','MANAGER','WAREHOUSE') (ddl-auto=update không tự sửa),
+     * nên đổi sang VARCHAR trước rồi mới cập nhật dữ liệu. Chạy lại nhiều lần không ảnh hưởng.
+     */
+    void migrateRolesToStaff() {
+        try {
+            List<String> types = jdbcTemplate.queryForList(
+                    "SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                            + "AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'", String.class);
+            if (!types.isEmpty() && types.get(0) != null
+                    && types.get(0).toLowerCase().startsWith("enum") && !types.get(0).contains("'STAFF'")) {
+                jdbcTemplate.execute("ALTER TABLE users MODIFY role VARCHAR(20) NOT NULL");
+                log.info("Đã đổi cột users.role sang VARCHAR để thêm vai trò STAFF");
+            }
+        } catch (DataAccessException e) {
+            log.debug("Không kiểm tra được kiểu cột users.role, bỏ qua: {}", e.getMessage());
+        }
+        try {
+            int changed = jdbcTemplate.update("UPDATE users SET role = 'STAFF' WHERE role IN ('CASHIER', 'WAREHOUSE')");
+            if (changed > 0) {
+                log.info("Đã chuyển {} tài khoản Thu ngân / Thủ kho sang vai trò STAFF", changed);
+            }
+        } catch (DataAccessException e) {
+            log.warn("Không chuyển được vai trò cũ sang STAFF: {}", e.getMessage());
+        }
+    }
+
     void migrateSingleBranchColumn() {
         try {
             int moved = jdbcTemplate.update("INSERT INTO user_branch (user_id, branch_id) "

@@ -12,7 +12,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/purchase-orders")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
 @Tag(name = "Purchase orders", description = "Đơn đặt hàng nhà cung cấp, lập từ đề xuất AI dự báo")
 public class PurchaseOrderController {
 

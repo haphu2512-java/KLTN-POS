@@ -317,7 +317,7 @@ function AppContent() {
   };
 
   // Thu ngân không được sửa danh mục; khớp quyền của PUT /api/scanner/products/{id}/barcode
-  const canAssignBarcode = ['ADMIN', 'MANAGER', 'WAREHOUSE'].includes(session?.role);
+  const canAssignBarcode = ['ADMIN', 'MANAGER'].includes(session?.role);
 
   // iOS không mở được Modal mới khi Modal cũ chưa đóng hẳn, nên chờ hiệu ứng đóng xong
   const MODAL_SWITCH_DELAY_MS = 350;

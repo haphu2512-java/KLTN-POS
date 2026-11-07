@@ -4,7 +4,9 @@ import { userService } from '../../services/userService';
 import { formatDateTime } from '../../utils/formatters';
 import useBranches, { branchNameOf } from '../../hooks/useBranches';
 import BranchManager from './BranchManager';
+import { normalizeRole } from '../../utils/permissions';
 import './StaffPage.css';
+import { toast, confirmDialog } from '../../components/common/toastStore';
 
 /** Ô chọn nhiều chi nhánh được phân công; quản trị không cần (làm việc được mọi chi nhánh) */
 function BranchAssignment({ role, branches, value, onChange }) {
@@ -48,13 +50,13 @@ export default function StaffPage({
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    role: 'CASHIER',
+    role: 'STAFF',
     branchIds: [branchId || 1]
   });
   const [editFormData, setEditFormData] = useState({
     id: null,
     username: '',
-    role: 'CASHIER',
+    role: 'STAFF',
     branchIds: [],
     active: true
   });
@@ -86,53 +88,53 @@ export default function StaffPage({
   const handleCreateUser = async (e) => {
     e.preventDefault();
     if (!formData.username.trim() || !formData.password.trim()) {
-      alert('Vui lòng điền đầy đủ các thông tin bắt buộc');
+      toast.warning('Vui lòng điền đầy đủ các thông tin bắt buộc');
       return;
     }
     if (formData.role !== 'ADMIN' && formData.branchIds.length === 0) {
-      alert('Chọn ít nhất một chi nhánh cho tài khoản');
+      toast.warning('Chọn ít nhất một chi nhánh cho tài khoản');
       return;
     }
     try {
       await userService.createUser(formData);
-      alert('Tạo tài khoản thành công!');
+      toast.success('Tạo tài khoản thành công!');
       setShowAddModal(false);
-      setFormData({ username: '', password: '', role: 'CASHIER', branchIds: [branchId || 1] });
+      setFormData({ username: '', password: '', role: 'STAFF', branchIds: [branchId || 1] });
       fetchUsers();
     } catch (err) {
-      alert(err.response?.data?.message || 'Có lỗi xảy ra khi tạo tài khoản');
+      toast.error(err.response?.data?.message || 'Có lỗi xảy ra khi tạo tài khoản');
     }
   };
 
   const handleToggleStatus = async (user) => {
     if (user.username === 'admin') {
-      alert('Không thể khóa tài khoản quản trị tối cao!');
+      toast.warning('Không thể khóa tài khoản quản trị tối cao!');
       return;
     }
     const action = user.active ? 'khóa' : 'mở khóa';
-    if (!window.confirm(`Bạn có chắc chắn muốn ${action} tài khoản "${user.username}"?`)) return;
+    if (!(await confirmDialog(`Bạn có chắc chắn muốn ${action} tài khoản "${user.username}"?`, { title: user.active ? 'Khóa tài khoản' : 'Mở khóa tài khoản', confirmText: user.active ? 'Khóa' : 'Mở khóa', danger: user.active }))) return;
 
     try {
       await userService.toggleUserStatus(user.id);
       fetchUsers();
     } catch (err) {
-      alert(err.response?.data?.message || 'Không thể đổi trạng thái tài khoản');
+      toast.error(err.response?.data?.message || 'Không thể đổi trạng thái tài khoản');
     }
   };
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
     if (!newPassword || newPassword.length < 6) {
-      alert('Mật khẩu mới phải từ 6 ký tự trở lên');
+      toast.warning('Mật khẩu mới phải từ 6 ký tự trở lên');
       return;
     }
     try {
       await userService.changePassword(selectedUser.id, newPassword);
-      alert('Đổi mật khẩu thành công!');
+      toast.success('Đổi mật khẩu thành công!');
       setShowPasswordModal(false);
       setNewPassword('');
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi khi đổi mật khẩu');
+      toast.error(err.response?.data?.message || 'Lỗi khi đổi mật khẩu');
     }
   };
 
@@ -140,7 +142,7 @@ export default function StaffPage({
     setEditFormData({
       id: user.id,
       username: user.username,
-      role: user.role || 'CASHIER',
+      role: normalizeRole(user.role) || 'STAFF',
       branchIds: user.branchIds || [],
       active: user.active !== false
     });
@@ -150,7 +152,7 @@ export default function StaffPage({
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     if (editFormData.role !== 'ADMIN' && editFormData.branchIds.length === 0) {
-      alert('Chọn ít nhất một chi nhánh cho tài khoản');
+      toast.warning('Chọn ít nhất một chi nhánh cho tài khoản');
       return;
     }
     try {
@@ -159,17 +161,17 @@ export default function StaffPage({
         branchIds: editFormData.branchIds,
         active: editFormData.active
       });
-      alert('Cập nhật tài khoản thành công!');
+      toast.success('Cập nhật tài khoản thành công!');
       setShowEditModal(false);
       fetchUsers();
     } catch (err) {
-      alert(err.response?.data?.message || 'Có lỗi xảy ra khi cập nhật');
+      toast.error(err.response?.data?.message || 'Có lỗi xảy ra khi cập nhật');
     }
   };
 
   const filteredUsers = users.filter((u) => {
     const matchSearch = u.username.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchRole = filterRole === 'ALL' || u.role === filterRole;
+    const matchRole = filterRole === 'ALL' || normalizeRole(u.role) === filterRole;
     return matchSearch && matchRole;
   });
 
@@ -184,18 +186,15 @@ export default function StaffPage({
       key: 'role',
       title: 'Vai trò',
       render: (val, u) => {
-        const role = val || u?.role;
+        const role = normalizeRole(val || u?.role);
         let variant = 'secondary';
-        let label = 'Thu ngân';
+        let label = 'Nhân viên';
         if (role === 'ADMIN') {
           variant = 'danger';
           label = 'Quản trị viên';
         } else if (role === 'MANAGER') {
           variant = 'brand';
           label = 'Quản lý';
-        } else if (role === 'WAREHOUSE') {
-          variant = 'warning';
-          label = 'Thủ kho';
         }
         return <Badge variant={variant}>{label}</Badge>;
       }
@@ -292,8 +291,7 @@ export default function StaffPage({
               <option value="ALL">Tất cả vai trò</option>
               <option value="ADMIN">Quản trị viên (ADMIN)</option>
               <option value="MANAGER">Quản lý (MANAGER)</option>
-              <option value="CASHIER">Thu ngân (CASHIER)</option>
-              <option value="WAREHOUSE">Thủ kho (WAREHOUSE)</option>
+              <option value="STAFF">Nhân viên (STAFF)</option>
             </select>
           </div>
           <div>
@@ -354,9 +352,8 @@ export default function StaffPage({
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
             >
-              <option value="CASHIER">CASHIER (Thu ngân bán hàng tại quầy)</option>
-              <option value="MANAGER">MANAGER (Quản lý chi nhánh)</option>
-              <option value="WAREHOUSE">WAREHOUSE (Thủ kho)</option>
+              <option value="STAFF">STAFF (Nhân viên bán hàng tại quầy)</option>
+              <option value="MANAGER">MANAGER (Quản lý chi nhánh, gồm nghiệp vụ kho)</option>
               <option value="ADMIN">ADMIN (Quản trị viên toàn quyền)</option>
             </select>
           </div>
@@ -408,9 +405,8 @@ export default function StaffPage({
               value={editFormData.role}
               onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })}
             >
-              <option value="CASHIER">CASHIER (Thu ngân bán hàng tại quầy)</option>
-              <option value="MANAGER">MANAGER (Quản lý chi nhánh)</option>
-              <option value="WAREHOUSE">WAREHOUSE (Thủ kho)</option>
+              <option value="STAFF">STAFF (Nhân viên bán hàng tại quầy)</option>
+              <option value="MANAGER">MANAGER (Quản lý chi nhánh, gồm nghiệp vụ kho)</option>
               <option value="ADMIN">ADMIN (Quản trị viên toàn quyền)</option>
             </select>
           </div>

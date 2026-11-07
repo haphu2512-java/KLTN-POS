@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Modal, Button, Input } from '../../components/common';
 import { productService } from '../../services/productService';
+import { confirmDialog } from '../../components/common/toastStore';
 
 const EMPTY = { barcode: '', name: '', category: '', unit: '', costPrice: '', salePrice: '', imageUrl: '' };
 
 /**
- * Thêm / sửa sản phẩm (ADMIN, MANAGER, WAREHOUSE). Sửa thì có thêm nút ngừng kinh doanh (xóa mềm).
+ * Thêm / sửa sản phẩm (ADMIN, MANAGER). Sửa thì có thêm nút ngừng kinh doanh (xóa mềm).
  * product = null là thêm mới.
  */
 export default function ProductFormModal({ isOpen, onClose, product = null, categories = [], onSaved }) {
@@ -67,7 +68,7 @@ export default function ProductFormModal({ isOpen, onClose, product = null, cate
   };
 
   const handleDeactivate = async () => {
-    if (!window.confirm(`Ngừng kinh doanh "${product.name}"? Sản phẩm sẽ ẩn khỏi danh mục bán hàng, lịch sử bán vẫn giữ.`)) return;
+    if (!(await confirmDialog(`Ngừng kinh doanh "${product.name}"? Sản phẩm sẽ ẩn khỏi danh mục bán hàng, lịch sử bán vẫn giữ.`, { title: 'Ngừng kinh doanh', confirmText: 'Ngừng kinh doanh', danger: true }))) return;
     setSaving(true);
     try {
       await productService.deleteProduct(product.id);

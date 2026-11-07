@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/expiry")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
 @Tag(name = "Expiry", description = "Hạn sử dụng theo lô: hàng cận date, hết hạn, lập phiếu hủy")
 public class ExpiryController {
 
