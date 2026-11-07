@@ -7,6 +7,7 @@ import { exportToCsv } from '../../utils/exportCsv';
 import useBranches, { branchNameOf } from '../../hooks/useBranches';
 import ReturnModal from '../pos/ReturnModal';
 import './ReportPage.css';
+import { toast } from '../../components/common/toastStore';
 
 export default function ReportPage({
   currentUser,
@@ -102,7 +103,7 @@ export default function ReportPage({
     try {
       await reportService.downloadExcel(selectedBranchId, days);
     } catch (err) {
-      alert(`Không xuất được file Excel: ${err?.response?.status === 403 ? 'không có quyền' : err.message}`);
+      toast.error(`Không xuất được file Excel: ${err?.response?.status === 403 ? 'không có quyền' : err.message}`);
     } finally {
       setExportingExcel(false);
     }

@@ -48,7 +48,7 @@ public class InventoryController {
     }
 
     @PostMapping("/transfer")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Điều chuyển hàng từ chi nhánh đang đăng nhập sang chi nhánh khác")
     public ResponseEntity<ApiResponse<Void>> transferStock(@Valid @RequestBody StockTransferRequest req) {
         req.setFromBranchId(currentUserService.branchForWrite(req.getFromBranchId()));

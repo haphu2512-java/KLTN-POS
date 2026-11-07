@@ -27,6 +27,6 @@ public class CostPriceSerializer extends JsonSerializer<BigDecimal> {
     private static boolean isCashier() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null && auth.getAuthorities().stream()
-                .anyMatch(a -> "ROLE_CASHIER".equals(a.getAuthority()));
+                .anyMatch(a -> "ROLE_STAFF".equals(a.getAuthority()));
     }
 }

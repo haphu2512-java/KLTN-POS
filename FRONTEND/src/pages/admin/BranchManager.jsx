@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal, Button, Input, Table, Badge } from '../../components/common';
 import { branchService } from '../../services/branchService';
 import { invalidateBranches } from '../../hooks/useBranches';
+import { toast, confirmDialog } from '../../components/common/toastStore';
 
 const EMPTY = { name: '', address: '', phone: '' };
 
@@ -59,12 +60,12 @@ export default function BranchManager() {
 
   const toggleActive = async (branch) => {
     const next = !branch.active;
-    if (!next && !window.confirm(`Ngừng hoạt động "${branch.name}"? Nhân viên sẽ không chọn được chi nhánh này khi đăng nhập.`)) return;
+    if (!next && !(await confirmDialog(`Ngừng hoạt động "${branch.name}"? Nhân viên sẽ không chọn được chi nhánh này khi đăng nhập.`, { title: 'Ngừng hoạt động chi nhánh', confirmText: 'Ngừng hoạt động', danger: true }))) return;
     try {
       await branchService.updateBranch(branch.id, { name: branch.name, address: branch.address, phone: branch.phone, active: next });
       afterChange();
     } catch (err) {
-      alert(err.response?.data?.message || 'Không cập nhật được chi nhánh.');
+      toast.error(err.response?.data?.message || 'Không cập nhật được chi nhánh.');
     }
   };
 

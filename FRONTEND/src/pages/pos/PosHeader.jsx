@@ -5,7 +5,7 @@ import { formatDateTime } from '../../utils/formatters';
 export default function PosHeader({
   branchName = 'Chi nhánh 1',
   cashierName = 'Thu ngân',
-  role = 'CASHIER',
+  role = 'STAFF',
   shiftName = 'Chưa mở ca',
   shiftOpen = false,
   onOpenShift,
@@ -27,7 +27,7 @@ export default function PosHeader({
     return () => clearInterval(timer);
   }, []);
 
-  const roleLabel = { ADMIN: 'Quản trị', MANAGER: 'Quản lý', WAREHOUSE: 'Thủ kho' }[role] || 'Thu ngân';
+  const roleLabel = { ADMIN: 'Quản trị', MANAGER: 'Quản lý' }[role] || 'Nhân viên';
   const status = !isOnline ? 'offline' : isWsConnected ? 'live' : 'online';
   const statusText = {
     offline: 'Ngoại tuyến',

@@ -13,7 +13,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/customers")
-@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
 @RequiredArgsConstructor
 @Tag(name = "Customers", description = "Quản lý khách hàng và tích điểm thành viên")
 public class CustomerController {

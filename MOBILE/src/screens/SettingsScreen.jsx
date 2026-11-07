@@ -7,7 +7,7 @@ import { OfflineStorage } from '../storage/offlineStorage';
 import { colors, fonts, radius, type } from '../theme';
 import { formatDate } from '../utils/formatters';
 
-const ROLE_LABELS = { ADMIN: 'Quản trị', MANAGER: 'Quản lý', CASHIER: 'Thu ngân', WAREHOUSE: 'Thủ kho' };
+const ROLE_LABELS = { ADMIN: 'Quản trị', MANAGER: 'Quản lý', STAFF: 'Nhân viên', CASHIER: 'Nhân viên', WAREHOUSE: 'Nhân viên' };
 
 export default function SettingsScreen({
   isOnline,

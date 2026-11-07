@@ -24,7 +24,7 @@ class ApprovalServiceTest {
     private final UserRepository userRepository = mock(UserRepository.class);
     private ApprovalService service;
 
-    private final User cashier = User.builder().id(7L).username("cashier").role(Role.CASHIER)
+    private final User cashier = User.builder().id(7L).username("cashier").role(Role.STAFF)
             .currentBranchId(1L).active(true).build();
     private User manager;
 
@@ -60,7 +60,7 @@ class ApprovalServiceTest {
                 () -> service.checkDiscountApproval(grant.token(), cashier, 1L, BigDecimal.valueOf(20001)), "Vượt số đã duyệt");
         assertThrows(BusinessException.class,
                 () -> service.checkDiscountApproval(grant.token(), cashier, 2L, BigDecimal.valueOf(100)), "Sai chi nhánh");
-        User other = User.builder().id(9L).role(Role.CASHIER).currentBranchId(1L).build();
+        User other = User.builder().id(9L).role(Role.STAFF).currentBranchId(1L).build();
         assertThrows(BusinessException.class,
                 () -> service.checkDiscountApproval(grant.token(), other, 1L, BigDecimal.valueOf(100)), "Thu ngân khác");
 
@@ -91,7 +91,7 @@ class ApprovalServiceTest {
         assertEquals("APPROVAL_BRANCH_FORBIDDEN", assertThrows(BusinessException.class,
                 () -> service.approveDiscount(cashier, "m2", "1357", BigDecimal.TEN)).getCode());
 
-        User cashier2 = User.builder().id(11L).username("c2").role(Role.CASHIER).active(true)
+        User cashier2 = User.builder().id(11L).username("c2").role(Role.STAFF).active(true)
                 .approvalPinHash(encoder.encode("1111")).build();
         when(userRepository.findByUsername("c2")).thenReturn(Optional.of(cashier2));
         assertEquals("APPROVAL_PIN_INVALID", assertThrows(BusinessException.class,

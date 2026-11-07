@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, Table, Badge, Modal } from '../../components/common';
 import { loyaltyService } from '../../services/loyaltyService';
 import { formatNumber, formatDateTime } from '../../utils/formatters';
+import { toast } from '../../components/common/toastStore';
 
 const TYPE_LABELS = {
   EARN: { label: 'Tích điểm', variant: 'success' },
@@ -44,7 +45,7 @@ export default function PointHistoryModal({ customer, onClose, canAdjust = false
     e.preventDefault();
     const delta = Math.trunc(Number(points));
     if (!delta || !reason.trim()) {
-      alert('Nhập số điểm (âm để trừ) và lý do điều chỉnh');
+      toast.warning('Nhập số điểm (âm để trừ) và lý do điều chỉnh');
       return;
     }
     setSaving(true);
@@ -55,7 +56,7 @@ export default function PointHistoryModal({ customer, onClose, canAdjust = false
       await load(customer.id);
       onAdjusted?.(updated);
     } catch (err) {
-      alert(err.response?.data?.message || 'Không điều chỉnh được điểm');
+      toast.error(err.response?.data?.message || 'Không điều chỉnh được điểm');
     } finally {
       setSaving(false);
     }

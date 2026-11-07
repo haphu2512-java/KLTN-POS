@@ -4,6 +4,7 @@ import { formatCurrency } from '../../utils/formatters';
 import { exportToCsv } from '../../utils/exportCsv';
 import { playBeep } from '../../utils/audio';
 import './BarcodePrintModal.css';
+import { toast } from '../../components/common/toastStore';
 
 export default function BarcodePrintModal({
   isOpen,
@@ -88,7 +89,7 @@ export default function BarcodePrintModal({
         new CustomEvent('pos:barcode_scanned', { detail: { barcode: product.barcode, product } })
       );
     }
-    alert(`Đã mô phỏng quét mã vạch: ${product.barcode} (${product.name})`);
+    toast.info(`Đã mô phỏng quét mã vạch: ${product.barcode} (${product.name})`);
   };
 
   return (

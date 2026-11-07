@@ -42,14 +42,14 @@ public class ProductController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Tạo mới sản phẩm")
     public ResponseEntity<ApiResponse<Product>> create(@Valid @RequestBody ProductRequest req) {
         return ResponseEntity.ok(ApiResponse.ok("Tạo sản phẩm thành công", productService.createProduct(req)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Cập nhật sản phẩm")
     public ResponseEntity<ApiResponse<Product>> update(@PathVariable Long id, @Valid @RequestBody ProductRequest req) {
         return ResponseEntity.ok(ApiResponse.ok("Cập nhật sản phẩm thành công", productService.updateProduct(id, req)));
@@ -63,7 +63,7 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Xóa sản phẩm (Soft delete)")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         productService.deleteProduct(id);

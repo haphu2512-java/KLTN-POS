@@ -168,25 +168,12 @@ class ApiSecurityIntegrationTest {
     }
 
     @Test
-    @DisplayName("Thủ kho không bán hàng, không mở ca, không xem khách hàng; vẫn xem nhà cung cấp và phiếu nhập")
-    void warehouseBlockedFromSelling() throws Exception {
-        userRepository.save(User.builder().username("wh_user").password("x")
-                .fullName("Thủ kho").role(Role.WAREHOUSE).branchIds(TestAuth.branches(1L)).active(true).build());
-        String warehouse = tokenFor("wh_user");
-
-        mvc.perform(post("/api/invoices").header("Authorization", warehouse)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"branchId\":1,\"paymentMethod\":\"CARD\",\"items\":[{\"productId\":1,\"quantity\":1}]}"))
-                .andExpect(status().isForbidden());
-        mvc.perform(post("/api/shifts/open").header("Authorization", warehouse)
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"workShiftId\":1,\"openingCash\":0}"))
-                .andExpect(status().isForbidden());
-        for (String url : new String[]{"/api/shifts/current", "/api/staff", "/api/customers"}) {
-            mvc.perform(get(url).header("Authorization", warehouse)).andExpect(status().isForbidden());
+    @DisplayName("Nhân viên (STAFF) không làm nghiệp vụ kho: không xem nhà cung cấp, phiếu nhập, kiểm kê, đặt hàng, dự báo")
+    void staffBlockedFromWarehouseWork() throws Exception {
+        for (String url : new String[]{"/api/suppliers", "/api/stock-in", "/api/stock-counts", "/api/purchase-orders"}) {
+            mvc.perform(get(url).header("Authorization", cashierToken)).andExpect(status().isForbidden());
         }
-        for (String url : new String[]{"/api/suppliers", "/api/stock-in"}) {
-            mvc.perform(get(url).header("Authorization", warehouse)).andExpect(status().isOk());
-        }
+        mvc.perform(get("/api/suppliers").header("Authorization", tokenFor("admin"))).andExpect(status().isOk());
     }
 
     @Test
@@ -235,7 +222,7 @@ class ApiSecurityIntegrationTest {
     @DisplayName("Tài khoản bị khóa không dùng được token cũ")
     void disabledUserTokenRejected() throws Exception {
         User user = userRepository.save(User.builder().username("tmp_cashier").password("x")
-                .fullName("Tạm").role(Role.CASHIER).branchIds(TestAuth.branches(1L)).active(true).build());
+                .fullName("Tạm").role(Role.STAFF).branchIds(TestAuth.branches(1L)).active(true).build());
         String token = tokenFor("tmp_cashier");
 
         user.setActive(false);
@@ -250,7 +237,7 @@ class ApiSecurityIntegrationTest {
     void invoiceDetailScopedToOwnShift() throws Exception {
         User cashier = userRepository.findByUsername("cashier").orElseThrow();
         User other = userRepository.save(User.builder().username("other_cashier").password("x")
-                .fullName("Thu ngân khác").role(Role.CASHIER).branchIds(TestAuth.branches(1L)).active(true).build());
+                .fullName("Thu ngân khác").role(Role.STAFF).branchIds(TestAuth.branches(1L)).active(true).build());
 
         Long ownShift = closedShift(cashier.getId());
         Long otherShift = closedShift(other.getId());

@@ -48,7 +48,7 @@ class UserServiceTest {
                 .username("cashier2")
                 .password("plain123")
                 .fullName("Lê Thu Ngân")
-                .role(Role.CASHIER)
+                .role(Role.STAFF)
                 .branchIds(Set.of(1L, 2L))
                 .build();
 
@@ -66,7 +66,7 @@ class UserServiceTest {
         assertNotNull(res);
         assertEquals("cashier2", res.getUsername());
         assertEquals("Lê Thu Ngân", res.getFullName());
-        assertEquals(Role.CASHIER, res.getRole());
+        assertEquals(Role.STAFF, res.getRole());
         assertTrue(res.getActive());
         assertEquals(List.of(1L, 2L), res.getBranchIds());
         verify(passwordEncoder).encode("plain123");
@@ -79,7 +79,7 @@ class UserServiceTest {
         CreateUserRequest req = CreateUserRequest.builder()
                 .username("quay1")
                 .password("plain123")
-                .role(Role.CASHIER)
+                .role(Role.STAFF)
                 .branchIds(Set.of(1L))
                 .build();
 
@@ -128,13 +128,13 @@ class UserServiceTest {
     private UpdateUserRequest assign(Long... branchIds) {
         UpdateUserRequest req = new UpdateUserRequest();
         req.setFullName("Thu Ngân");
-        req.setRole(Role.CASHIER);
+        req.setRole(Role.STAFF);
         req.setBranchIds(Set.of(branchIds));
         return req;
     }
 
     private User cashierAt(Long id, Long... branchIds) {
-        return User.builder().id(id).username("c" + id).fullName("Thu Ngân").role(Role.CASHIER)
+        return User.builder().id(id).username("c" + id).fullName("Thu Ngân").role(Role.STAFF)
                 .branchIds(new HashSet<>(Set.of(branchIds))).active(true).build();
     }
 
@@ -142,7 +142,7 @@ class UserServiceTest {
     @DisplayName("Thu ngân phải được phân công ít nhất một chi nhánh")
     void cashierNeedsAtLeastOneBranch() {
         CreateUserRequest req = CreateUserRequest.builder()
-                .username("no_branch").password("plain123").fullName("Chưa gán").role(Role.CASHIER).build();
+                .username("no_branch").password("plain123").fullName("Chưa gán").role(Role.STAFF).build();
         when(userRepository.existsByUsername("no_branch")).thenReturn(false);
 
         BusinessException ex = assertThrows(BusinessException.class, () -> userService.createUser(req));

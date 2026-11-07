@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Modal, Button } from '../../components/common';
 import { formatCurrency } from '../../utils/formatters';
 import { newRequestId } from '../../utils/requestId';
+import { toast } from '../../components/common/toastStore';
 
 export default function StockInModal({
   isOpen,
@@ -85,7 +86,7 @@ export default function StockInModal({
 
   const handleRemoveRow = (index) => {
     if (items.length <= 1) {
-      alert('Phiếu nhập phải có ít nhất 1 sản phẩm!');
+      toast.warning('Phiếu nhập phải có ít nhất 1 sản phẩm!');
       return;
     }
     setItems(items.filter((_, idx) => idx !== index));
@@ -101,7 +102,7 @@ export default function StockInModal({
     // Chặn bấm 2 lần liên tiếp trước khi React kịp vẽ lại nút
     if (savingRef.current) return;
     if (items.length === 0) {
-      alert('Vui lòng thêm sản phẩm nhập kho!');
+      toast.warning('Vui lòng thêm sản phẩm nhập kho!');
       return;
     }
 

@@ -6,6 +6,7 @@ import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { PERMS } from '../../utils/permissions';
 import useBranches, { branchNameOf } from '../../hooks/useBranches';
 import './PromotionPage.css';
+import { toast, confirmDialog } from '../../components/common/toastStore';
 
 const EMPTY_FORM = {
   name: '',
@@ -136,16 +137,16 @@ export default function PromotionPage({ isOnline = true, can = () => true, branc
   const handleSave = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) {
-      alert('Vui lòng nhập tên chương trình');
+      toast.warning('Vui lòng nhập tên chương trình');
       return;
     }
     const value = Number(form.value);
     if (!value || value <= 0) {
-      alert('Mức giảm phải lớn hơn 0');
+      toast.warning('Mức giảm phải lớn hơn 0');
       return;
     }
     if (form.type === 'PERCENT' && value > 100) {
-      alert('Giảm theo % không được vượt 100%');
+      toast.warning('Giảm theo % không được vượt 100%');
       return;
     }
     const payload = {
@@ -173,7 +174,7 @@ export default function PromotionPage({ isOnline = true, can = () => true, branc
       setEditing(null);
       load();
     } catch (err) {
-      alert(err.response?.data?.message || 'Không lưu được khuyến mãi');
+      toast.error(err.response?.data?.message || 'Không lưu được khuyến mãi');
     } finally {
       setSaving(false);
     }
@@ -184,17 +185,17 @@ export default function PromotionPage({ isOnline = true, can = () => true, branc
       const updated = await promotionService.setActive(p.id, !p.active);
       setPromotions((prev) => prev.map((x) => (x.id === p.id ? updated : x)));
     } catch (err) {
-      alert(err.response?.data?.message || 'Không đổi được trạng thái');
+      toast.error(err.response?.data?.message || 'Không đổi được trạng thái');
     }
   };
 
   const handleDelete = async (p) => {
-    if (!window.confirm(`Xóa chương trình "${p.name}"?\nHóa đơn đã bán vẫn giữ tên và số tiền khuyến mãi.`)) return;
+    if (!(await confirmDialog(`Xóa chương trình "${p.name}"?\nHóa đơn đã bán vẫn giữ tên và số tiền khuyến mãi.`, { title: 'Xóa khuyến mãi', confirmText: 'Xóa', danger: true }))) return;
     try {
       await promotionService.remove(p.id);
       setPromotions((prev) => prev.filter((x) => x.id !== p.id));
     } catch (err) {
-      alert(err.response?.data?.message || 'Không xóa được khuyến mãi');
+      toast.error(err.response?.data?.message || 'Không xóa được khuyến mãi');
     }
   };
 

@@ -1,9 +1,10 @@
+import { toast } from '../components/common/toastStore';
 /**
  * Utility function to export data to CSV format with UTF-8 BOM (supporting Vietnamese characters in Excel)
  */
 export function exportToCsv(filename, headers, rows) {
   if (!rows || !rows.length) {
-    alert('Không có dữ liệu để xuất file');
+    toast.warning('Không có dữ liệu để xuất file');
     return;
   }
 

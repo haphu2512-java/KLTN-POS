@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import ApprovalPinModal from './ApprovalPinModal';
 import AssistantPanel from '../assistant/AssistantPanel';
 import './AppShell.css';
+import { ROLE_LABELS, normalizeRole } from '../../utils/permissions';
 
 const ICONS = {
   pos: <path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6" />,
@@ -58,7 +59,7 @@ function readCollapsed() {
   }
 }
 
-const ROLE_LABEL = { ADMIN: 'Quản trị viên', MANAGER: 'Quản lý', CASHIER: 'Thu ngân', WAREHOUSE: 'Thủ kho' };
+const ROLE_LABEL = ROLE_LABELS;
 
 /**
  * Khung ứng dụng: thanh điều hướng bên trái (nhóm theo chức năng, thu gọn được) + vùng nội dung.
@@ -179,7 +180,7 @@ export default function AppShell({
     );
   };
 
-  const roleLabel = ROLE_LABEL[currentUser?.role] || currentUser?.role || '';
+  const roleLabel = ROLE_LABEL[normalizeRole(currentUser?.role)] || currentUser?.role || '';
   const hasMenu = canApprove || onLogout;
 
   return (

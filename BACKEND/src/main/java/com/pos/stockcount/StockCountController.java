@@ -16,7 +16,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/stock-counts")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
 @Tag(name = "Stock count", description = "Kiểm kê và điều chỉnh tồn kho, báo cáo hao hụt")
 public class StockCountController {
 

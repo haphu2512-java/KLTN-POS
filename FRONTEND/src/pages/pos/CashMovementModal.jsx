@@ -4,6 +4,7 @@ import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { shiftService } from '../../services/shiftService';
 import { MOVEMENT_LABELS } from '../shifts/shiftUtils';
 import '../shifts/ShiftsPage.css';
+import { confirmDialog } from '../../components/common/toastStore';
 
 const EXPENSE_CATEGORIES = ['Vận chuyển', 'Mua vật tư', 'Ứng lương', 'Điện nước', 'Khác'];
 const EMPTY = { type: 'EXPENSE', category: 'Vận chuyển', amount: '', reason: '', counterpart: '' };
@@ -52,7 +53,7 @@ export default function CashMovementModal({ isOpen, onClose, session, drawerLimi
   };
 
   const handleDelete = async (row) => {
-    if (!window.confirm(`Xóa khoản ${MOVEMENT_LABELS[row.type].toLowerCase()} ${formatCurrency(row.amount)}?`)) return;
+    if (!(await confirmDialog(`Xóa khoản ${MOVEMENT_LABELS[row.type].toLowerCase()} ${formatCurrency(row.amount)}?`, { title: 'Xóa khoản thu/chi', confirmText: 'Xóa', danger: true }))) return;
     try {
       await shiftService.deleteCashMovement(row.id);
       await load();

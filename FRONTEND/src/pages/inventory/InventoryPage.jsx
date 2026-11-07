@@ -16,8 +16,9 @@ import { websocketService } from '../../services/websocketService';
 import { exportToCsv } from '../../utils/exportCsv';
 import { newRequestId } from '../../utils/requestId';
 import useBranches from '../../hooks/useBranches';
-import { PERMS } from '../../utils/permissions';
+import { PERMS, normalizeRole } from '../../utils/permissions';
 import './InventoryPage.css';
+import { toast, confirmDialog } from '../../components/common/toastStore';
 
 export default function InventoryPage({
   currentUser,
@@ -29,9 +30,8 @@ export default function InventoryPage({
   // Chi nhánh của phiên đăng nhập: nhập kho và điều chuyển luôn từ chi nhánh này.
   // Quản trị xem được tồn kho chi nhánh khác nhưng muốn nhập/xuất ở đó thì đăng nhập vào chi nhánh đó.
   const isAdmin = currentUser?.role === 'ADMIN';
-  // Thu ngân chỉ xem tồn kho; nhập kho, điều chuyển và lịch sử phiếu nhập dành cho kho/quản lý
-  const isCashier = currentUser?.role === 'CASHIER';
-  // Thu ngân chỉ xem tồn kho; nhập kho, điều chuyển và lịch sử phiếu nhập dành cho kho/quản lý
+  // Nhân viên (STAFF) chỉ xem tồn kho; nhập kho, điều chuyển và lịch sử phiếu nhập dành cho quản lý
+  const isCashier = normalizeRole(currentUser?.role) === 'STAFF';
   const canEdit = can(PERMS.INVENTORY_EDIT);
   const canViewCost = canEdit && !isCashier;
   // State from Database
@@ -171,22 +171,22 @@ export default function InventoryPage({
     setProductForm({ open: false, product: null });
     setReloadKey((k) => k + 1);
     if (action === 'created' && saved?.barcode) {
-      alert(`Đã thêm sản phẩm "${saved.name}" (mã vạch ${saved.barcode}). Nhập kho để có tồn bán.`);
+      toast.success(`Đã thêm sản phẩm "${saved.name}" (mã vạch ${saved.barcode}). Nhập kho để có tồn bán.`);
     }
   };
 
   const handleSyncBarcodes = async () => {
-    if (!window.confirm('Gán mã vạch nội bộ cho các sản phẩm đang mang mã cũ không quét được?')) return;
+    if (!(await confirmDialog('Gán mã vạch nội bộ cho các sản phẩm đang mang mã cũ không quét được?', { title: 'Đồng bộ mã vạch', confirmText: 'Đồng bộ' }))) return;
     setSyncingBarcodes(true);
     try {
       const result = await productService.syncBarcodes();
-      alert(
+      toast.success(
         `Đồng bộ mã vạch xong: kiểm tra ${result?.checked ?? 0} sản phẩm, ` +
           `đổi mã ${result?.updated ?? 0}, bỏ qua ${result?.skipped ?? 0}.`
       );
       setReloadKey((k) => k + 1);
     } catch (err) {
-      alert(err.response?.data?.message || 'Không đồng bộ được mã vạch.');
+      toast.error(err.response?.data?.message || 'Không đồng bộ được mã vạch.');
     } finally {
       setSyncingBarcodes(false);
     }
@@ -326,11 +326,11 @@ export default function InventoryPage({
       } catch (err) {
         // Server từ chối (ví dụ tài khoản thu ngân không có quyền nhập kho): không cộng kho giả trên giao diện
         if (err.response) {
-          alert(`Không thể nhập kho: ${err.response.data?.message || 'Máy chủ từ chối phiếu nhập'}`);
+          toast.error(`Không thể nhập kho: ${err.response.data?.message || 'Máy chủ từ chối phiếu nhập'}`);
           return false;
         }
         // Mất phản hồi: phiếu có thể đã được lưu. Giữ form để bấm lại với cùng mã, máy chủ sẽ không cộng kho lần hai
-        alert(`Chưa nhận được phản hồi từ máy chủ (${err.message}). Hãy bấm lại "Hoàn tất & Nhập Kho" để thử lại, phiếu sẽ không bị nhập trùng.`);
+        toast.error(`Chưa nhận được phản hồi từ máy chủ (${err.message}). Hãy bấm lại "Hoàn tất & Nhập Kho" để thử lại, phiếu sẽ không bị nhập trùng.`);
         return false;
       }
     }
@@ -354,7 +354,7 @@ export default function InventoryPage({
 
     // 3. Append to history
     setStockInHistory([newStockIn, ...stockInHistory]);
-    alert(`Đã hoàn tất nhập kho phiếu: ${newStockIn.id}! Tồn kho đã được cộng tự động.`);
+    toast.success(`Đã hoàn tất nhập kho phiếu: ${newStockIn.id}! Tồn kho đã được cộng tự động.`);
     return true;
   };
 
@@ -365,7 +365,7 @@ export default function InventoryPage({
         await inventoryService.transfer({ productId, quantity, toBranchId, note, clientRequestId: requestId });
       } catch (err) {
         const hint = err.response ? '' : ' Bấm xác nhận lại để thử, hàng sẽ không bị chuyển hai lần.';
-        alert(`Không thể điều chuyển: ${err.response?.data?.message || err.message}.${hint}`);
+        toast.error(`Không thể điều chuyển: ${err.response?.data?.message || err.message}.${hint}`);
         return false;
       }
     }
@@ -378,7 +378,7 @@ export default function InventoryPage({
       })
     );
     const targetBranch = branches.find((b) => b.id === toBranchId);
-    alert(
+    toast.success(
       `Đã chuyển thành công ${quantity} sản phẩm sang ${targetBranch?.name}!`
     );
     return true;
@@ -390,7 +390,7 @@ export default function InventoryPage({
     if (!qty) return;
     const num = Number(qty);
     if (isNaN(num) || num <= 0) {
-      alert('Số lượng không hợp lệ!');
+      toast.warning('Số lượng không hợp lệ!');
       return;
     }
 

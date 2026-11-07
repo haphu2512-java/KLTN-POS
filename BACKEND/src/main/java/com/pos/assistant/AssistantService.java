@@ -27,7 +27,7 @@ import java.util.Set;
 
 /**
  * Trợ lý hỏi đáp cho nhân viên cửa hàng. Chỉ dùng luật (từ khóa) và dữ liệu sẵn có, không gọi LLM.
- * Phân quyền giống các API gốc: doanh thu / bán chạy cho ADMIN, MANAGER; gợi ý nhập cho ADMIN, MANAGER, WAREHOUSE;
+ * Phân quyền giống các API gốc: doanh thu / bán chạy cho ADMIN, MANAGER; gợi ý nhập cho ADMIN, MANAGER;
  * tồn kho và hàng sắp hết cho mọi vai trò. Luôn trả lời theo chi nhánh của phiên đăng nhập.
  */
 @Service
@@ -39,7 +39,7 @@ public class AssistantService {
     private static final int MAX_ROWS = 5;
 
     private static final Set<Role> REPORT_ROLES = Set.of(Role.ADMIN, Role.MANAGER);
-    private static final Set<Role> FORECAST_ROLES = Set.of(Role.ADMIN, Role.MANAGER, Role.WAREHOUSE);
+    private static final Set<Role> FORECAST_ROLES = Set.of(Role.ADMIN, Role.MANAGER);
 
     private final IntentParser intentParser;
     private final CurrentUserService currentUserService;

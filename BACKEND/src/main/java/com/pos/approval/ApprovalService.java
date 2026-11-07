@@ -80,7 +80,7 @@ public class ApprovalService {
 
     /** Chỉ thu ngân bị giới hạn; ADMIN/MANAGER tự chịu trách nhiệm khoản giảm của mình */
     public boolean requiresDiscountApproval(User actor, BigDecimal discount, BigDecimal subtotal) {
-        return actor.getRole() == Role.CASHIER && discount.compareTo(cashierDiscountLimit(subtotal)) > 0;
+        return actor.getRole() == Role.STAFF && discount.compareTo(cashierDiscountLimit(subtotal)) > 0;
     }
 
     /** Quản lý tự đặt hoặc đổi PIN, phải nhập lại mật khẩu đăng nhập */

@@ -41,14 +41,14 @@ public class InvoiceController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
-    @Operation(summary = "Xem chi tiết hóa đơn theo ID. ADMIN mọi hóa đơn, MANAGER hóa đơn chi nhánh đang đăng nhập, CASHIER hóa đơn trong ca của mình")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
+    @Operation(summary = "Xem chi tiết hóa đơn theo ID. ADMIN mọi hóa đơn, MANAGER hóa đơn chi nhánh đang đăng nhập, STAFF hóa đơn trong ca của mình")
     public ResponseEntity<ApiResponse<Invoice>> getById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(invoiceService.getInvoiceForViewer(id, currentUserService.getCurrentUser())));
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Tạo hóa đơn thanh toán (tự động kiểm tra và trừ tồn kho nguyên tử)")
     public ResponseEntity<ApiResponse<Invoice>> create(@Valid @RequestBody InvoiceRequest req) {
         Invoice invoice = invoiceService.createInvoice(req, currentUserService.getCurrentUser());
@@ -56,14 +56,14 @@ public class InvoiceController {
     }
 
     @GetMapping("/{id}/return-info")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Thông tin hoàn trả: hóa đơn, các phiếu đã hoàn, hạn đổi trả. Thu ngân tra được hóa đơn cùng chi nhánh còn hạn đổi trả")
     public ResponseEntity<ApiResponse<InvoiceService.ReturnInfo>> returnInfo(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(invoiceService.getReturnInfo(id, currentUserService.getCurrentUser())));
     }
 
     @PostMapping("/{id}/returns")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Hoàn trả từng món / một phần số lượng (items rỗng = trả hết). Thu ngân cần approvalToken từ /api/approvals/refund")
     public ResponseEntity<ApiResponse<InvoiceService.ReturnResult>> createReturn(@PathVariable Long id,
                                                                                 @RequestBody ReturnRequest req) {

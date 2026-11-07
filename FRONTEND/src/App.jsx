@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AppShell from './components/layout/AppShell';
+import KeepAlivePage from './components/layout/KeepAlivePage';
+import { ToastHost } from './components/common';
 import useAppNavigate from './hooks/useAppNavigate';
 import LoginPage from './pages/auth/LoginPage';
 import PosPage from './pages/pos/PosPage';
@@ -24,23 +26,28 @@ import { PERMS, permissionsFor, homePathFor } from './utils/permissions';
 function AppRoutes() {
   const { user, branchId, branchName, isBackendOnline, isWsConnected, logout, isAuthenticated } = useAuth();
   const [isOfflineDemo, setIsOfflineDemo] = useState(false);
+  const [visited, setVisited] = useState([]);
+  const location = useLocation();
   const nav = useAppNavigate();
 
   // If user is not authenticated and hasn't selected offline demo, show Login Screen
   if (!isAuthenticated && !isOfflineDemo) {
+    // Hết phiên / đăng xuất: bỏ các màn hình đã giữ để phiên sau bắt đầu sạch
+    if (visited.length > 0) setVisited([]);
     return <LoginPage onSkipOffline={() => setIsOfflineDemo(true)} />;
   }
 
   const currentUser = user || {
     username: 'offline_cashier',
-    fullName: 'Thu Ngân (Ngoại Tuyến)',
-    role: 'CASHIER',
+    fullName: 'Nhân viên (Ngoại Tuyến)',
+    role: 'STAFF',
     branchId: 1,
     branchName: 'Chi nhánh 1 (demo)'
   };
 
   const handleLogout = () => {
     setIsOfflineDemo(false);
+    setVisited([]);
     logout();
   };
 
@@ -84,67 +91,61 @@ function AppRoutes() {
     onOpenPurchaseOrder: !isOfflineDemo && can(PERMS.INVENTORY_EDIT) ? nav.onOpenPurchaseOrder : undefined,
   };
 
-  // Hàm trả về element (không phải component) để không bị mount lại mỗi lần render.
-  // Không đủ quyền thì về trang mở đầu của vai trò.
-  const shell = (active, allowed, page) =>
-    allowed
-      ? <AppShell active={active} {...sharedProps}>{page}</AppShell>
-      : <Navigate to={homePath} replace />;
+  // Các màn hình của ứng dụng. Màn hình đã mở được GIỮ LẠI (ẩn đi) khi chuyển sang màn hình khác,
+  // nên dữ liệu đang nhập (giỏ hàng, biểu mẫu, bộ lọc...) không bị mất khi quay lại.
+  // Đăng xuất sẽ gỡ toàn bộ nên không lộ dữ liệu sang phiên sau.
+  const pages = [
+    { path: '/', key: 'pos', allowed: can(PERMS.POS_SELL), Page: PosPage },
+    { path: '/inventory', key: 'inventory', allowed: can(PERMS.INVENTORY_VIEW), Page: InventoryPage },
+    { path: '/forecast', key: 'forecast', allowed: can(PERMS.FORECAST_VIEW), Page: ForecastPage },
+    { path: '/report', key: 'report', allowed: can(PERMS.REPORT_VIEW), Page: ReportPage },
+    {
+      path: '/partners',
+      key: 'partners',
+      allowed: can(PERMS.CUSTOMER_VIEW) || can(PERMS.SUPPLIER_VIEW),
+      Page: PartnerPage,
+    },
+    { path: '/shifts', key: 'shifts', allowed: !isOfflineDemo && can(PERMS.SHIFTS_MANAGE), Page: ShiftsPage },
+    { path: '/staff', key: 'staff', allowed: can(PERMS.ACCOUNT_MANAGE), Page: StaffPage },
+    {
+      path: '/promotions',
+      key: 'promotions',
+      allowed: !isOfflineDemo && can(PERMS.PROMOTION_VIEW),
+      Page: PromotionPage,
+    },
+    {
+      path: '/stock-counts',
+      key: 'stockcount',
+      allowed: !isOfflineDemo && can(PERMS.INVENTORY_EDIT),
+      Page: StockCountPage,
+    },
+    {
+      path: '/purchase-orders',
+      key: 'purchaseorder',
+      allowed: !isOfflineDemo && can(PERMS.INVENTORY_EDIT),
+      Page: PurchaseOrderPage,
+    },
+    { path: '/audit', key: 'audit', allowed: !isOfflineDemo && can(PERMS.AUDIT_VIEW), Page: AuditLogPage },
+  ];
+
+  const current = pages.find((p) => p.path === location.pathname);
+  // Đường dẫn lạ hoặc không đủ quyền thì về trang mở đầu của vai trò
+  if (!current || !current.allowed) return <Navigate to={homePath} replace />;
+
+  // Ghi nhận màn hình đã mở (cập nhật state ngay khi render, theo cách React khuyến nghị)
+  if (!visited.includes(current.key)) setVisited([...visited, current.key]);
+  const mounted = new Set([...visited, current.key]);
 
   return (
-    <Routes>
-      <Route path="/" element={shell("pos", can(PERMS.POS_SELL), <PosPage {...sharedProps} />)} />
-      <Route
-        path="/inventory"
-        element={shell("inventory", can(PERMS.INVENTORY_VIEW), <InventoryPage {...sharedProps} />)}
-      />
-      <Route
-        path="/forecast"
-        element={shell("forecast", can(PERMS.FORECAST_VIEW), <ForecastPage {...sharedProps} />)}
-      />
-      <Route
-        path="/report"
-        element={shell("report", can(PERMS.REPORT_VIEW), <ReportPage {...sharedProps} />)}
-      />
-      <Route
-        path="/partners"
-        element={shell(
-          "partners",
-          can(PERMS.CUSTOMER_VIEW) || can(PERMS.SUPPLIER_VIEW),
-          <PartnerPage {...sharedProps} />
-        )}
-      />
-      <Route
-        path="/shifts"
-        element={shell("shifts", !isOfflineDemo && can(PERMS.SHIFTS_MANAGE), <ShiftsPage {...sharedProps} />)}
-      />
-      <Route
-        path="/staff"
-        element={shell("staff", can(PERMS.ACCOUNT_MANAGE), <StaffPage {...sharedProps} />)}
-      />
-      <Route
-        path="/promotions"
-        element={shell(
-          "promotions",
-          !isOfflineDemo && can(PERMS.PROMOTION_VIEW),
-          <PromotionPage {...sharedProps} />
-        )}
-      />
-      <Route
-        path="/stock-counts"
-        element={shell("stockcount", !isOfflineDemo && can(PERMS.INVENTORY_EDIT), <StockCountPage {...sharedProps} />)}
-      />
-      <Route
-        path="/purchase-orders"
-        element={shell("purchaseorder", !isOfflineDemo && can(PERMS.INVENTORY_EDIT), <PurchaseOrderPage {...sharedProps} />)}
-      />
-      <Route
-        path="/audit"
-        element={shell("audit", !isOfflineDemo && can(PERMS.AUDIT_VIEW), <AuditLogPage {...sharedProps} />)}
-      />
-      {/* Fallback: đường dẫn lạ về trang mở đầu của vai trò */}
-      <Route path="*" element={<Navigate to={homePath} replace />} />
-    </Routes>
+    <AppShell active={current.key} {...sharedProps}>
+      {pages
+        .filter((p) => p.allowed && mounted.has(p.key))
+        .map(({ key, Page }) => (
+          <KeepAlivePage key={key} active={key === current.key}>
+            <Page {...sharedProps} />
+          </KeepAlivePage>
+        ))}
+    </AppShell>
   );
 }
 
@@ -153,6 +154,7 @@ export default function App() {
     <HashRouter>
       <AuthProvider>
         <AppRoutes />
+        <ToastHost />
       </AuthProvider>
     </HashRouter>
   );
