@@ -14,6 +14,8 @@ import { purchaseOrderService } from '../../services/purchaseOrderService';
 import './ForecastPage.css';
 import { toast } from '../../components/common/toastStore';
 
+const TABLE_PAGE_SIZE = 50;
+
 export default function ForecastPage({
   branchId = 1,
   isOnline = true,
@@ -25,6 +27,7 @@ export default function ForecastPage({
   const [algorithm, setAlgorithm] = useState('EXP_SMOOTHING'); // 'EXP_SMOOTHING' | 'MOVING_AVG'
   const [forecastDays, setForecastDays] = useState(7); // 7 | 14 | 30
   const [selectedProductId, setSelectedProductId] = useState(null);
+  const [tablePage, setTablePage] = useState(1);
   const [backendForecasts, setBackendForecasts] = useState([]);
   const [productForecast, setProductForecast] = useState(null);
   const [revenueSummary, setRevenueSummary] = useState({
@@ -229,6 +232,14 @@ export default function ForecastPage({
   const handleRestockClick = (item) => openStockInDraft([item]);
 
   const restockRows = replenishmentList.filter((r) => r.suggestedQty > 0);
+
+  // Bảng gợi ý có thể tới vài nghìn dòng (mỗi sản phẩm một dòng): chỉ render từng trang để không giật
+  const totalPages = Math.ceil(replenishmentList.length / TABLE_PAGE_SIZE) || 1;
+  const currentPage = Math.min(tablePage, totalPages);
+  const pagedReplenishment = useMemo(
+    () => replenishmentList.slice((currentPage - 1) * TABLE_PAGE_SIZE, currentPage * TABLE_PAGE_SIZE),
+    [replenishmentList, currentPage]
+  );
   const handleBulkRestockClick = () => {
     if (restockRows.length === 0) {
       toast.info('Hiện chưa có mặt hàng nào cần nhập thêm.');
@@ -466,7 +477,7 @@ export default function ForecastPage({
               Biểu đồ xu hướng & dự báo theo sản phẩm:
             </span>
             <select
-              value={selectedProductId}
+              value={selectedProductId ?? ''}
               onChange={(e) => setSelectedProductId(Number(e.target.value))}
               style={{
                 height: '32px',
@@ -546,11 +557,29 @@ export default function ForecastPage({
 
           <Table
             columns={restockColumns}
-            data={replenishmentList}
+            data={pagedReplenishment}
             loading={loading}
             loadingText="Đang tính toán gợi ý nhập hàng AI..."
             emptyText="Không có gợi ý nhập hàng"
           />
+          {!loading && replenishmentList.length > TABLE_PAGE_SIZE && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', padding: '0 8px' }}>
+              <span className="text-muted" style={{ fontSize: '13px' }}>
+                Hiển thị {(currentPage - 1) * TABLE_PAGE_SIZE + 1} - {Math.min(currentPage * TABLE_PAGE_SIZE, replenishmentList.length)} / {replenishmentList.length} mặt hàng
+              </span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <Button size="sm" variant="secondary" disabled={currentPage <= 1} onClick={() => setTablePage(currentPage - 1)}>
+                  ← Trước
+                </Button>
+                <span style={{ fontSize: '13px', fontWeight: 600 }}>
+                  Trang {currentPage} / {totalPages}
+                </span>
+                <Button size="sm" variant="secondary" disabled={currentPage >= totalPages} onClick={() => setTablePage(currentPage + 1)}>
+                  Sau →
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
       </main>
     </div>
