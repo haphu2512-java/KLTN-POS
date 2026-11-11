@@ -14,7 +14,7 @@ OUT_DIR = ROOT / "outputs"
 CHART_DIR = OUT_DIR / "charts"
 
 # Danh mục sản phẩm thật của dự án (cào từ Bách Hóa Xanh) – chỉ dùng tên, giá, nhóm hàng.
-CATALOG_FILE = ROOT.parents[1] / "bhx_products_scraped.json"
+CATALOG_FILE = ROOT.parents[1] / "data" / "bhx" / "bhx_products_scraped.json"
 
 SEED = 2026
 

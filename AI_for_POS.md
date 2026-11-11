@@ -42,7 +42,7 @@ Trong đó:
 - $\hat{y}_{t+1}$: Giá trị dự báo cho ngày tiếp theo.
 - $y_t$: Số lượng bán thực tế của ngày gần nhất.
 - $\hat{y}_t$: Giá trị dự báo của ngày trước đó.
-- $\alpha$: Hệ số làm mịn (Smoothing Factor). Sau quá trình tinh chỉnh nghiệm thu, hệ số được chọn là **$\alpha = 0.35$** (cân bằng tối ưu giữa việc phản ứng với biến động nhu cầu mới và loại trừ nhiễu giao dịch ngẫu nhiên).
+- $\alpha$: Hệ số làm mịn (Smoothing Factor). Giá trị mặc định là **$\alpha = 0.35$**, nằm trong khoảng thông dụng cho dữ liệu bán lẻ theo ngày (cân bằng giữa phản ứng với biến động nhu cầu mới và loại trừ nhiễu giao dịch ngẫu nhiên) và đổi được qua cấu hình. Kết quả thử các giá trị $\alpha$ trên dữ liệu thật xem mục 5.
 
 ### 3.2. Moving Average 7 ngày (Trung bình trượt)
 Kết hợp tính trung bình trượt 7 ngày để triệt tiêu tính chu kỳ tuần (ví dụ: lượng mua tăng mạnh vào thứ 7 và Chủ nhật):
@@ -130,6 +130,10 @@ $$Q_{order} = \max\left(0, \lceil ROP + (\bar{d} \times T) - Q_{current} \rceil\
 ### Kiểm chứng bằng Python (`AI_FORECAST/`)
 
 Thư mục `AI_FORECAST/` là bản cài đặt Python của cùng các công thức, dùng để kiểm chứng và lấy số liệu cho báo cáo (thử α, thử dữ liệu CSV, xuất kết quả JSON). Python không chạy trong luồng bán hàng. `python -m pos_forecast.parity` sinh bộ ca `AI_FORECAST/tests/fixtures/parity_cases.json`, và JUnit `ForecastParityTest` kiểm tra `ForecastCalculator.java` cho cùng kết quả trên từng ca, nên hai bản không thể lệch nhau mà CI không báo.
+
+### Kiểm chứng trên dữ liệu thật (`AI_FORECAST/real_data_eval/`)
+
+Các công thức trên được chạy lại trên bộ dữ liệu công khai The Complete Journey (giao dịch tạp hóa thật của 2.469 hộ gia đình, năm 2017, 300 sản phẩm, 690.900 điểm so sánh). Kết quả đầy đủ ở `AI_FORECAST/real_data_eval/outputs/KET_QUA.md`. Tóm tắt: Exponential Smoothing α = 0.35 có MAE 2,74 đơn vị/ngày và sai 43,1% trên tổng nhu cầu 7 ngày, ngang Moving Average 7 ngày; α khoảng 0.1 cho sai số thấp hơn (37,8%); tồn kho an toàn với Z = 1.65 đạt mức phục vụ thực tế 89,7%. Đây là dữ liệu Mỹ và là mẫu theo hộ gia đình, nên các con số dùng để kiểm chứng phương pháp; khi triển khai cần đo lại trên dữ liệu của cửa hàng và chỉnh `AI_FORECAST_ALPHA`, `AI_SERVICE_LEVEL_Z` cho phù hợp.
 
 Tham số cấu hình qua biến môi trường: `AI_FORECAST_ALPHA`, `AI_FORECAST_MA_WINDOW`, `AI_SERVICE_LEVEL_Z`, `AI_LEAD_TIME_DAYS`, `AI_HISTORY_DAYS`, `AI_VALIDATION_DAYS`.
 
