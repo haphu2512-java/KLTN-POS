@@ -22,7 +22,10 @@ def main() -> None:
             print(f"đã có {target.name}")
             continue
         print(f"tải {name} ...")
-        urllib.request.urlretrieve(BASE + name, target)
+        # Tải vào file tạm rồi mới đổi tên, để lần tải bị ngắt giữa chừng không bị coi là file hoàn chỉnh
+        partial = target.with_name(target.name + ".part")
+        urllib.request.urlretrieve(BASE + name, partial)
+        partial.replace(target)
         print(f"  -> {target} ({target.stat().st_size / 1e6:.1f} MB)")
 
 
