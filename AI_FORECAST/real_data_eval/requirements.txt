@@ -1,0 +1,5 @@
+pandas>=2.2
+numpy>=1.26
+matplotlib>=3.8
+# Chỉ cần khi chạy lại download.py / prepare.py (đọc file .rds/.rda của R)
+pyreadr>=0.5
