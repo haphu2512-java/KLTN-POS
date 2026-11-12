@@ -1,6 +1,6 @@
 # Tích điểm và đổi điểm thành viên
 
-Tài liệu mô tả cách hệ thống KLTN POS cộng điểm, đổi điểm, hoàn điểm khi trả hàng và cách quản lý điều chỉnh điểm. Đây là phần nền của mảng **Khuyến mãi / Thành viên**; khuyến mãi theo chương trình (giảm theo sản phẩm, mua X tặng Y, voucher) và hạng thành viên sẽ xây tiếp trên nền này.
+Tài liệu mô tả cách hệ thống KLTN POS cộng điểm, đổi điểm, hoàn điểm khi trả hàng và cách quản lý điều chỉnh điểm. Đây là phần nền của mảng **Khuyến mãi / Thành viên**; hạng thành viên và các loại khuyến mãi khác sẽ xây tiếp trên nền này.
 
 ## 1. Khái niệm
 
@@ -19,7 +19,7 @@ Cấu hình trong `BACKEND/src/main/resources/application.properties` (có thể
 |---|---|---|---|
 | `pos.loyalty.earn-per-amount` | `POS_LOYALTY_EARN_PER_AMOUNT` | 10000 | Mỗi 10.000đ khách **thực trả** được 1 điểm (làm tròn xuống) |
 | `pos.loyalty.point-value` | `POS_LOYALTY_POINT_VALUE` | 1000 | 1 điểm đổi được 1.000đ |
-| `pos.loyalty.redeem-max-percent` | `POS_LOYALTY_REDEEM_MAX_PERCENT` | 50 | Mỗi hóa đơn dùng điểm trả tối đa 50% số tiền sau giảm tay |
+| `pos.loyalty.redeem-max-percent` | `POS_LOYALTY_REDEEM_MAX_PERCENT` | 50 | Mỗi hóa đơn dùng điểm trả tối đa 50% số tiền sau khuyến mãi và giảm tay |
 | `pos.loyalty.min-redeem-points` | `POS_LOYALTY_MIN_REDEEM_POINTS` | 10 | Mỗi lần đổi tối thiểu 10 điểm |
 
 Với mặc định trên, mua 1.000.000đ được 100 điểm, tương đương 100.000đ cho lần mua sau, tức khách được hoàn lại khoảng 10% giá trị.
@@ -28,6 +28,8 @@ Với mặc định trên, mua 1.000.000đ được 100 điểm, tương đươn
 
 ```
 Tiền hàng (subtotal)                 = Σ đơn giá niêm yết × số lượng
+− Khuyến mãi (promotionDiscount)       chương trình khuyến mãi được chọn, nếu có
+= Sau khuyến mãi (afterPromotion)
 − Giảm tay (discount)                  thu ngân nhập, kiểm hạn mức + PIN
 = Sau giảm (afterDiscount)
 − Giảm do đổi điểm (pointsDiscount)  = redeemPoints × point-value
@@ -36,7 +38,8 @@ Tiền hàng (subtotal)                 = Σ đơn giá niêm yết × số lư�
 ```
 
 - Điểm cộng tính trên số tiền **sau khi đã trừ điểm**, nên phần trả bằng điểm không sinh thêm điểm.
-- Giảm do đổi điểm **không tính vào hạn mức giảm tay** của thu ngân, vì đây là quyền của khách, không cần quản lý duyệt.
+- Khuyến mãi và giảm do đổi điểm đều **không tính vào hạn mức giảm tay** của thu ngân. Trần đổi điểm 50% tính trên `afterDiscount`, tức sau cả khuyến mãi và giảm tay.
+- Giảm do đổi điểm **không cần quản lý duyệt**, vì đây là quyền của khách.
 
 ## 4. Quy trình tích điểm
 
@@ -79,14 +82,22 @@ Khách có 36 điểm, mua 1 hộp sữa 36.000đ:
 
 ## 6. Hoàn trả hóa đơn
 
-Khi quản lý hoàn trả một hóa đơn có khách thành viên:
+Hóa đơn có thể trả nhiều lần, mỗi lần trả một số món hoặc một phần số lượng (`InvoiceService.createReturn`). Với hóa đơn có khách thành viên, mỗi lần trả hệ thống:
 
-1. **Trả lại điểm đã dùng** (`REFUND_REDEEM`, +`points_redeemed`).
-2. **Thu hồi đúng số điểm đã cộng** cho hóa đơn đó (`REFUND_EARN`, −`points_earned`), không tính lại theo công thức hiện hành, nên đổi cấu hình tỷ lệ cũng không làm sai.
-3. Nếu khách đã tiêu bớt số điểm được cộng, chỉ thu hồi phần còn lại để số dư không âm; dòng sổ điểm ghi rõ "Thu hồi x/y điểm".
-4. Hóa đơn cũ (trước khi có cột `points_earned`) thì tính lại theo công thức như trước.
+1. **Trả lại điểm đã dùng** (`REFUND_REDEEM`) và **thu hồi điểm đã cộng** (`REFUND_EARN`) theo tỷ lệ tiền hoàn **cộng dồn** trên tổng tiền khách thực trả:
+   - mục tiêu trả lại = floor(`points_redeemed` × tổng tiền đã hoàn / `total_amount`);
+   - mục tiêu thu hồi = floor(`points_earned` × tổng tiền đã hoàn / `total_amount`);
+   - lần này chỉ xử lý phần chênh so với các lần trả trước (lưu ở `invoice_return.points_returned` / `points_revoked`), nên trả nhiều lần không bị cộng/trừ trùng.
+2. **Lần trả cuối** (trả hết số lượng còn lại) thì xử lý **toàn bộ** phần còn lại của `points_redeemed` và `points_earned`, nên phần lẻ do làm tròn không bị mất.
+3. Điểm thu hồi dựa trên `points_earned` đã lưu, không tính lại theo công thức hiện hành, nên đổi cấu hình tỷ lệ cũng không làm sai.
+4. Nếu khách đã tiêu bớt số điểm được cộng, chỉ thu hồi phần còn lại để số dư không âm; dòng sổ điểm ghi rõ "Thu hồi x/y điểm".
+5. Hóa đơn cũ (trước khi có cột `points_earned`) thì tính lại theo công thức hiện hành.
 
-Ví dụ trên sau khi hoàn: 19 + 18 − 1 = 36 điểm, đúng bằng trước khi mua.
+Ví dụ trên sau khi hoàn toàn bộ: 19 + 18 − 1 = 36 điểm, đúng bằng trước khi mua.
+
+Ví dụ trả một phần: hóa đơn thực trả 200.000đ, dùng 20 điểm, được cộng 20 điểm. Lần 1 hoàn 50.000đ (25%): trả lại floor(20 × 25%) = 5 điểm, thu hồi 5 điểm. Lần 2 trả nốt số hàng còn lại: trả lại 15 điểm, thu hồi 15 điểm.
+
+**Hủy hóa đơn:** trạng thái `CANCELLED` có trong `InvoiceStatus` nhưng hiện chưa có luồng hủy nào dùng tới, nên chưa có xử lý điểm khi hủy. Muốn hoàn lại điểm thì dùng hoàn trả toàn bộ.
 
 ## 7. Xem sổ điểm và điều chỉnh tay
 
@@ -135,5 +146,6 @@ Hibernate (`ddl-auto=update`) tự thêm cột và bảng khi khởi động; c�
 ## 11. Hướng phát triển tiếp
 
 1. **Hạng thành viên** (Bạc, Vàng, Kim cương) theo chi tiêu 12 tháng, hệ số tích điểm theo hạng. Dùng chi tiêu để xếp hạng, điểm để đổi, nên đổi điểm không làm tụt hạng.
-2. **Khuyến mãi theo chương trình**: giảm %/số tiền theo sản phẩm hoặc nhóm hàng, mua X tặng Y, hóa đơn từ X giảm Y, voucher có hạn và số lượt. Thứ tự áp dụng: KM sản phẩm → KM đơn → voucher → giảm theo hạng → đổi điểm → giảm tay.
-3. **Điểm hết hạn** sau 12 tháng (thêm loại `EXPIRE` vào sổ điểm), ưu đãi sinh nhật, báo cáo hiệu quả khuyến mãi.
+2. **Mở rộng khuyến mãi**: hiện có hai loại khuyến mãi là giảm % và giảm số tiền cố định; có thể thêm mua X tặng Y, voucher có hạn và số lượt, giảm theo hạng.
+3. **Hủy hóa đơn** kèm hoàn điểm (dùng trạng thái `CANCELLED` đang có sẵn).
+4. **Điểm hết hạn** sau 12 tháng (thêm loại `EXPIRE` vào sổ điểm), ưu đãi sinh nhật, báo cáo hiệu quả khuyến mãi.
