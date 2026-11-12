@@ -93,6 +93,15 @@ Database mới chỉ có 8 sản phẩm mẫu. Muốn có 1.949 sản phẩm Bá
 docker exec -i pos-mysql mysql -uroot -p"$DB_ROOT_PASSWORD" pos_inventory < data/bhx/import_bhx_data.sql
 ```
 
+### Dữ liệu bán hàng mẫu 90 ngày (để demo Dự báo AI)
+Database mới chưa có hóa đơn nên trang Dự báo AI, nút "Lập đơn từ đề xuất AI", Báo cáo và file Excel đều trống. Nạp lịch sử bán 90 ngày (có xu hướng tăng/giảm và cuối tuần bán nhiều hơn) bằng:
+
+```bash
+docker exec -i pos-mysql mysql -uroot -p"$DB_ROOT_PASSWORD" pos_inventory < data/demo/lich_su_ban_90_ngay.sql
+```
+
+Script chỉ thêm hóa đơn và ca làm có ghi chú `[DEMO]`, không xóa sản phẩm, tài khoản hay hóa đơn thật, chạy lại nhiều lần được. Nó đặt lại tồn kho của 120 sản phẩm được chọn để có đủ mức "Khẩn cấp / sắp hết / còn đủ", và xóa cache dự báo để trang Dự báo tính lại ngay. Chạy sau khi backend đã chạy lần đầu (và sau khi nạp BHX nếu có).
+
 Quy tắc mã vạch (`BarcodeRules.java`):
 - Mã EAN-8/UPC-A/EAN-13/ITF-14 thật in trên bao bì (đúng số kiểm tra) được giữ nguyên.
 - Sản phẩm không có mã thật dùng mã EAN-13 nội bộ của cửa hàng: `20` + ID sản phẩm đủ 10 số + số kiểm tra (vd. sản phẩm #3 → `2000000000039`). In tem ở trang Kho để dán lên hàng.

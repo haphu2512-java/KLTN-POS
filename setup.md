@@ -260,6 +260,20 @@ Sau khi nạp, **khởi động lại backend** để bước đồng bộ mã v
 
 Các file đi kèm trong `data/bhx/`: `bhx_products_scraped.json` là dữ liệu thô, `scrape_bhx.py` là script đã dùng để lấy dữ liệu (chạy trong thư mục đó). Không cần chạy lại chúng.
 
+## Nạp lịch sử bán hàng 90 ngày để demo (tùy chọn)
+
+Trang Dự báo AI cần lịch sử bán để vẽ biểu đồ và đề xuất nhập hàng. File `data/demo/lich_su_ban_90_ngay.sql` tạo khoảng 15.000 hóa đơn trong 90 ngày gần nhất (đến hôm qua) cho 120 sản phẩm đầu tiên, ở mọi chi nhánh đang hoạt động, kèm ca làm đã đóng và khớp tiền.
+
+```bash
+docker exec -i pos-mysql mysql -uroot -p"<DB_ROOT_PASSWORD>" pos_inventory < data/demo/lich_su_ban_90_ngay.sql
+```
+
+- Chỉ thêm dữ liệu có ghi chú `[DEMO]`. Chạy lại thì dữ liệu `[DEMO]` cũ được xóa rồi tạo lại.
+- Đặt lại số tồn kho của 120 sản phẩm đó để có hàng "Khẩn cấp", "Sắp hết" và "Còn đủ".
+- Xóa cache dự báo nên không cần khởi động lại backend.
+- Muốn đổi số ngày hoặc số sản phẩm, sửa `@demo_days` và `@demo_max_products` ở đầu file.
+- Chạy mất khoảng 10 giây.
+
 ---
 
 ## Bước 6. Chạy ứng dụng quầy (FRONTEND)
