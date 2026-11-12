@@ -1,5 +1,6 @@
 -- IMPORT REAL BACH HOA XANH DATA FOR POS & INVENTORY SYSTEM
 -- Total products: 1949
+SET NAMES utf8mb4;
 USE `pos_inventory`;
 SET FOREIGN_KEY_CHECKS = 0;
 TRUNCATE TABLE `inventory`;
