@@ -82,9 +82,9 @@ Tạo tự động khi database còn trống, mật khẩu là giá trị `SEED_
 | Tài khoản | Vai trò |
 |-----------|---------|
 | `admin` | ADMIN (toàn quyền, chọn được mọi chi nhánh) |
-| `cashier` | CASHIER (chỉ bán hàng, được phân công Chi nhánh Quận 1) |
+| `cashier` | STAFF (nhân viên bán hàng, được phân công Chi nhánh Quận 1) |
 
-Bốn vai trò: `ADMIN`, `MANAGER`, `CASHIER`, `WAREHOUSE`. Báo cáo dành cho ADMIN/MANAGER; Dự báo dành cho ADMIN/MANAGER/WAREHOUSE.
+Ba vai trò: `ADMIN`, `MANAGER`, `STAFF`. Thu ngân và thủ kho cũ đã gộp thành `STAFF`; nghiệp vụ kho (nhập, điều chuyển, kiểm kê, đặt hàng) do MANAGER/ADMIN làm. Báo cáo và Dự báo dành cho ADMIN/MANAGER.
 
 ### Dữ liệu sản phẩm và mã vạch
 Database mới chỉ có 8 sản phẩm mẫu. Muốn có 1.949 sản phẩm Bách Hóa Xanh thì nạp `data/bhx/import_bhx_data.sql` sau khi backend đã chạy lần đầu (script này **xóa sạch** bảng `product` và `inventory` rồi nạp lại):
@@ -414,7 +414,7 @@ Mọi API (trừ đăng nhập và `/api/scanner/ping`) cần header `Authorizat
 ### Trợ lý hỏi đáp (chatbot)
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| POST | `/api/assistant/chat` | Body `{ "message": "..." }`. Trả `{ reply, intent, source, suggestions }`. Hiểu câu hỏi tiếng Việt (có dấu hoặc không) theo từ khóa, không gọi LLM: tồn kho/giá một sản phẩm (tên hoặc mã vạch), hàng sắp hết (mọi vai trò); doanh thu hôm nay/hôm qua/N ngày, top bán chạy (ADMIN, MANAGER); gợi ý nhập theo dự báo (ADMIN, MANAGER, WAREHOUSE). Luôn theo chi nhánh của phiên đăng nhập. Giao diện: nút **Trợ lý** trên thanh điều hướng desktop. |
+| POST | `/api/assistant/chat` | Body `{ "message": "..." }`. Trả `{ reply, intent, source, suggestions }`. Hiểu câu hỏi tiếng Việt (có dấu hoặc không) theo từ khóa, không gọi LLM: tồn kho/giá một sản phẩm (tên hoặc mã vạch), hàng sắp hết (mọi vai trò); doanh thu hôm nay/hôm qua/N ngày, top bán chạy (ADMIN, MANAGER); gợi ý nhập theo dự báo (ADMIN, MANAGER). Luôn theo chi nhánh của phiên đăng nhập. Giao diện: nút **Trợ lý** trên thanh điều hướng desktop. |
 
 ### Shifts (Ca làm việc)
 | Method | Endpoint | Mô tả |

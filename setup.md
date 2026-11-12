@@ -180,7 +180,20 @@ JPA_DDL_AUTO=validate
 
 - Database trống: Flyway chạy V1 tạo toàn bộ bảng, sau đó backend tạo dữ liệu mẫu như bình thường.
 - Database đã có bảng (trước đây chạy với `update`): lần đầu Flyway chỉ đánh dấu database là V1 (bảng `flyway_schema_history`), không tạo lại bảng. Hibernate `validate` kiểm tra entity khớp với bảng, lệch thì backend dừng ngay lúc khởi động thay vì lỗi giữa ca bán hàng.
-- Khi thêm hoặc sửa entity (thêm cột, thêm bảng, thêm giá trị enum), viết thêm file `V2__mo_ta.sql`, `V3__...` trong cùng thư mục. File đã chạy thì không sửa lại.
+- Khi thêm hoặc sửa entity (thêm cột, thêm bảng, thêm giá trị enum), viết thêm file `V3__mo_ta.sql`, `V4__...` trong cùng thư mục. File đã chạy thì không sửa lại.
+
+Các file hiện có:
+
+| File | Nội dung |
+|------|----------|
+| `V1__baseline.sql` | Toàn bộ bảng ban đầu |
+| `V2__merge_roles_into_staff.sql` | Gộp vai trò `CASHIER` và `WAREHOUSE` thành `STAFF`; cột `users.role` chỉ còn `ADMIN`, `MANAGER`, `STAFF` |
+
+Database đang chạy với `JPA_DDL_AUTO=update` (không bật Flyway) mà còn tài khoản vai trò cũ thì chạy tay nội dung file V2 một lần, nếu không backend sẽ lỗi khi đọc các tài khoản đó:
+
+```bash
+docker exec -i pos-mysql mysql -uroot -p"<DB_ROOT_PASSWORD>" pos_inventory < BACKEND/src/main/resources/db/migration/V2__merge_roles_into_staff.sql
+```
 
 Đã thử cả hai trường hợp trên MySQL 8: database trống lên V1 rồi tạo dữ liệu mẫu, database đang dùng được đánh dấu V1 và qua bước `validate`.
 
@@ -190,7 +203,7 @@ Khi database còn trống (chưa có chi nhánh nào), lớp `DatabaseInitialize
 
 - 5 ca làm mẫu: 06:00–09:00, 09:00–12:00, 12:00–15:00, 15:00–18:00, 18:00–22:00.
 - 2 chi nhánh: **id 1 = Chi nhánh Quận 1 (Trụ sở)**, **id 2 = Chi nhánh Quận 3**.
-- 2 tài khoản: `admin` (ADMIN) và `cashier` (CASHIER, được phân công Chi nhánh Quận 1), mật khẩu đều là `SEED_DEFAULT_PASSWORD`.
+- 2 tài khoản: `admin` (ADMIN) và `cashier` (STAFF, được phân công Chi nhánh Quận 1), mật khẩu đều là `SEED_DEFAULT_PASSWORD`.
 - 5 nhà cung cấp và 8 sản phẩm mẫu kèm tồn kho ở cả 2 chi nhánh.
 
 Nếu database trống mà chưa đặt `SEED_DEFAULT_PASSWORD`, backend dừng với lỗi *"Database trống nhưng chưa đặt SEED_DEFAULT_PASSWORD..."*.
@@ -345,7 +358,7 @@ Cách tìm IP Wi-Fi của máy tính: Windows `ipconfig`, macOS `ipconfig getifa
 2. Trên app điện thoại quét QR đó (hoặc nhập mã 6 số trong Cài đặt). Mã chỉ dùng một lần và hết hạn sau **5 phút**.
 3. Từ giờ mã quét trên điện thoại đi thẳng vào giỏ của đúng quầy đó. Quét lúc mất mạng thì mã nằm trong hàng đợi offline, có mạng lại bấm *Đồng bộ ngay*.
 
-Các vai trò dùng được tính năng bắn mã vào quầy: ADMIN, MANAGER, CASHIER. Tra giá/tồn kho thì cả WAREHOUSE cũng dùng được.
+Cả 3 vai trò (ADMIN, MANAGER, STAFF) đều dùng được tính năng bắn mã vào quầy và tra giá/tồn kho. Riêng tìm sản phẩm để gán mã vạch mới thì chỉ ADMIN, MANAGER.
 
 ### 8.3. Điều kiện "cùng mạng"
 
@@ -389,23 +402,29 @@ Công thức và lý do thiết kế: xem [`AI_for_POS.md`](AI_for_POS.md) và [
 
 ## Bước 10. Vai trò và phân quyền
 
-Có 4 vai trò. Quyền dưới đây lấy từ các `@PreAuthorize` trong backend:
+Có 3 vai trò: ADMIN, MANAGER và STAFF. Thu ngân (CASHIER) và thủ kho (WAREHOUSE) cũ đã gộp thành STAFF; nghiệp vụ kho do MANAGER hoặc ADMIN làm. Quyền dưới đây lấy từ các `@PreAuthorize` trong backend:
 
-| Chức năng | ADMIN | MANAGER | CASHIER | WAREHOUSE |
-|-----------|:-----:|:-------:|:-------:|:---------:|
-| Bán hàng, tạo hóa đơn | ✓ | ✓ | ✓ | |
-| Hoàn trả, xem lịch sử hóa đơn | ✓ | ✓ | | |
-| Khách hàng | ✓ | ✓ | ✓ | |
-| Sản phẩm, tồn kho, nhập kho, nhà cung cấp | ✓ | ✓ | | ✓ |
-| Đồng bộ mã vạch (`/api/products/barcodes/sync`) | ✓ | | | |
-| Báo cáo doanh thu | ✓ | ✓ | | |
-| Dự báo AI | ✓ | ✓ | | ✓ |
-| Mở/đóng ca, thu chi két | ✓ | ✓ | ✓ | |
-| Duyệt ca lệch tiền, đóng hộ ca, xếp ca | ✓ | ✓ | | |
-| Sửa lịch ca (thêm/sửa/xóa ca) | ✓ | | | |
-| Quản lý tài khoản (tạo, phân quyền, khóa, đổi mật khẩu) | ✓ | | | |
-| Quản lý chi nhánh | ✓ | | | |
-| Ghép điện thoại với quầy | ✓ | ✓ | ✓ | |
+| Chức năng | ADMIN | MANAGER | STAFF |
+|-----------|:-----:|:-------:|:-----:|
+| Bán hàng, tạo hóa đơn, áp khuyến mãi | ✓ | ✓ | ✓ |
+| Trả hàng từng món (STAFF cần quản lý nhập PIN duyệt) | ✓ | ✓ | ✓ |
+| Hoàn tiền cả hóa đơn, xem danh sách hóa đơn | ✓ | ✓ | |
+| Khách hàng, tích điểm | ✓ | ✓ | ✓ |
+| Điều chỉnh điểm thủ công, đặt PIN duyệt | ✓ | ✓ | |
+| Xem tồn kho, tra giá | ✓ | ✓ | ✓ |
+| Sửa sản phẩm, nhập kho, nhà cung cấp, điều chuyển, kiểm kê, hạn dùng, đặt hàng | ✓ | ✓ | |
+| Đồng bộ mã vạch (`/api/products/barcodes/sync`) | ✓ | | |
+| Xem khuyến mãi | ✓ | ✓ | |
+| Tạo, sửa, bật/tắt khuyến mãi | ✓ | | |
+| Báo cáo doanh thu, xuất Excel | ✓ | ✓ | |
+| Dự báo AI | ✓ | ✓ | |
+| Mở/đóng ca, thu chi két | ✓ | ✓ | ✓ |
+| Duyệt ca lệch tiền, đóng hộ ca, xếp ca | ✓ | ✓ | |
+| Sửa lịch ca (thêm/sửa/xóa ca) | ✓ | | |
+| Nhật ký thao tác | ✓ | ✓ | |
+| Quản lý tài khoản (tạo, phân quyền, khóa, đổi mật khẩu) | ✓ | | |
+| Quản lý chi nhánh | ✓ | | |
+| Ghép điện thoại với quầy | ✓ | ✓ | ✓ |
 
 Chi nhánh:
 - ADMIN chọn được mọi chi nhánh khi đăng nhập. Người khác chỉ chọn được chi nhánh mà ADMIN đã phân công (trang **Tài khoản**).
