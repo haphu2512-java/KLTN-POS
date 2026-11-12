@@ -98,11 +98,11 @@ Ví dụ trên sau khi hoàn: 19 + 18 − 1 = 36 điểm, đúng bằng trước
 
 | Phương thức | Đường dẫn | Quyền | Mô tả |
 |---|---|---|---|
-| GET | `/api/loyalty/policy` | ADMIN, MANAGER, CASHIER | Quy tắc đang áp dụng |
-| GET | `/api/loyalty/customers/{id}/transactions` | ADMIN, MANAGER, CASHIER | Sổ điểm của khách |
+| GET | `/api/loyalty/policy` | ADMIN, MANAGER, STAFF | Quy tắc đang áp dụng |
+| GET | `/api/loyalty/customers/{id}/transactions` | ADMIN, MANAGER, STAFF | Sổ điểm của khách |
 | POST | `/api/loyalty/customers/{id}/adjust` | ADMIN, MANAGER | `{ "points": -5, "reason": "..." }` |
-| POST | `/api/customers` | ADMIN, MANAGER, CASHIER | `{ name, phone, address }` |
-| PUT | `/api/customers/{id}` | ADMIN, MANAGER, CASHIER | Sửa tên, SĐT, địa chỉ |
+| POST | `/api/customers` | ADMIN, MANAGER, STAFF | `{ name, phone, address }` |
+| PUT | `/api/customers/{id}` | ADMIN, MANAGER, STAFF | Sửa tên, SĐT, địa chỉ |
 | POST | `/api/invoices` | | Thêm trường `redeemPoints` (tùy chọn, cần `customerId`) |
 
 Hóa đơn trả về thêm `pointsRedeemed`, `pointsDiscount`, `pointsEarned` và `customerPointsBalance` (số dư ngay sau khi bán, chỉ có trong phản hồi tạo hóa đơn).
