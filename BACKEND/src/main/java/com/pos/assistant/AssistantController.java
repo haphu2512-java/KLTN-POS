@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("isAuthenticated()")
 @RequestMapping("/api/assistant")
 @RequiredArgsConstructor
-@Tag(name = "Assistant", description = "Trợ lý hỏi đáp số liệu cửa hàng cho nhân viên (dựa trên luật, không dùng LLM)")
+@Tag(name = "Assistant", description = "Trợ lý hỏi đáp số liệu cửa hàng cho nhân viên (hiểu câu hỏi bằng luật, Gemini dự phòng khi bật)")
 public class AssistantController {
 
     private final AssistantService assistantService;

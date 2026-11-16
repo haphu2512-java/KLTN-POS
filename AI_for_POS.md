@@ -154,4 +154,4 @@ Mô hình được đo lường dựa trên các chỉ số chuẩn trong bài t
 
 1. **Tích hợp thêm đặc trưng ngoại cảnh:** Bổ sung biến ngày lễ/Tết, khuyến mãi, thời tiết (mưa/nắng ảnh hưởng nước giải khát).
 2. **Mô hình học máy LightGBM / XGBoost:** Chạy microservice Python độc lập khi lượng dữ liệu tích lũy trên 6 tháng.
-3. **Chatbot tư vấn trợ lý kho (GenAI):** Tích hợp LLM tổng hợp báo cáo ngôn ngữ tự nhiên: *"Hôm nay mặt hàng nào có nguy cơ đứt hàng cao nhất?"*.
+3. **Chatbot tư vấn trợ lý kho (GenAI):** Đã làm bước đầu: Trợ lý AI hiểu câu hỏi bằng luật, câu nào luật không hiểu thì nhờ Gemini phân loại (bật bằng `ENABLE_AI_ASSISTANT`, `GEMINI_API_KEY`); Gemini chỉ chọn loại câu hỏi, số liệu vẫn do backend tính nên không bị bịa. Hướng tiếp theo: để LLM tổng hợp báo cáo bằng ngôn ngữ tự nhiên, ví dụ *"Hôm nay mặt hàng nào có nguy cơ đứt hàng cao nhất?"*.

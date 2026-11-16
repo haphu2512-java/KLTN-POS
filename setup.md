@@ -98,7 +98,10 @@ Backend đọc file này dù chạy từ `BACKEND/` hay từ thư mục gốc (`
 | `SCANNER_REQUIRE_SAME_NETWORK` | `true` | Điện thoại phải cùng mạng với máy POS mới bắn mã được (xem Bước 8) |
 | `SCANNER_LAN_IPV4_PREFIX` | `24` | Độ rộng dải LAN (24 = `192.168.1.x`; mạng `10.0.x.x` thì đặt `16`) |
 | `SCANNER_TRUST_FORWARDED_FOR` | `false` | Chỉ đặt `true` khi backend đứng sau reverse proxy tin cậy |
-| `ENABLE_AI_ASSISTANT`, `GEMINI_API_KEY`, `AI_LLM_MODEL` | | **Chưa dùng trong code**, để trống |
+| `ENABLE_AI_ASSISTANT` | `false` | `true` để Trợ lý AI nhờ Gemini đoán ý những câu hỏi mà bộ luật không hiểu (tùy chọn) |
+| `GEMINI_API_KEY` | | Key Gemini (lấy tại aistudio.google.com/apikey). Bỏ trống thì trợ lý chỉ chạy bằng luật |
+| `AI_LLM_MODEL` | `gemini-2.5-flash` | Mô hình Gemini dùng để phân loại câu hỏi |
+| `AI_LLM_TIMEOUT_MS` | `6000` | Gemini chậm hơn mức này thì bỏ qua, trả lời theo luật |
 
 Ví dụ một file `.env` tối thiểu (giá trị chỉ là chỗ trống, hãy tự điền):
 

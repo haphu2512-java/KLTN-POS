@@ -37,13 +37,14 @@ class AssistantServiceTest {
     @Mock private ForecastService forecastService;
     @Mock private InventoryRepository inventoryRepository;
     @Mock private ProductRepository productRepository;
+    @Mock private LlmIntentClassifier llmClassifier;
 
     private AssistantService service;
 
     @BeforeEach
     void setUp() {
         service = new AssistantService(new IntentParser(), currentUserService, reportService, forecastService,
-                inventoryRepository, productRepository);
+                inventoryRepository, productRepository, llmClassifier);
     }
 
     private void loginAs(Role role) {
@@ -140,5 +141,44 @@ class AssistantServiceTest {
         assertEquals("UNKNOWN", res.getIntent());
         assertTrue(res.getReply().contains("Bạn có thể hỏi"));
         verifyNoInteractions(reportService, forecastService, inventoryRepository, productRepository);
+    }
+
+    @Test
+    @DisplayName("Luật không hiểu thì hỏi Gemini; Gemini đoán ra doanh thu thì backend tự tính số liệu")
+    void llmFallbackWhenRuleUnknown() {
+        loginAs(Role.MANAGER);
+        when(llmClassifier.classify("hôm nay quán mình kiếm được nhiu z")).thenReturn(
+                Optional.of(new ParsedQuestion(ChatIntent.REVENUE, 1, false, "")));
+        when(llmClassifier.sourceName()).thenReturn("GEMINI");
+        when(reportService.getRevenueSummary(2L, 1)).thenReturn(RevenueSummaryResponse.builder()
+                .totalRevenue(BigDecimal.valueOf(500000)).totalOrders(2)
+                .averageOrderValue(BigDecimal.valueOf(250000)).grossProfit(BigDecimal.valueOf(100000))
+                .profitMarginPercent(20.0).build());
+
+        ChatResponse res = service.chat("hôm nay quán mình kiếm được nhiu z");
+
+        assertEquals("REVENUE", res.getIntent());
+        assertEquals("GEMINI", res.getSource());
+        assertTrue(res.getReply().contains("500.000 đ"), res.getReply());
+    }
+
+    @Test
+    @DisplayName("Gemini tắt hoặc lỗi thì trả lời chưa hiểu như cũ")
+    void llmFallbackEmpty() {
+        loginAs(Role.MANAGER);
+        when(llmClassifier.classify("abc xyz")).thenReturn(Optional.empty());
+
+        ChatResponse res = service.chat("abc xyz");
+
+        assertEquals("UNKNOWN", res.getIntent());
+        assertEquals("RULE", res.getSource());
+    }
+
+    @Test
+    @DisplayName("Luật hiểu câu hỏi thì không gọi Gemini")
+    void ruleHitSkipsLlm() {
+        loginAs(Role.STAFF);
+        service.chat("doanh thu hôm nay");
+        verifyNoInteractions(llmClassifier);
     }
 }
