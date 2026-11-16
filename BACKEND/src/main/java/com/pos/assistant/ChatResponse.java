@@ -19,7 +19,7 @@ public class ChatResponse {
     /** Ý định đã nhận ra (xem ChatIntent) */
     private String intent;
 
-    /** Nguồn câu trả lời; hiện chỉ có RULE (trả lời từ dữ liệu theo mẫu câu, không gọi LLM) */
+    /** Cách hiểu câu hỏi: RULE (theo từ khóa) hoặc GEMINI (luật không hiểu, Gemini đoán loại câu hỏi); số liệu luôn do backend tính */
     private String source;
 
     /** Câu hỏi gợi ý để người dùng bấm hỏi tiếp */

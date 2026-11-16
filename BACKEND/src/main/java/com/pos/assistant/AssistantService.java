@@ -26,7 +26,9 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Trợ lý hỏi đáp cho nhân viên cửa hàng. Chỉ dùng luật (từ khóa) và dữ liệu sẵn có, không gọi LLM.
+ * Trợ lý hỏi đáp cho nhân viên cửa hàng. Hiểu câu hỏi bằng luật (từ khóa); khi luật không hiểu và đã bật
+ * Gemini thì nhờ {@link LlmIntentClassifier} đoán loại câu hỏi. Mọi số liệu đều lấy từ dữ liệu sẵn có, LLM không
+ * tự trả lời.
  * Phân quyền giống các API gốc: doanh thu / bán chạy cho ADMIN, MANAGER; gợi ý nhập cho ADMIN, MANAGER;
  * tồn kho và hàng sắp hết cho mọi vai trò. Luôn trả lời theo chi nhánh của phiên đăng nhập.
  */
@@ -47,10 +49,19 @@ public class AssistantService {
     private final ForecastService forecastService;
     private final InventoryRepository inventoryRepository;
     private final ProductRepository productRepository;
+    private final LlmIntentClassifier llmClassifier;
 
     public ChatResponse chat(String message) {
         User user = currentUserService.getCurrentUser();
         ParsedQuestion q = intentParser.parse(message);
+        String source = SOURCE_RULE;
+        if (q.intent() == ChatIntent.UNKNOWN && llmClassifier != null) {
+            Optional<ParsedQuestion> guessed = llmClassifier.classify(message);
+            if (guessed.isPresent()) {
+                q = guessed.get();
+                source = llmClassifier.sourceName();
+            }
+        }
         Long branchId = user.getCurrentBranchId();
 
         String reply = switch (q.intent()) {
@@ -68,7 +79,7 @@ public class AssistantService {
         return ChatResponse.builder()
                 .reply(reply)
                 .intent(q.intent().name())
-                .source(SOURCE_RULE)
+                .source(source)
                 .suggestions(suggestionsFor(user))
                 .build();
     }
