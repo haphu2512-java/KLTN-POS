@@ -45,6 +45,15 @@ class WebSocketService {
             }
           });
 
+          // Khuyến mãi tạo/sửa/bật/tắt/xóa: màn hình Bán hàng tải lại khuyến mãi cho giỏ đang mở
+          this.client.subscribe('/topic/promotion-updates', (message) => {
+            try {
+              this.emit('promotion-update', JSON.parse(message.body));
+            } catch {
+              console.warn('Invalid promotion-update payload:', message.body);
+            }
+          });
+
           // Subscribe to sales updates
           this.client.subscribe('/topic/sales-updates', (message) => {
             try {
