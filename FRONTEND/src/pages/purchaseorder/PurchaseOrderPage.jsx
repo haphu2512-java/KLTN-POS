@@ -21,6 +21,22 @@ const errMsg = (err, fallback) => err?.response?.data?.message || fallback;
 const remainingOf = (l) => Math.max(0, (l.orderedQty || 0) - (l.receivedQty || 0));
 const catKey = (c) => (c || '').trim().toLowerCase();
 
+const toLocalDateStr = (dateVal) => {
+  if (!dateVal) return '';
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const formatDateOnly = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+};
+
 /**
  * Đơn đặt hàng nhà cung cấp: lập nháp từ đề xuất AI (mỗi NCC một đơn) hoặc tạo tay, sửa số lượng / đơn giá,
  * gửi NCC, rồi nhận hàng (đủ hoặc từng phần). Mỗi lần nhận tạo một phiếu nhập kho, tồn kho tăng đúng số nhận.
@@ -41,6 +57,83 @@ export default function PurchaseOrderPage() {
   const [busy, setBusy] = useState(false);
   // Mặc định ô NCC chỉ hiện NCC có bán danh mục của mặt hàng trong đơn; bật để chọn NCC bất kỳ
   const [showAllSuppliers, setShowAllSuppliers] = useState(false);
+
+  // Bộ lọc danh sách đơn đặt hàng bên trái: mặc định lọc theo ngày hôm nay
+  const [datePreset, setDatePreset] = useState('today');
+  const [fromDate, setFromDate] = useState(() => toLocalDateStr(new Date()));
+  const [toDate, setToDate] = useState(() => toLocalDateStr(new Date()));
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+
+  const handlePresetChange = (preset) => {
+    setDatePreset(preset);
+    const today = new Date();
+    if (preset === 'today') {
+      const s = toLocalDateStr(today);
+      setFromDate(s);
+      setToDate(s);
+    } else if (preset === 'yesterday') {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      const s = toLocalDateStr(y);
+      setFromDate(s);
+      setToDate(s);
+    } else if (preset === '7days') {
+      const p = new Date(today);
+      p.setDate(p.getDate() - 6);
+      setFromDate(toLocalDateStr(p));
+      setToDate(toLocalDateStr(today));
+    } else if (preset === '30days') {
+      const p = new Date(today);
+      p.setDate(p.getDate() - 29);
+      setFromDate(toLocalDateStr(p));
+      setToDate(toLocalDateStr(today));
+    } else if (preset === 'all') {
+      setFromDate('');
+      setToDate('');
+    }
+  };
+
+  const resetFilters = () => {
+    const today = toLocalDateStr(new Date());
+    setDatePreset('today');
+    setFromDate(today);
+    setToDate(today);
+    setSearchKeyword('');
+    setStatusFilter('ALL');
+  };
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      // 1. Lọc theo ngày tạo
+      if (fromDate || toDate) {
+        const orderDate = toLocalDateStr(o.createdAt);
+        if (fromDate && orderDate < fromDate) return false;
+        if (toDate && orderDate > toDate) return false;
+      }
+      // 2. Lọc theo trạng thái
+      if (statusFilter !== 'ALL' && o.status !== statusFilter) {
+        return false;
+      }
+      // 3. Lọc theo từ khóa tìm kiếm (mã đơn #, tên nhà cung cấp, ghi chú, nguồn AI)
+      if (searchKeyword.trim()) {
+        const kw = searchKeyword.trim().toLowerCase();
+        const idMatch = String(o.id).includes(kw) || `#${o.id}`.toLowerCase().includes(kw);
+        const supMatch = (o.supplierName || '').toLowerCase().includes(kw);
+        const noteMatch = (o.note || '').toLowerCase().includes(kw);
+        const isAi = o.source === 'FORECAST' && ('từ ai'.includes(kw) || 'ai'.includes(kw));
+        if (!idMatch && !supMatch && !noteMatch && !isAi) return false;
+      }
+      return true;
+    });
+  }, [orders, fromDate, toDate, statusFilter, searchKeyword]);
+
+  const todayStr = toLocalDateStr(new Date());
+  const isFiltered = datePreset !== 'today'
+    || fromDate !== todayStr
+    || toDate !== todayStr
+    || Boolean(searchKeyword)
+    || statusFilter !== 'ALL';
 
   const loadList = async () => {
     try {
@@ -74,7 +167,16 @@ export default function PurchaseOrderPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadList().then((list) => {
       const found = openId && list.find((o) => o.id === openId);
-      if (found) select(found);
+      if (found) {
+        select(found);
+        const orderDate = toLocalDateStr(found.createdAt);
+        const today = toLocalDateStr(new Date());
+        if (orderDate && orderDate !== today) {
+          setDatePreset('all');
+          setFromDate('');
+          setToDate('');
+        }
+      }
     });
     if (location.state?.message) {
       setMessage({ text: location.state.message });
@@ -92,7 +194,16 @@ export default function PurchaseOrderPage() {
     const openId = location.state.openOrderId;
     loadList().then((list) => {
       const found = list.find((o) => o.id === openId);
-      if (found) select(found);
+      if (found) {
+        select(found);
+        const orderDate = toLocalDateStr(found.createdAt);
+        const today = toLocalDateStr(new Date());
+        if (orderDate && orderDate !== today) {
+          setDatePreset('all');
+          setFromDate('');
+          setToDate('');
+        }
+      }
     });
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (location.state.message) setMessage({ text: location.state.message });
@@ -133,12 +244,18 @@ export default function PurchaseOrderPage() {
           + (noSupplier ? ` ${noSupplier.lines?.length || 0} mặt hàng chưa có NCC bán đúng danh mục, nằm ở đơn #${noSupplier.id}.` : ' Kiểm tra số lượng rồi gửi đơn.');
       }
     );
-    if (created?.length) await refreshWith(created[0]);
+    if (created?.length) {
+      resetFilters();
+      await refreshWith(created[0]);
+    }
   };
 
   const createEmpty = async () => {
     const order = await run(() => purchaseOrderService.create({ lines: [] }), 'Đã tạo đơn trống, thêm mặt hàng bên dưới');
-    if (order) await refreshWith(order);
+    if (order) {
+      resetFilters();
+      await refreshWith(order);
+    }
   };
 
   const editable = current?.status === 'DRAFT';
@@ -456,7 +573,115 @@ export default function PurchaseOrderPage() {
 
         <div className="mp-split">
           <div className="mp-card">
-            <Table columns={listColumns} data={orders} onRowClick={select} emptyText="Chưa có đơn đặt hàng" maxHeight="65vh" />
+            <div style={{ padding: '12px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--bg-surface)' }}>
+              {/* Hàng 1: Bộ lọc Ngày */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  className="mp-select"
+                  value={datePreset}
+                  onChange={(e) => handlePresetChange(e.target.value)}
+                  style={{ fontSize: '13px', padding: '6px 8px', height: '32px' }}
+                  aria-label="Chọn khoảng ngày"
+                >
+                  <option value="all">Tất cả ngày</option>
+                  <option value="today">Hôm nay</option>
+                  <option value="yesterday">Hôm qua</option>
+                  <option value="7days">7 ngày qua</option>
+                  <option value="30days">30 ngày qua</option>
+                  <option value="custom">Tùy chọn...</option>
+                </select>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: '200px' }}>
+                  <input
+                    type="date"
+                    className="mp-input"
+                    style={{ padding: '4px 6px', fontSize: '12px', flex: 1, height: '32px' }}
+                    value={fromDate}
+                    max={toDate || undefined}
+                    title="Từ ngày"
+                    aria-label="Từ ngày"
+                    onChange={(e) => {
+                      setFromDate(e.target.value);
+                      setDatePreset('custom');
+                    }}
+                  />
+                  <span className="mp-muted" style={{ padding: '0 2px' }}>–</span>
+                  <input
+                    type="date"
+                    className="mp-input"
+                    style={{ padding: '4px 6px', fontSize: '12px', flex: 1, height: '32px' }}
+                    value={toDate}
+                    min={fromDate || undefined}
+                    title="Đến ngày"
+                    aria-label="Đến ngày"
+                    onChange={(e) => {
+                      setToDate(e.target.value);
+                      setDatePreset('custom');
+                    }}
+                  />
+                </div>
+
+                {isFiltered && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    style={{ height: '32px', padding: '0 8px', fontSize: '12px', color: 'var(--text-muted)' }}
+                    onClick={resetFilters}
+                    title="Đặt lại về hôm nay"
+                  >
+                    ✕ Đặt lại
+                  </Button>
+                )}
+              </div>
+
+              {/* Hàng 2: Tìm kiếm mã đơn/nhà cung cấp & lọc trạng thái */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  className="mp-input"
+                  style={{ flex: 1, padding: '5px 8px', fontSize: '12px', height: '32px' }}
+                  placeholder="Tìm theo #đơn, nhà cung cấp..."
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  aria-label="Tìm kiếm đơn đặt hàng"
+                />
+                <select
+                  className="mp-select"
+                  style={{ padding: '5px 8px', fontSize: '12px', height: '32px' }}
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  aria-label="Lọc theo trạng thái"
+                >
+                  <option value="ALL">Mọi trạng thái</option>
+                  <option value="DRAFT">Nháp</option>
+                  <option value="SENT">Đã gửi NCC</option>
+                  <option value="PARTIALLY_RECEIVED">Nhận một phần</option>
+                  <option value="RECEIVED">Đã nhận đủ</option>
+                  <option value="CANCELLED">Đã hủy</option>
+                </select>
+              </div>
+
+              {/* Thông tin số lượng kết quả */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)', paddingTop: '2px' }}>
+                <span>Hiển thị <strong>{filteredOrders.length}</strong> / {orders.length} đơn</span>
+                {(fromDate || toDate) && (
+                  <span>
+                    {fromDate === toDate
+                      ? `Ngày ${formatDateOnly(fromDate)}`
+                      : `${fromDate ? formatDateOnly(fromDate) : '...'} → ${toDate ? formatDateOnly(toDate) : '...'}`}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <Table
+              columns={listColumns}
+              data={filteredOrders}
+              onRowClick={select}
+              selectedKey={current?.id}
+              emptyText={orders.length === 0 ? 'Chưa có đơn đặt hàng' : 'Không tìm thấy đơn phù hợp bộ lọc'}
+              maxHeight="60vh"
+            />
           </div>
 
           <div className="mp-card">

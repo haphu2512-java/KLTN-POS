@@ -15,6 +15,22 @@ const STATUS = {
 
 const errMsg = (err, fallback) => err?.response?.data?.message || fallback;
 
+const toLocalDateStr = (dateVal) => {
+  if (!dateVal) return '';
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const formatDateOnly = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+};
+
 /**
  * Kiểm kê và điều chỉnh tồn kho: nhân viên kho tạo phiếu, quét mã (máy quét USB gõ mã + Enter) để đếm,
  * chọn lý do cho dòng lệch rồi gửi duyệt; quản lý duyệt thì tồn được cộng/trừ đúng phần chênh lệch.
@@ -34,6 +50,83 @@ export default function StockCountPage({ currentUser }) {
   const location = useLocation();
   const openedFromKey = useRef(null);
 
+  // Bộ lọc danh sách phiếu kiểm kê bên trái: mặc định lọc theo ngày hôm nay
+  const [datePreset, setDatePreset] = useState('today');
+  const [fromDate, setFromDate] = useState(() => toLocalDateStr(new Date()));
+  const [toDate, setToDate] = useState(() => toLocalDateStr(new Date()));
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+
+  const handlePresetChange = (preset) => {
+    setDatePreset(preset);
+    const today = new Date();
+    if (preset === 'today') {
+      const s = toLocalDateStr(today);
+      setFromDate(s);
+      setToDate(s);
+    } else if (preset === 'yesterday') {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      const s = toLocalDateStr(y);
+      setFromDate(s);
+      setToDate(s);
+    } else if (preset === '7days') {
+      const p = new Date(today);
+      p.setDate(p.getDate() - 6);
+      setFromDate(toLocalDateStr(p));
+      setToDate(toLocalDateStr(today));
+    } else if (preset === '30days') {
+      const p = new Date(today);
+      p.setDate(p.getDate() - 29);
+      setFromDate(toLocalDateStr(p));
+      setToDate(toLocalDateStr(today));
+    } else if (preset === 'all') {
+      setFromDate('');
+      setToDate('');
+    }
+  };
+
+  const resetFilters = () => {
+    const today = toLocalDateStr(new Date());
+    setDatePreset('today');
+    setFromDate(today);
+    setToDate(today);
+    setSearchKeyword('');
+    setStatusFilter('ALL');
+  };
+
+  const filteredCounts = useMemo(() => {
+    return counts.filter((c) => {
+      // 1. Lọc theo ngày tạo
+      if (fromDate || toDate) {
+        const countDate = toLocalDateStr(c.createdAt);
+        if (fromDate && countDate < fromDate) return false;
+        if (toDate && countDate > toDate) return false;
+      }
+      // 2. Lọc theo trạng thái
+      if (statusFilter !== 'ALL' && c.status !== statusFilter) {
+        return false;
+      }
+      // 3. Lọc theo từ khóa (mã phiếu #, ghi chú, người tạo, người duyệt)
+      if (searchKeyword.trim()) {
+        const kw = searchKeyword.trim().toLowerCase();
+        const idMatch = String(c.id).includes(kw) || `#${c.id}`.toLowerCase().includes(kw);
+        const noteMatch = (c.note || '').toLowerCase().includes(kw);
+        const creatorMatch = (c.createdByName || '').toLowerCase().includes(kw);
+        const approverMatch = (c.approvedByName || '').toLowerCase().includes(kw);
+        if (!idMatch && !noteMatch && !creatorMatch && !approverMatch) return false;
+      }
+      return true;
+    });
+  }, [counts, fromDate, toDate, statusFilter, searchKeyword]);
+
+  const todayStr = toLocalDateStr(new Date());
+  const isFiltered = datePreset !== 'today'
+    || fromDate !== todayStr
+    || toDate !== todayStr
+    || Boolean(searchKeyword)
+    || statusFilter !== 'ALL';
+
   const loadList = async () => {
     try {
       setCounts(await stockCountService.list());
@@ -50,7 +143,16 @@ export default function StockCountPage({ currentUser }) {
     loadShrinkage();
     // Mở sẵn phiếu vừa lập từ nơi khác (vd. phiếu hủy hàng hết hạn ở trang Kho)
     if (location.state?.openCountId) {
-      stockCountService.get(location.state.openCountId).then(setCurrent).catch(() => {});
+      stockCountService.get(location.state.openCountId).then((sc) => {
+        setCurrent(sc);
+        const countDate = toLocalDateStr(sc?.createdAt);
+        const today = toLocalDateStr(new Date());
+        if (countDate && countDate !== today) {
+          setDatePreset('all');
+          setFromDate('');
+          setToDate('');
+        }
+      }).catch(() => {});
       if (location.state.message) setMessage({ text: location.state.message });
     }
     openedFromKey.current = location.key;
@@ -64,7 +166,16 @@ export default function StockCountPage({ currentUser }) {
     if (openedFromKey.current === location.key || !location.state?.openCountId) return;
     openedFromKey.current = location.key;
     loadList();
-    stockCountService.get(location.state.openCountId).then(setCurrent).catch(() => {});
+    stockCountService.get(location.state.openCountId).then((sc) => {
+      setCurrent(sc);
+      const countDate = toLocalDateStr(sc?.createdAt);
+      const today = toLocalDateStr(new Date());
+      if (countDate && countDate !== today) {
+        setDatePreset('all');
+        setFromDate('');
+        setToDate('');
+      }
+    }).catch(() => {});
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (location.state.message) setMessage({ text: location.state.message });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,6 +202,7 @@ export default function StockCountPage({ currentUser }) {
     const res = await run(() => stockCountService.create(note.trim()), 'Đã tạo phiếu, quét mã để bắt đầu đếm');
     if (res) {
       setNote('');
+      resetFilters();
       loadList();
       setTimeout(() => scanRef.current?.focus(), 50);
     }
@@ -283,9 +395,11 @@ export default function StockCountPage({ currentUser }) {
           <div className="mp-card">
             <div className="mp-card-head">
               <strong>Phiếu kiểm kê</strong>
-              <span className="mp-muted">{counts.length} phiếu</span>
+              <span className="mp-muted">
+                {filteredCounts.length !== counts.length ? `${filteredCounts.length} / ${counts.length} phiếu` : `${counts.length} phiếu`}
+              </span>
             </div>
-            <div className="mp-card-pad" style={{ display: 'flex', gap: 8 }}>
+            <div className="mp-card-pad" style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border-subtle)' }}>
               <input
                 className="mp-input"
                 style={{ flex: 1 }}
@@ -295,14 +409,116 @@ export default function StockCountPage({ currentUser }) {
               />
               <Button variant="primary" onClick={createCount} disabled={busy}>Tạo phiếu</Button>
             </div>
+
+            {/* Khung bộ lọc ngày, tìm kiếm & trạng thái */}
+            <div style={{ padding: '12px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--bg-surface)' }}>
+              {/* Hàng 1: Bộ lọc Ngày */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  className="mp-select"
+                  value={datePreset}
+                  onChange={(e) => handlePresetChange(e.target.value)}
+                  style={{ fontSize: '13px', padding: '6px 8px', height: '32px' }}
+                  aria-label="Chọn khoảng ngày"
+                >
+                  <option value="today">Hôm nay</option>
+                  <option value="yesterday">Hôm qua</option>
+                  <option value="7days">7 ngày qua</option>
+                  <option value="30days">30 ngày qua</option>
+                  <option value="all">Tất cả ngày</option>
+                  <option value="custom">Tùy chọn...</option>
+                </select>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: '200px' }}>
+                  <input
+                    type="date"
+                    className="mp-input"
+                    style={{ padding: '4px 6px', fontSize: '12px', flex: 1, height: '32px' }}
+                    value={fromDate}
+                    max={toDate || undefined}
+                    title="Từ ngày"
+                    aria-label="Từ ngày"
+                    onChange={(e) => {
+                      setFromDate(e.target.value);
+                      setDatePreset('custom');
+                    }}
+                  />
+                  <span className="mp-muted" style={{ padding: '0 2px' }}>–</span>
+                  <input
+                    type="date"
+                    className="mp-input"
+                    style={{ padding: '4px 6px', fontSize: '12px', flex: 1, height: '32px' }}
+                    value={toDate}
+                    min={fromDate || undefined}
+                    title="Đến ngày"
+                    aria-label="Đến ngày"
+                    onChange={(e) => {
+                      setToDate(e.target.value);
+                      setDatePreset('custom');
+                    }}
+                  />
+                </div>
+
+                {isFiltered && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    style={{ height: '32px', padding: '0 8px', fontSize: '12px', color: 'var(--text-muted)' }}
+                    onClick={resetFilters}
+                    title="Đặt lại về hôm nay"
+                  >
+                    ✕ Đặt lại
+                  </Button>
+                )}
+              </div>
+
+              {/* Hàng 2: Tìm kiếm mã phiếu/ghi chú & lọc trạng thái */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  className="mp-input"
+                  style={{ flex: 1, padding: '5px 8px', fontSize: '12px', height: '32px' }}
+                  placeholder="Tìm theo #phiếu, ghi chú, người tạo..."
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  aria-label="Tìm kiếm phiếu kiểm kê"
+                />
+                <select
+                  className="mp-select"
+                  style={{ padding: '5px 8px', fontSize: '12px', height: '32px' }}
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  aria-label="Lọc theo trạng thái"
+                >
+                  <option value="ALL">Mọi trạng thái</option>
+                  <option value="DRAFT">Đang đếm</option>
+                  <option value="SUBMITTED">Chờ duyệt</option>
+                  <option value="APPROVED">Đã duyệt</option>
+                  <option value="CANCELLED">Đã hủy</option>
+                </select>
+              </div>
+
+              {/* Thông tin số lượng kết quả */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)', paddingTop: '2px' }}>
+                <span>Hiển thị <strong>{filteredCounts.length}</strong> / {counts.length} phiếu</span>
+                {(fromDate || toDate) && (
+                  <span>
+                    {fromDate === toDate
+                      ? `Ngày ${formatDateOnly(fromDate)}`
+                      : `${fromDate ? formatDateOnly(fromDate) : '...'} → ${toDate ? formatDateOnly(toDate) : '...'}`}
+                  </span>
+                )}
+              </div>
+            </div>
+
             <Table
               columns={listColumns}
-              data={counts}
+              data={filteredCounts}
               onRowClick={open}
               selectedKey={current?.id}
               className="mp-flush-table"
-              emptyText="Chưa có phiếu kiểm kê"
-              maxHeight="60vh"
+              emptyText={counts.length === 0 ? 'Chưa có phiếu kiểm kê' : 'Không tìm thấy phiếu phù hợp bộ lọc'}
+              maxHeight="55vh"
             />
           </div>
 
