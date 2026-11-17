@@ -5,6 +5,8 @@ import { stockCountService } from '../../services/stockCountService';
 import { productService } from '../../services/productService';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import '../../components/layout/ManagePage.css';
+import { useDateRangeFilter } from '../../hooks/useDateRangeFilter';
+import DateRangeFilterBar from '../../components/common/DateRangeFilterBar';
 
 const STATUS = {
   DRAFT: { label: 'Đang đếm', variant: 'brand' },
@@ -14,6 +16,17 @@ const STATUS = {
 };
 
 const errMsg = (err, fallback) => err?.response?.data?.message || fallback;
+
+const COUNT_STATUS_OPTIONS = Object.entries(STATUS).map(([value, v]) => ({ value, label: v.label }));
+// Phiếu đang đếm / chờ duyệt luôn hiện dù tạo ngày nào
+const OPEN_COUNT_STATUSES = ['DRAFT', 'SUBMITTED'];
+const matchCount = (c, kw) => {
+  const id = kw.replace(/^#/, '');
+  return (id && String(c.id).includes(id))
+    || (c.note || '').toLowerCase().includes(kw)
+    || (c.createdByName || '').toLowerCase().includes(kw)
+    || (c.approvedByName || '').toLowerCase().includes(kw);
+};
 
 /**
  * Kiểm kê và điều chỉnh tồn kho: nhân viên kho tạo phiếu, quét mã (máy quét USB gõ mã + Enter) để đếm,
@@ -34,6 +47,9 @@ export default function StockCountPage({ currentUser }) {
   const location = useLocation();
   const openedFromKey = useRef(null);
 
+  // Bộ lọc danh sách phiếu bên trái: mặc định hôm nay, phiếu đang đếm / chờ duyệt luôn hiện
+  const filter = useDateRangeFilter(counts, { openStatuses: OPEN_COUNT_STATUSES, matchKeyword: matchCount });
+
   const loadList = async () => {
     try {
       setCounts(await stockCountService.list());
@@ -50,7 +66,10 @@ export default function StockCountPage({ currentUser }) {
     loadShrinkage();
     // Mở sẵn phiếu vừa lập từ nơi khác (vd. phiếu hủy hàng hết hạn ở trang Kho)
     if (location.state?.openCountId) {
-      stockCountService.get(location.state.openCountId).then(setCurrent).catch(() => {});
+      stockCountService.get(location.state.openCountId).then((sc) => {
+        setCurrent(sc);
+        filter.reveal(sc);
+      }).catch(() => {});
       if (location.state.message) setMessage({ text: location.state.message });
     }
     openedFromKey.current = location.key;
@@ -64,7 +83,10 @@ export default function StockCountPage({ currentUser }) {
     if (openedFromKey.current === location.key || !location.state?.openCountId) return;
     openedFromKey.current = location.key;
     loadList();
-    stockCountService.get(location.state.openCountId).then(setCurrent).catch(() => {});
+    stockCountService.get(location.state.openCountId).then((sc) => {
+      setCurrent(sc);
+      filter.reveal(sc);
+    }).catch(() => {});
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (location.state.message) setMessage({ text: location.state.message });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,6 +113,7 @@ export default function StockCountPage({ currentUser }) {
     const res = await run(() => stockCountService.create(note.trim()), 'Đã tạo phiếu, quét mã để bắt đầu đếm');
     if (res) {
       setNote('');
+      filter.reset();
       loadList();
       setTimeout(() => scanRef.current?.focus(), 50);
     }
@@ -283,9 +306,11 @@ export default function StockCountPage({ currentUser }) {
           <div className="mp-card">
             <div className="mp-card-head">
               <strong>Phiếu kiểm kê</strong>
-              <span className="mp-muted">{counts.length} phiếu</span>
+              <span className="mp-muted">
+                {filter.filtered.length !== counts.length ? `${filter.filtered.length} / ${counts.length} phiếu` : `${counts.length} phiếu`}
+              </span>
             </div>
-            <div className="mp-card-pad" style={{ display: 'flex', gap: 8 }}>
+            <div className="mp-card-pad" style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border-subtle)' }}>
               <input
                 className="mp-input"
                 style={{ flex: 1 }}
@@ -295,14 +320,23 @@ export default function StockCountPage({ currentUser }) {
               />
               <Button variant="primary" onClick={createCount} disabled={busy}>Tạo phiếu</Button>
             </div>
+
+            <DateRangeFilterBar
+              filter={filter}
+              statusOptions={COUNT_STATUS_OPTIONS}
+              placeholder="Tìm theo #phiếu, ghi chú, người tạo..."
+              noun="phiếu"
+              openLabel="phiếu chưa duyệt"
+            />
+
             <Table
               columns={listColumns}
-              data={counts}
+              data={filter.filtered}
               onRowClick={open}
               selectedKey={current?.id}
               className="mp-flush-table"
-              emptyText="Chưa có phiếu kiểm kê"
-              maxHeight="60vh"
+              emptyText={counts.length === 0 ? 'Chưa có phiếu kiểm kê' : 'Không tìm thấy phiếu phù hợp bộ lọc'}
+              maxHeight="55vh"
             />
           </div>
 

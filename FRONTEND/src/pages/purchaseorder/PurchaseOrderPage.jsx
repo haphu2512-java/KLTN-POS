@@ -8,6 +8,8 @@ import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import '../../components/layout/ManagePage.css';
 import { confirmDialog } from '../../components/common/toastStore';
 import { DATA_EVENTS, emitDataChange } from '../../utils/dataEvents';
+import { useDateRangeFilter } from '../../hooks/useDateRangeFilter';
+import DateRangeFilterBar from '../../components/common/DateRangeFilterBar';
 
 const STATUS = {
   DRAFT: { label: 'Nháp', variant: 'brand' },
@@ -20,6 +22,17 @@ const STATUS = {
 const errMsg = (err, fallback) => err?.response?.data?.message || fallback;
 const remainingOf = (l) => Math.max(0, (l.orderedQty || 0) - (l.receivedQty || 0));
 const catKey = (c) => (c || '').trim().toLowerCase();
+
+const ORDER_STATUS_OPTIONS = Object.entries(STATUS).map(([value, v]) => ({ value, label: v.label }));
+// Đơn chưa đóng luôn hiện trong danh sách dù lập ngày nào (đơn đã gửi thường chờ hàng về vài ngày)
+const OPEN_ORDER_STATUSES = ['DRAFT', 'SENT', 'PARTIALLY_RECEIVED'];
+const matchOrder = (o, kw) => {
+  const id = kw.replace(/^#/, '');
+  return (id && String(o.id).includes(id))
+    || (o.supplierName || '').toLowerCase().includes(kw)
+    || (o.note || '').toLowerCase().includes(kw)
+    || (o.source === 'FORECAST' && (kw === 'ai' || kw === 'từ ai'));
+};
 
 /**
  * Đơn đặt hàng nhà cung cấp: lập nháp từ đề xuất AI (mỗi NCC một đơn) hoặc tạo tay, sửa số lượng / đơn giá,
@@ -41,6 +54,9 @@ export default function PurchaseOrderPage() {
   const [busy, setBusy] = useState(false);
   // Mặc định ô NCC chỉ hiện NCC có bán danh mục của mặt hàng trong đơn; bật để chọn NCC bất kỳ
   const [showAllSuppliers, setShowAllSuppliers] = useState(false);
+
+  // Bộ lọc danh sách đơn bên trái: mặc định hôm nay, đơn chưa đóng luôn hiện
+  const filter = useDateRangeFilter(orders, { openStatuses: OPEN_ORDER_STATUSES, matchKeyword: matchOrder });
 
   const loadList = async () => {
     try {
@@ -74,7 +90,10 @@ export default function PurchaseOrderPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadList().then((list) => {
       const found = openId && list.find((o) => o.id === openId);
-      if (found) select(found);
+      if (found) {
+        select(found);
+        filter.reveal(found);
+      }
     });
     if (location.state?.message) {
       setMessage({ text: location.state.message });
@@ -92,7 +111,10 @@ export default function PurchaseOrderPage() {
     const openId = location.state.openOrderId;
     loadList().then((list) => {
       const found = list.find((o) => o.id === openId);
-      if (found) select(found);
+      if (found) {
+        select(found);
+        filter.reveal(found);
+      }
     });
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (location.state.message) setMessage({ text: location.state.message });
@@ -133,12 +155,18 @@ export default function PurchaseOrderPage() {
           + (noSupplier ? ` ${noSupplier.lines?.length || 0} mặt hàng chưa có NCC bán đúng danh mục, nằm ở đơn #${noSupplier.id}.` : ' Kiểm tra số lượng rồi gửi đơn.');
       }
     );
-    if (created?.length) await refreshWith(created[0]);
+    if (created?.length) {
+      filter.reset();
+      await refreshWith(created[0]);
+    }
   };
 
   const createEmpty = async () => {
     const order = await run(() => purchaseOrderService.create({ lines: [] }), 'Đã tạo đơn trống, thêm mặt hàng bên dưới');
-    if (order) await refreshWith(order);
+    if (order) {
+      filter.reset();
+      await refreshWith(order);
+    }
   };
 
   const editable = current?.status === 'DRAFT';
@@ -456,7 +484,22 @@ export default function PurchaseOrderPage() {
 
         <div className="mp-split">
           <div className="mp-card">
-            <Table columns={listColumns} data={orders} onRowClick={select} emptyText="Chưa có đơn đặt hàng" maxHeight="65vh" />
+            <DateRangeFilterBar
+              filter={filter}
+              statusOptions={ORDER_STATUS_OPTIONS}
+              placeholder="Tìm theo #đơn, nhà cung cấp, ghi chú..."
+              noun="đơn"
+              openLabel="đơn chưa nhận xong"
+            />
+
+            <Table
+              columns={listColumns}
+              data={filter.filtered}
+              onRowClick={select}
+              selectedKey={current?.id}
+              emptyText={orders.length === 0 ? 'Chưa có đơn đặt hàng' : 'Không tìm thấy đơn phù hợp bộ lọc'}
+              maxHeight="60vh"
+            />
           </div>
 
           <div className="mp-card">
