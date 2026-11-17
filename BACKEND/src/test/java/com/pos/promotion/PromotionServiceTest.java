@@ -8,7 +8,15 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.Map;
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 class PromotionServiceTest {
 
@@ -80,5 +88,22 @@ class PromotionServiceTest {
 
         p.setMinOrderAmount(BigDecimal.valueOf(150_000));
         assertNotNull(service.ineligibleReason(p, 1L, member, lines, now));
+    }
+
+    @Test
+    @DisplayName("Bật/tắt khuyến mãi báo realtime cho máy bán hàng")
+    void setActiveNotifiesPos() {
+        PromotionRepository repo = mock(PromotionRepository.class);
+        Promotion p = percent(10);
+        when(repo.findById(1L)).thenReturn(Optional.of(p));
+        when(repo.save(any(Promotion.class))).thenAnswer(inv -> inv.getArgument(0));
+        SimpMessagingTemplate ws = mock(SimpMessagingTemplate.class);
+        PromotionService svc = new PromotionService(repo, null, null, null);
+        ReflectionTestUtils.setField(svc, "messagingTemplate", ws);
+
+        svc.setActive(1L, false, 9L);
+
+        assertFalse(p.getActive());
+        verify(ws).convertAndSend("/topic/promotion-updates", (Object) Map.of("promotionId", 1L, "change", "deactivated"));
     }
 }

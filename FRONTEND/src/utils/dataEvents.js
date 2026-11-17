@@ -6,6 +6,8 @@
 export const DATA_EVENTS = {
   /** Có phiếu nhập kho mới (nhận hàng từ đơn đặt hàng, nhập kho tay...). detail: { branchId, stockInId } */
   STOCK_IN_CHANGED: 'stock-in-changed',
+  /** Khuyến mãi vừa tạo/sửa/bật/tắt/xóa. detail: { promotionId, change } */
+  PROMOTION_CHANGED: 'promotion-changed',
 };
 
 const listeners = new Map();

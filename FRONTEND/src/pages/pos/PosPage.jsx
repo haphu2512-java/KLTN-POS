@@ -23,6 +23,7 @@ import { inventoryService } from '../../services/inventoryService';
 import { customerService } from '../../services/customerService';
 import { saleService } from '../../services/saleService';
 import { websocketService } from '../../services/websocketService';
+import { DATA_EVENTS, onDataChange } from '../../utils/dataEvents';
 import { scannerPairingService } from '../../services/scannerPairingService';
 import { shiftService } from '../../services/shiftService';
 import { approvalService } from '../../services/approvalService';
@@ -382,6 +383,17 @@ export default function PosPage({
     window.addEventListener('pos:barcode_scanned', handleCustomScan);
     return () => window.removeEventListener('pos:barcode_scanned', handleCustomScan);
   }, [handleBarcodeScanned, isPageActive]);
+
+  // Khuyến mãi vừa được bật/tắt/sửa (ở cửa sổ này hoặc máy khác qua WebSocket): hỏi lại máy chủ ngay
+  useEffect(() => {
+    const refresh = () => setPromotionRefresh((n) => n + 1);
+    const offLocal = onDataChange(DATA_EVENTS.PROMOTION_CHANGED, refresh);
+    const offWs = websocketService.on('promotion-update', refresh);
+    return () => {
+      offLocal();
+      offWs();
+    };
+  }, []);
 
   // Hỏi máy chủ khuyến mãi áp được mỗi khi giỏ hoặc khách đổi (chờ 300ms để quét liên tục không gọi dồn)
   useEffect(() => {

@@ -10,7 +10,11 @@ import com.pos.customer.CustomerRepository;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,11 +24,13 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Quản lý chương trình khuyến mãi (ADMIN) và tính số tiền được giảm cho một đơn hàng.
  * Tiền giảm luôn do server tính từ giỏ hàng; POS chỉ gửi id chương trình được chọn.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -40,6 +46,36 @@ public class PromotionService {
     /** Nhật ký thao tác; để trống trong unit test dựng service bằng tay */
     @Autowired(required = false)
     private AuditService auditService;
+
+    /** Báo realtime cho các máy POS; để trống trong unit test dựng service bằng tay */
+    @Autowired(required = false)
+    private SimpMessagingTemplate messagingTemplate;
+
+    /**
+     * Báo các máy bán hàng tải lại khuyến mãi áp được cho giỏ đang mở.
+     * Gửi sau khi giao dịch đã lưu, để máy POS hỏi lại thì đọc được trạng thái mới.
+     */
+    private void notifyPromotionChanged(Long promotionId, String change) {
+        if (messagingTemplate == null) return;
+        Runnable send = () -> {
+            try {
+                messagingTemplate.convertAndSend("/topic/promotion-updates",
+                        Map.of("promotionId", promotionId, "change", change));
+            } catch (Exception e) {
+                log.warn("WS notify promotion {} failed: {}", promotionId, e.getMessage());
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    send.run();
+                }
+            });
+        } else {
+            send.run();
+        }
+    }
 
     private void audit(AuditAction action, String entityType, Object entityId, Long branchId, String summary) {
         if (auditService != null) auditService.log(action, entityType, entityId, branchId, summary);
@@ -73,6 +109,7 @@ public class PromotionService {
         p.setCreatedAt(LocalDateTime.now());
         Promotion saved = promotionRepository.save(p);
         audit(AuditAction.PROMOTION_CHANGE, "PROMOTION", saved.getId(), null, "Tạo khuyến mãi: " + saved.getName());
+        notifyPromotionChanged(saved.getId(), "created");
         return saved;
     }
 
@@ -86,6 +123,7 @@ public class PromotionService {
         p.setUpdatedBy(actorId);
         p.setUpdatedAt(LocalDateTime.now());
         audit(AuditAction.PROMOTION_CHANGE, "PROMOTION", id, null, "Sửa khuyến mãi: " + p.getName());
+        notifyPromotionChanged(id, "updated");
         return promotionRepository.save(p);
     }
 
@@ -96,6 +134,7 @@ public class PromotionService {
         audit(AuditAction.PROMOTION_CHANGE, "PROMOTION", id, null, (active ? "Bật" : "Tắt") + " khuyến mãi: " + p.getName());
         p.setUpdatedBy(actorId);
         p.setUpdatedAt(LocalDateTime.now());
+        notifyPromotionChanged(id, active ? "activated" : "deactivated");
         return promotionRepository.save(p);
     }
 
@@ -105,6 +144,7 @@ public class PromotionService {
         Promotion p = getById(id);
         promotionRepository.delete(p);
         audit(AuditAction.PROMOTION_CHANGE, "PROMOTION", id, null, "Xóa khuyến mãi: " + p.getName());
+        notifyPromotionChanged(id, "deleted");
     }
 
     private void apply(Promotion p, PromotionRequest req) {
