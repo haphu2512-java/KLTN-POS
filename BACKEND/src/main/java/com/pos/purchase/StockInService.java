@@ -50,8 +50,43 @@ public class StockInService {
                 .orElseThrow(() -> new BusinessException("STOCK_IN_NOT_FOUND", "Không tìm thấy phiếu nhập kho với ID: " + id));
     }
 
+    /**
+     * Phiếu nhập tự do ở trang Kho hàng (không theo đơn đặt hàng): bắt buộc chọn NCC và NCC phải bán danh mục của
+     * mọi mặt hàng trong phiếu, cùng quy tắc với gửi đơn đặt hàng (SupplierCategoryRule).
+     */
+    @Transactional
+    public StockIn createManualStockIn(StockInRequest req) {
+        if (req.getSupplierId() == null) {
+            throw new BusinessException("SUPPLIER_REQUIRED", "Chọn nhà cung cấp cho phiếu nhập");
+        }
+        // Gửi lại cùng mã sau khi mất phản hồi: trả phiếu đã tạo, không kiểm tra lại
+        String rid = req.getClientRequestId() != null ? req.getClientRequestId().trim() : null;
+        if (rid != null && !rid.isEmpty() && stockInRepository.findByClientRequestId(rid).isPresent()) {
+            return createStockIn(req, null);
+        }
+        Supplier supplier = supplierRepository.findById(req.getSupplierId())
+                .orElseThrow(() -> new BusinessException("SUPPLIER_NOT_FOUND", "Nhà cung cấp không tồn tại"));
+        List<SupplierCategoryRule.Line> lines = new ArrayList<>();
+        for (StockInRequest.Item item : req.getItems()) {
+            Product p = productRepository.findById(item.getProductId())
+                    .orElseThrow(() -> new BusinessException("PRODUCT_NOT_FOUND", "Sản phẩm không tồn tại: " + item.getProductId()));
+            lines.add(new SupplierCategoryRule.Line(p.getName(), p.getCategory()));
+        }
+        SupplierCategoryRule.check(supplier, lines);
+        return createStockIn(req, null);
+    }
+
     @Transactional
     public StockIn createStockIn(StockInRequest req) {
+        return createStockIn(req, null);
+    }
+
+    /**
+     * Tạo phiếu nhập, cộng tồn và cập nhật giá vốn. purchaseOrderId khác null khi phiếu sinh ra từ nhận hàng theo
+     * đơn đặt hàng, để lịch sử nhập truy ngược được về đơn gốc.
+     */
+    @Transactional
+    public StockIn createStockIn(StockInRequest req, Long purchaseOrderId) {
         String clientRequestId = req.getClientRequestId() != null && !req.getClientRequestId().isBlank()
                 ? req.getClientRequestId().trim() : null;
         if (clientRequestId != null) {
@@ -77,6 +112,7 @@ public class StockInService {
         StockIn stockIn = StockIn.builder()
                 .branch(branch)
                 .supplier(supplier)
+                .purchaseOrderId(purchaseOrderId)
                 .employeeId(req.getEmployeeId())
                 .note(req.getNote())
                 .clientRequestId(clientRequestId)
@@ -123,7 +159,7 @@ public class StockInService {
         stockIn.setTotalCost(totalCost);
         StockIn saved = stockInRepository.save(stockIn);
         audit(AuditAction.STOCK_IN, "STOCK_IN", saved.getId(), branch.getId(),
-                "Phiếu nhập #" + saved.getId() + ": " + saved.getDetails().size() + " mặt hàng, tổng " + AuditService.money(totalCost)
+                "Phiếu nhập #" + saved.getId() + (purchaseOrderId != null ? " (đơn đặt #" + purchaseOrderId + ")" : "") + ": " + saved.getDetails().size() + " mặt hàng, tổng " + AuditService.money(totalCost)
                         + (supplier != null ? " - NCC " + supplier.getName() : ""));
         return saved;
     }

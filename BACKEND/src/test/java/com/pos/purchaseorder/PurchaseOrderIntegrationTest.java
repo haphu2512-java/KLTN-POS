@@ -61,7 +61,7 @@ class PurchaseOrderIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         long productId = JsonPath.<Integer>read(p, "$.data.id").longValue();
         String s = mvc.perform(post("/api/suppliers").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"NCC đặt hàng test\",\"phone\":\"0900000001\"}"))
+                        .content("{\"name\":\"NCC đặt hàng test\",\"phone\":\"0900000001\",\"categories\":[\"Khác\"]}"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         long supplierId = JsonPath.<Integer>read(s, "$.data.id").longValue();
         Integer q0 = inventoryRepository.findQuantity(productId, 1L);

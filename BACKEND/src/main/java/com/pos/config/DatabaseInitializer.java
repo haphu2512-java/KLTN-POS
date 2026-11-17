@@ -57,6 +57,7 @@ public class DatabaseInitializer implements CommandLineRunner {
         seedWorkShifts();
         migrateRolesToStaff();
         migrateSingleBranchColumn();
+        linkStockInToPurchaseOrder();
 
         if (branchRepository.count() == 0) {
             if (seedPassword == null || seedPassword.isBlank()) {
@@ -180,6 +181,21 @@ public class DatabaseInitializer implements CommandLineRunner {
         if (updated > 0) {
             supplierRepository.saveAll(suppliers);
             log.info("Đã gán danh mục mặc định cho {} nhà cung cấp mẫu", updated);
+        }
+    }
+
+    /**
+     * Phiếu nhập tạo từ nhận hàng trước khi có cột stock_in.purchase_order_id chỉ ghi mã đơn trong ghi chú
+     * ("Nhận hàng theo đơn đặt #12 - ..."): điền lại cột để lịch sử nhập kho hiện đơn gốc. Chạy lại không ảnh hưởng.
+     */
+    void linkStockInToPurchaseOrder() {
+        try {
+            int n = jdbcTemplate.update("UPDATE stock_in SET purchase_order_id = "
+                    + "CAST(SUBSTRING_INDEX(SUBSTRING(note, LOCATE('#', note) + 1), ' ', 1) AS UNSIGNED) "
+                    + "WHERE purchase_order_id IS NULL AND note LIKE 'Nhận hàng theo đơn đặt #%'");
+            if (n > 0) log.info("Đã gắn {} phiếu nhập cũ với đơn đặt hàng gốc", n);
+        } catch (DataAccessException e) {
+            log.debug("Không gắn được phiếu nhập cũ với đơn đặt hàng, bỏ qua: {}", e.getMessage());
         }
     }
 

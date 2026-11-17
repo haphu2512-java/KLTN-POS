@@ -4,7 +4,8 @@ import { formatCurrency } from '../../utils/formatters';
 export default function StockInDetailModal({
   isOpen,
   onClose,
-  slip
+  slip,
+  onOpenPurchaseOrder
 }) {
   if (!slip) return null;
 
@@ -100,6 +101,21 @@ export default function StockInDetailModal({
           <div>
             <span className="text-muted">Người lập phiếu: </span>
             <span>{slip.employeeName}</span>
+          </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <span className="text-muted">Nguồn: </span>
+            {slip.purchaseOrderId ? (
+              <>
+                <strong>Nhận hàng theo đơn đặt hàng #{slip.purchaseOrderId}</strong>
+                {onOpenPurchaseOrder && (
+                  <Button size="sm" variant="ghost" onClick={() => onOpenPurchaseOrder(slip.purchaseOrderId)} style={{ marginLeft: '6px' }}>
+                    Mở đơn
+                  </Button>
+                )}
+              </>
+            ) : (
+              <span>Nhập tự do ở trang Kho hàng (không theo đơn đặt hàng)</span>
+            )}
           </div>
         </div>
 

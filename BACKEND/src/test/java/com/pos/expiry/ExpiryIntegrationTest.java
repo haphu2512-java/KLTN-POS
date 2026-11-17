@@ -52,10 +52,19 @@ class ExpiryIntegrationTest {
         return "Bearer " + tokenProvider.generateToken(details, TestAuth.branchOf(user), user.getRole().name(), user.getFullName());
     }
 
+    /** NCC bán danh mục "Khác" (danh mục mặc định của sản phẩm tạo qua API), để phiếu nhập qua được quy tắc danh mục NCC */
+    private long supplierForOtherCategory(String admin) throws Exception {
+        String s = mvc.perform(post("/api/suppliers").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"NCC hàng Khác " + System.nanoTime() + "\",\"categories\":[\"Khác\"]}"))
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.<Integer>read(s, "$.data.id").longValue();
+    }
+
     @Test
     @DisplayName("Hạn sử dụng: nhập lô có hạn, cảnh báo cận date, chặn nhập hàng đã hết hạn, lập phiếu hủy hàng hết hạn")
     void nearExpiryWarningAndDisposalCount() throws Exception {
         String admin = tokenFor("admin");
+        long supplierId = supplierForOtherCategory(admin);
         String p = mvc.perform(post("/api/products").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Sữa chua test hạn\",\"salePrice\":8000,\"costPrice\":5000}"))
                 .andReturn().getResponse().getContentAsString();
@@ -64,16 +73,16 @@ class ExpiryIntegrationTest {
         String far = LocalDate.now().plusDays(90).toString();
 
         mvc.perform(post("/api/stock-in").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"branchId\":1,\"items\":[{\"productId\":" + productId + ",\"quantity\":3,\"unitCost\":5000,"
+                        .content("{\"branchId\":1,\"supplierId\":" + supplierId + ",\"items\":[{\"productId\":" + productId + ",\"quantity\":3,\"unitCost\":5000,"
                                 + "\"expiryDate\":\"" + LocalDate.now().minusDays(1) + "\"}]}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("EXPIRY_IN_PAST"));
         mvc.perform(post("/api/stock-in").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"branchId\":1,\"items\":[{\"productId\":" + productId + ",\"quantity\":6,\"unitCost\":5000,"
+                        .content("{\"branchId\":1,\"supplierId\":" + supplierId + ",\"items\":[{\"productId\":" + productId + ",\"quantity\":6,\"unitCost\":5000,"
                                 + "\"lotNumber\":\"L-NEAR\",\"expiryDate\":\"" + near + "\"}]}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/stock-in").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"branchId\":1,\"items\":[{\"productId\":" + productId + ",\"quantity\":4,\"unitCost\":5000,"
+                        .content("{\"branchId\":1,\"supplierId\":" + supplierId + ",\"items\":[{\"productId\":" + productId + ",\"quantity\":4,\"unitCost\":5000,"
                                 + "\"lotNumber\":\"L-FAR\",\"expiryDate\":\"" + far + "\"}]}"))
                 .andExpect(status().isOk());
 

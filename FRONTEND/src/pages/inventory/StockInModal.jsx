@@ -1,8 +1,10 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Modal, Button } from '../../components/common';
 import { formatCurrency } from '../../utils/formatters';
 import { newRequestId } from '../../utils/requestId';
 import { toast } from '../../components/common/toastStore';
+
+const catKey = (c) => (c || '').trim().toLowerCase();
 
 export default function StockInModal({
   isOpen,
@@ -12,10 +14,40 @@ export default function StockInModal({
   branchId,
   branchName,
   onSaveStockIn,
-  initialItems
+  initialItems,
+  // Lịch sử phiếu nhập (mới nhất trước) để ưu tiên NCC đã nhập mặt hàng gần nhất khi tự chọn NCC
+  history = [],
+  onOpenPartners
 }) {
-  // Không chọn sẵn NCC đầu danh sách: chọn nhầm sẽ ghi sai NCC của mặt hàng, ảnh hưởng gợi ý đặt hàng sau này
-  const [supplierId, setSupplierId] = useState('');
+  // Quy tắc giống đơn đặt hàng và máy chủ (SupplierCategoryRule): NCC chỉ nhập được mặt hàng thuộc danh mục NCC bán.
+  // NCC chưa gán danh mục thì không chọn được; mặt hàng chưa có danh mục thì không kiểm tra.
+  const categoryOf = useMemo(() => new Map(products.map((p) => [p.id, p.category || null])), [products]);
+  const supplierCats = useMemo(
+    () => new Map(suppliers.map((s) => [s.id, new Set((s.categories || []).map(catKey))])),
+    [suppliers]
+  );
+  const anySupplierHasCategories = suppliers.some((s) => (s.categories || []).length > 0);
+
+  /** NCC phù hợp nhất cho các dòng: bán đủ danh mục, ưu tiên NCC nhập gần nhất một trong các mặt hàng */
+  const pickSupplier = (rows) => {
+    const keys = [...new Set(rows.map((it) => catKey(categoryOf.get(Number(it.productId)))).filter(Boolean))];
+    const fit = suppliers.filter((s) => {
+      const cats = supplierCats.get(s.id);
+      return cats && cats.size > 0 && keys.every((k) => cats.has(k));
+    });
+    if (fit.length === 0) return '';
+    const ids = new Set(rows.map((it) => Number(it.productId)));
+    for (const slip of history) {
+      if (slip.supplierId && fit.some((s) => s.id === Number(slip.supplierId))
+          && (slip.items || []).some((it) => ids.has(Number(it.productId)))) {
+        return String(slip.supplierId);
+      }
+    }
+    return String(fit[0].id);
+  };
+
+  // Mở từ một sản phẩm / từ Dự báo: tự chọn NCC bán đúng danh mục. Form trống thì để người dùng chọn.
+  const [supplierId, setSupplierId] = useState(() => (initialItems?.length ? pickSupplier(initialItems) : ''));
   const [note, setNote] = useState('');
   // Một mã cho mỗi lần mở form: bấm lại sau khi lỗi mạng vẫn dùng mã này nên không bị nhập trùng
   const [requestId] = useState(newRequestId);
@@ -34,8 +66,17 @@ export default function StockInModal({
     }
   ]);
 
+  const selectedCats = supplierId ? supplierCats.get(Number(supplierId)) : null;
+  const soldBySupplier = (p) => !selectedCats || !p.category || selectedCats.has(catKey(p.category));
+  // Đã chọn NCC thì ô sản phẩm chỉ liệt kê hàng NCC đó bán (giữ lại hàng đang chọn để thấy dòng sai)
+  const productOptions = useMemo(
+    () => (selectedCats ? products.filter(soldBySupplier) : products),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [products, selectedCats]
+  );
+
   const handleAddItemRow = () => {
-    const defaultProduct = products[0];
+    const defaultProduct = productOptions.find((p) => !items.some((it) => it.productId === p.id)) || productOptions[0];
     if (!defaultProduct) return;
     setItems([
       ...items,
@@ -63,6 +104,7 @@ export default function StockInModal({
       unitCost: found.costPrice
     };
     setItems(updated);
+    if (!supplierId) setSupplierId(pickSupplier(updated));
   };
 
   const handleQuantityChange = (index, qty) => {
@@ -93,6 +135,28 @@ export default function StockInModal({
     setItems(items.filter((_, idx) => idx !== index));
   };
 
+  /** Danh mục của dòng mà NCC đang chọn không bán (null nếu hợp lệ) */
+  const rowMismatch = (item) => {
+    if (!selectedCats) return null;
+    const c = categoryOf.get(Number(item.productId));
+    return c && !selectedCats.has(catKey(c)) ? c : null;
+  };
+  const mismatchCount = items.filter(rowMismatch).length;
+  const selectedSupplier = suppliers.find((s) => s.id === Number(supplierId));
+
+  // Danh sách NCC: bán đủ danh mục trong phiếu lên đầu; NCC thiếu danh mục / chưa gán danh mục vẫn hiện nhưng khóa
+  const itemCatKeys = [...new Set(items.map((it) => catKey(categoryOf.get(Number(it.productId)))).filter(Boolean))];
+  const supplierRows = suppliers.map((s) => {
+    const cats = supplierCats.get(s.id) || new Set();
+    const matched = itemCatKeys.filter((k) => cats.has(k)).length;
+    const ok = cats.size > 0 && matched === itemCatKeys.length;
+    let label = s.name;
+    if (cats.size === 0) label += ' (chưa gán danh mục)';
+    else if (itemCatKeys.length > 0 && !ok) label += ` (bán ${matched}/${itemCatKeys.length} danh mục trong phiếu)`;
+    return { s, ok, matched, label };
+  }).sort((a, b) => (b.ok - a.ok) || (b.matched - a.matched));
+  const noSupplierFits = itemCatKeys.length > 0 && !supplierRows.some((r) => r.ok);
+
   const totalCost = items.reduce(
     (sum, item) => sum + item.quantity * item.unitCost,
     0
@@ -108,6 +172,10 @@ export default function StockInModal({
     }
     if (!supplierId) {
       toast.warning('Vui lòng chọn nhà cung cấp');
+      return;
+    }
+    if (mismatchCount > 0) {
+      toast.error(`${selectedSupplier?.name || 'NCC đang chọn'} không bán ${mismatchCount} mặt hàng tô đỏ. Đổi NCC hoặc bỏ các dòng đó sang phiếu khác.`);
       return;
     }
 
@@ -151,7 +219,7 @@ export default function StockInModal({
           <Button variant="secondary" onClick={onClose}>
             Hủy (Esc)
           </Button>
-          <Button variant="success" onClick={handleSubmit} disabled={saving}>
+          <Button variant="success" onClick={handleSubmit} disabled={saving || mismatchCount > 0}>
             {saving ? 'Đang lưu...' : 'Hoàn tất & Nhập Kho'}
           </Button>
         </>
@@ -178,12 +246,18 @@ export default function StockInModal({
               }}
             >
               <option value="">Chọn nhà cung cấp...</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
+              {supplierRows.map(({ s, ok, label }) => (
+                // NCC không bán đủ vẫn chọn được để thấy dòng nào sai, nhưng không lưu được phiếu
+                <option key={s.id} value={s.id} disabled={(supplierCats.get(s.id) || new Set()).size === 0}>
+                  {ok && itemCatKeys.length > 0 ? `✓ ${label}` : label}
                 </option>
               ))}
             </select>
+            {selectedSupplier && (selectedSupplier.categories || []).length > 0 && (
+              <div className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                Bán: {(selectedSupplier.categories || []).join(', ')}
+              </div>
+            )}
           </div>
 
           <div>
@@ -207,6 +281,35 @@ export default function StockInModal({
             </div>
           </div>
         </div>
+
+        {(mismatchCount > 0 || noSupplierFits || !anySupplierHasCategories) && (
+          <div
+            role="alert"
+            style={{
+              padding: '8px 12px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--danger-border)',
+              backgroundColor: 'var(--danger-50)',
+              color: 'var(--danger-700)',
+              fontSize: '12px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <span>
+              {!anySupplierHasCategories
+                ? 'Chưa nhà cung cấp nào được gán danh mục hàng cung cấp, nên chưa lập được phiếu nhập. Gán danh mục ở trang Đối tác.'
+                : noSupplierFits
+                  ? 'Không nhà cung cấp nào bán đủ các danh mục trong phiếu. Tách các mặt hàng khác danh mục sang phiếu riêng, hoặc gán thêm danh mục cho NCC ở trang Đối tác.'
+                  : `${selectedSupplier?.name} không bán ${mismatchCount} mặt hàng tô đỏ. Đổi NCC (NCC có dấu ✓ bán đủ) hoặc xóa các dòng đó.`}
+            </span>
+            {onOpenPartners && (!anySupplierHasCategories || noSupplierFits) && (
+              <Button size="sm" variant="secondary" onClick={onOpenPartners}>Mở trang Đối tác</Button>
+            )}
+          </div>
+        )}
 
         {/* Table of items to stock-in */}
         <div>
@@ -233,8 +336,10 @@ export default function StockInModal({
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => (
-                  <tr key={idx}>
+                {items.map((item, idx) => {
+                  const bad = rowMismatch(item);
+                  return (
+                  <tr key={idx} style={bad ? { backgroundColor: 'var(--danger-50)' } : undefined}>
                     <td style={{ textAlign: 'center' }}>{idx + 1}</td>
                     <td>
                       <select
@@ -249,12 +354,20 @@ export default function StockInModal({
                           fontSize: '12px'
                         }}
                       >
-                        {products.map((p) => (
+                        {(productOptions.some((p) => p.id === item.productId)
+                          ? productOptions
+                          : [...products.filter((p) => p.id === item.productId), ...productOptions]
+                        ).map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.name} ({p.unit}) - Tồn: {p.stock}
                           </option>
                         ))}
                       </select>
+                      {bad && (
+                        <div style={{ color: 'var(--danger-600)', fontSize: '11px', marginTop: '2px' }}>
+                          {selectedSupplier?.name} không bán danh mục “{bad}”
+                        </div>
+                      )}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <input
@@ -326,7 +439,8 @@ export default function StockInModal({
                       >×</button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

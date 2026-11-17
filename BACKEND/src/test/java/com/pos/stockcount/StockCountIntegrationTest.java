@@ -49,10 +49,19 @@ class StockCountIntegrationTest {
         return "Bearer " + tokenProvider.generateToken(details, TestAuth.branchOf(user), user.getRole().name(), user.getFullName());
     }
 
+    /** NCC bán danh mục "Khác" (danh mục mặc định của sản phẩm tạo qua API), để phiếu nhập qua được quy tắc danh mục NCC */
+    private long supplierForOtherCategory(String admin) throws Exception {
+        String s = mvc.perform(post("/api/suppliers").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"NCC hàng Khác " + System.nanoTime() + "\",\"categories\":[\"Khác\"]}"))
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.<Integer>read(s, "$.data.id").longValue();
+    }
+
     @Test
     @DisplayName("Kiểm kê: quét mã cộng dồn, dòng lệch phải có lý do, duyệt thì trừ đúng phần chênh lệch và có trong báo cáo hao hụt")
     void countSubmitApproveAdjustsStock() throws Exception {
         String admin = tokenFor("admin");
+        long supplierId = supplierForOtherCategory(admin);
         // Sản phẩm riêng của test để không ảnh hưởng tồn mà test khác dùng (cùng database H2)
         String p = mvc.perform(post("/api/products").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"SP kiểm kê\",\"salePrice\":20000,\"costPrice\":15000}"))
@@ -60,7 +69,7 @@ class StockCountIntegrationTest {
         long productId = JsonPath.<Integer>read(p, "$.data.id").longValue();
         String barcode = JsonPath.read(p, "$.data.barcode");
         mvc.perform(post("/api/stock-in").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"branchId\":1,\"items\":[{\"productId\":" + productId + ",\"quantity\":10,\"unitCost\":15000}]}"));
+                .content("{\"branchId\":1,\"supplierId\":" + supplierId + ",\"items\":[{\"productId\":" + productId + ",\"quantity\":10,\"unitCost\":15000}]}"));
         int before = inventoryRepository.findQuantity(productId, 1L);
 
         String created = mvc.perform(post("/api/stock-counts").header("Authorization", admin)

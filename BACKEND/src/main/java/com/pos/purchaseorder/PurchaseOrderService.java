@@ -12,6 +12,7 @@ import com.pos.purchase.StockInRepository;
 import com.pos.purchase.StockInRequest;
 import com.pos.purchase.StockInService;
 import com.pos.purchase.Supplier;
+import com.pos.purchase.SupplierCategoryRule;
 import com.pos.purchase.SupplierRepository;
 import com.pos.security.CurrentUserService;
 import com.pos.user.Role;
@@ -304,6 +305,12 @@ public class PurchaseOrderService {
         if (o.getLines().isEmpty()) {
             throw new BusinessException("PO_EMPTY", "Đơn chưa có mặt hàng nào");
         }
+        Supplier supplier = supplierRepository.findById(o.getSupplierId())
+                .orElseThrow(() -> new BusinessException("SUPPLIER_NOT_FOUND", "Nhà cung cấp không tồn tại"));
+        // Cùng quy tắc với phiếu nhập tự do: NCC phải bán danh mục của mọi mặt hàng trong đơn
+        SupplierCategoryRule.check(supplier, o.getLines().stream()
+                .map(l -> new SupplierCategoryRule.Line(l.getProductName(), lineCategory(l)))
+                .toList());
         o.setStatus(PurchaseOrderStatus.SENT);
         o.setSentAt(LocalDateTime.now());
         audit(AuditAction.PURCHASE_ORDER, o.getId(), o.getBranchId(), "Gửi đơn đặt hàng #" + o.getId() + " cho "
@@ -370,7 +377,8 @@ public class PurchaseOrderService {
                 + (req != null && StringUtils.hasText(req.note()) ? " - " + req.note().trim() : ""), 255));
         stockReq.setClientRequestId(requestId);
         stockReq.setItems(items);
-        StockIn stockIn = stockInService.createStockIn(stockReq);
+        // Đơn đã kiểm tra danh mục NCC lúc gửi, nên nhận hàng không kiểm tra lại (đơn gửi trước khi có quy tắc vẫn nhận được)
+        StockIn stockIn = stockInService.createStockIn(stockReq, o.getId());
 
         boolean all = o.getLines().stream().allMatch(l -> l.getRemainingQty() == 0);
         o.setStatus(all ? PurchaseOrderStatus.RECEIVED : PurchaseOrderStatus.PARTIALLY_RECEIVED);
@@ -427,6 +435,12 @@ public class PurchaseOrderService {
             o.getLines().clear();
             o.getLines().addAll(next);
         }
+    }
+
+    /** Danh mục của dòng đơn; dòng cũ chưa lưu danh mục thì tra theo sản phẩm */
+    private String lineCategory(PurchaseOrderLine l) {
+        if (StringUtils.hasText(l.getCategory())) return l.getCategory();
+        return productRepository.findById(l.getProductId()).map(Product::getCategory).orElse(null);
     }
 
     private static String forecastNote(ForecastResponse s) {
