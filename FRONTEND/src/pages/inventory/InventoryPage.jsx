@@ -20,7 +20,7 @@ import usePageActive from '../../hooks/usePageActive';
 import { DATA_EVENTS, onDataChange } from '../../utils/dataEvents';
 import { PERMS, normalizeRole } from '../../utils/permissions';
 import './InventoryPage.css';
-import { toast, confirmDialog, promptDialog } from '../../components/common/toastStore';
+import { toast, confirmDialog } from '../../components/common/toastStore';
 
 export default function InventoryPage({
   currentUser,
@@ -236,6 +236,7 @@ export default function InventoryPage({
   // Modals state
   const [isStockInOpen, setIsStockInOpen] = useState(false);
   const [stockInModalKey, setStockInModalKey] = useState(0);
+  const [quickStockInItems, setQuickStockInItems] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -266,6 +267,7 @@ export default function InventoryPage({
   };
 
   const openEmptyStockIn = () => {
+    setQuickStockInItems(null);
     setStockInModalKey((k) => k + 1);
     setIsStockInOpen(true);
   };
@@ -420,48 +422,21 @@ export default function InventoryPage({
     return true;
   };
 
-  // Quick action: Stock-in single product
-  const handleQuickStockIn = async (product) => {
-    const qty = await promptDialog(`Nhập thêm số lượng cho "${product.name}" (${product.unit || 'đơn vị'}):`, {
-      title: 'Nhập hàng nhanh',
-      defaultValue: 10,
-      inputType: 'number',
-      min: 1,
-      step: 1,
-      confirmText: 'Nhập kho',
-      validate: (v) => {
-        const n = Number(v);
-        return Number.isInteger(n) && n > 0 ? null : 'Số lượng phải là số nguyên lớn hơn 0';
+  // Nút "+ Nhập hàng" trên từng dòng: mở cùng form phiếu nhập với trang Dự báo, điền sẵn mặt hàng này
+  // để người dùng chọn nhà cung cấp, chỉnh số lượng / giá / lô / hạn dùng rồi mới lưu.
+  const handleQuickStockIn = (product) => {
+    setQuickStockInItems([
+      {
+        productId: product.id,
+        productName: product.name,
+        barcode: product.barcode,
+        unit: product.unit,
+        quantity: 10,
+        unitCost: product.costPrice || 0
       }
-    });
-    if (qty == null) return;
-    const num = Number(qty);
-
-    const quickSlip = {
-      id: `NK-${Date.now().toString().slice(-6)}`,
-      supplierId: 1,
-      supplierName: suppliers[0]?.name || 'Nhà cung cấp',
-      branchId: currentBranchId,
-      branchName: branches.find((b) => b.id === currentBranchId)?.name || 'Chi nhánh',
-      createdDate: new Date().toLocaleString('vi-VN'),
-      employeeName: 'Nguyễn Văn A',
-      totalItems: num,
-      totalCost: num * product.costPrice,
-      items: [
-        {
-          productId: product.id,
-          productName: product.name,
-          barcode: product.barcode,
-          unit: product.unit,
-          quantity: num,
-          unitCost: product.costPrice
-        }
-      ],
-      note: 'Nhập nhanh trực tiếp từ bảng tồn kho',
-      requestId: newRequestId()
-    };
-
-    handleSaveStockIn(quickSlip);
+    ]);
+    setStockInModalKey((k) => k + 1);
+    setIsStockInOpen(true);
   };
 
   const handleExportInventory = () => {
@@ -1010,7 +985,7 @@ export default function InventoryPage({
       />
       <StockInModal
         key={showDraft ? `draft-${location.key}` : `empty-${stockInModalKey}`}
-        initialItems={showDraft ? draftItems : null}
+        initialItems={showDraft ? draftItems : quickStockInItems}
         isOpen={isStockInOpen || showDraft}
         onClose={closeStockIn}
         products={products}
