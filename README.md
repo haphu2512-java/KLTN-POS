@@ -377,6 +377,7 @@ Mọi API (trừ đăng nhập và `/api/scanner/ping`) cần header `Authorizat
 |--------|----------|-------|
 | GET / POST | `/api/purchase-orders` | Danh sách / tạo đơn đặt hàng tay |
 | POST | `/api/purchase-orders/from-forecast?days=` | Lập đơn nháp từ đề xuất AI, mỗi nhà cung cấp một đơn theo danh mục NCC bán |
+| POST | `/api/purchase-orders/{id}/split-by-category` | Tách đơn nháp thành nhiều đơn, mỗi đơn một danh mục, tự gán NCC bán danh mục đó |
 | PUT | `/api/purchase-orders/{id}` | Sửa đơn nháp (NCC, số lượng, đơn giá, ngày giao) |
 | POST | `/api/purchase-orders/{id}/send`, `/receive`, `/cancel` | Gửi đơn, nhận hàng (đủ hoặc từng phần, tạo phiếu nhập), hủy |
 | GET / POST | `/api/stock-counts` | Danh sách / tạo phiếu kiểm kê |

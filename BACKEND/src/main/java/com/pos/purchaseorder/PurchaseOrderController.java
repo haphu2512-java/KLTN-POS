@@ -58,6 +58,13 @@ public class PurchaseOrderController {
         return ApiResponse.ok("Đã nhận hàng và nhập kho", service.receive(id, req));
     }
 
+    @PostMapping("/{id}/split-by-category")
+    @Operation(summary = "Tách đơn nháp thành nhiều đơn, mỗi đơn một danh mục, tự gán NCC bán danh mục đó")
+    public ApiResponse<List<PurchaseOrder>> splitByCategory(@PathVariable Long id) {
+        List<PurchaseOrder> orders = service.splitByCategory(id);
+        return ApiResponse.ok("Đã tách thành " + orders.size() + " đơn theo danh mục", orders);
+    }
+
     @PostMapping("/{id}/cancel")
     public ApiResponse<PurchaseOrder> cancel(@PathVariable Long id) {
         return ApiResponse.ok("Đã hủy đơn", service.cancel(id));
