@@ -98,11 +98,7 @@ public class PurchaseOrderService {
         for (Object[] row : stockInRepository.recentSuppliersByProduct(branchId)) {
             recentSupplierOf.putIfAbsent((Long) row[0], (Long) row[1]);
         }
-        Map<String, List<Supplier>> suppliersByCategory = new HashMap<>();
-        supplierRepository.findAll().stream()
-                .sorted(Comparator.comparing(Supplier::getId))
-                .forEach(sup -> sup.getCategories().forEach(c ->
-                        suppliersByCategory.computeIfAbsent(categoryKey(c), k -> new ArrayList<>()).add(sup)));
+        Map<String, List<Supplier>> suppliersByCategory = suppliersByCategory();
 
         String baseNote = "Lập từ đề xuất AI dự báo " + days + " ngày";
         Map<Long, PurchaseOrder> bySupplier = new LinkedHashMap<>();
@@ -157,6 +153,117 @@ public class PurchaseOrderService {
 
     private static String categoryKey(String category) {
         return category == null ? "" : category.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Tách một đơn nháp có nhiều danh mục thành nhiều đơn nháp, mỗi đơn một danh mục, để người nhập không nhầm.
+     * Đơn gốc giữ nhóm danh mục mà NCC đang chọn có bán (không có thì nhóm đầu tiên); mỗi nhóm được gán NCC bán
+     * danh mục đó theo cùng quy tắc lập đơn từ AI, không ai bán thì để trống NCC. Trả về đơn gốc trước, các đơn mới sau.
+     */
+    @Transactional
+    public List<PurchaseOrder> splitByCategory(Long id) {
+        User actor = currentUserService.getCurrentUser();
+        PurchaseOrder o = find(id);
+        checkBranch(o, actor);
+        if (o.getStatus() != PurchaseOrderStatus.DRAFT) {
+            throw new BusinessException("PO_LOCKED", "Chỉ tách được đơn nháp", HttpStatus.CONFLICT);
+        }
+        // Dòng cũ chưa lưu danh mục: lấy theo sản phẩm
+        for (PurchaseOrderLine l : o.getLines()) {
+            if (!StringUtils.hasText(l.getCategory())) {
+                productRepository.findById(l.getProductId())
+                        .ifPresent(p -> l.setCategory(truncate(StringUtils.hasText(p.getCategory()) ? p.getCategory().trim() : null, 100)));
+            }
+        }
+        Map<String, List<PurchaseOrderLine>> groups = new LinkedHashMap<>();
+        Map<String, String> labelOf = new HashMap<>();
+        for (PurchaseOrderLine l : o.getLines()) {
+            String key = categoryKey(l.getCategory());
+            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(l);
+            labelOf.putIfAbsent(key, StringUtils.hasText(l.getCategory()) ? l.getCategory().trim() : "Chưa có danh mục");
+        }
+        if (groups.size() < 2) {
+            throw new BusinessException("PO_SINGLE_CATEGORY", "Đơn chỉ có một danh mục, không cần tách");
+        }
+
+        Map<String, List<Supplier>> suppliersByCategory = suppliersByCategory();
+        Map<Long, Long> recentSupplierOf = new HashMap<>();
+        for (Object[] row : stockInRepository.recentSuppliersByProduct(o.getBranchId())) {
+            recentSupplierOf.putIfAbsent((Long) row[0], (Long) row[1]);
+        }
+        Supplier current = o.getSupplierId() == null ? null : supplierRepository.findById(o.getSupplierId()).orElse(null);
+        String keepKey = groups.keySet().iterator().next();
+        if (current != null) {
+            for (String k : groups.keySet()) {
+                if (current.getCategories().stream().anyMatch(c -> categoryKey(c).equals(k))) { keepKey = k; break; }
+            }
+        }
+
+        List<PurchaseOrder> result = new ArrayList<>();
+        Set<Long> used = new java.util.HashSet<>();
+        if (current != null) used.add(current.getId());
+        for (Map.Entry<String, List<PurchaseOrderLine>> g : groups.entrySet()) {
+            List<Supplier> candidates = suppliersByCategory.getOrDefault(g.getKey(), List.of());
+            Supplier sup = null;
+            if (current != null && candidates.stream().anyMatch(c -> c.getId().equals(current.getId()))) {
+                sup = current;
+            } else {
+                Long recent = g.getValue().stream().map(l -> recentSupplierOf.get(l.getProductId()))
+                        .filter(r -> r != null && candidates.stream().anyMatch(c -> c.getId().equals(r)))
+                        .findFirst().orElse(null);
+                sup = pickSupplier(candidates, recent, used);
+            }
+            if (sup != null) used.add(sup.getId());
+            boolean keep = g.getKey().equals(keepKey);
+            String note = truncate("Danh mục " + labelOf.get(g.getKey())
+                    + (keep ? ", các danh mục khác đã tách sang đơn mới" : ", tách từ đơn #" + o.getId())
+                    + (sup == null ? ". Chưa có NCC bán danh mục này" : ""), 255);
+            if (keep) {
+                o.getLines().retainAll(g.getValue());
+                o.setSupplierId(sup != null ? sup.getId() : null);
+                o.setSupplierName(sup != null ? sup.getName() : null);
+                o.setNote(note);
+                result.add(0, o);
+            } else {
+                PurchaseOrder n = PurchaseOrder.builder()
+                        .branchId(o.getBranchId())
+                        .supplierId(sup != null ? sup.getId() : null)
+                        .supplierName(sup != null ? sup.getName() : null)
+                        .source(o.getSource())
+                        .note(note)
+                        .expectedDate(o.getExpectedDate())
+                        .createdBy(actor.getId())
+                        .createdAt(LocalDateTime.now())
+                        .build();
+                for (PurchaseOrderLine l : g.getValue()) {
+                    n.getLines().add(PurchaseOrderLine.builder()
+                            .purchaseOrder(n)
+                            .productId(l.getProductId())
+                            .productName(l.getProductName())
+                            .barcode(l.getBarcode())
+                            .category(l.getCategory())
+                            .orderedQty(l.getOrderedQty())
+                            .suggestedQty(l.getSuggestedQty())
+                            .unitCost(l.getUnitCost())
+                            .forecastNote(l.getForecastNote())
+                            .build());
+                }
+                result.add(n);
+            }
+        }
+        List<PurchaseOrder> saved = repository.saveAll(result);
+        audit(AuditAction.PURCHASE_ORDER, o.getId(), o.getBranchId(), "Tách đơn đặt hàng #" + o.getId()
+                + " thành " + saved.size() + " đơn theo danh mục");
+        return saved;
+    }
+
+    private Map<String, List<Supplier>> suppliersByCategory() {
+        Map<String, List<Supplier>> m = new HashMap<>();
+        supplierRepository.findAll().stream()
+                .sorted(Comparator.comparing(Supplier::getId))
+                .forEach(sup -> sup.getCategories().forEach(c ->
+                        m.computeIfAbsent(categoryKey(c), k -> new ArrayList<>()).add(sup)));
+        return m;
     }
 
     @Transactional

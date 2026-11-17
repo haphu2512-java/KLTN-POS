@@ -250,6 +250,28 @@ export default function PurchaseOrderPage() {
     if (res?.order) await refreshWith(res.order);
   };
 
+  // Số nhóm khi tách: mỗi danh mục một nhóm, các dòng chưa có danh mục gộp một nhóm
+  const splitGroups = orderCategories.size + (lines.some((l) => !lineCategory(l)) ? 1 : 0);
+
+  const splitByCategory = async () => {
+    const names = [...orderCategories.values()];
+    const ok = await confirmDialog(
+      `Tách đơn #${current.id} thành ${splitGroups} đơn, mỗi đơn một danh mục (${names.join(', ')}). `
+        + 'Mỗi đơn tự gán nhà cung cấp có bán danh mục đó; danh mục chưa ai bán thì để trống nhà cung cấp.',
+      { title: 'Tách ra các đơn theo danh mục', confirmText: 'Tách đơn', cancelText: 'Không' }
+    );
+    if (!ok) return;
+    const list = await run(
+      () => purchaseOrderService.splitByCategory(current.id),
+      (res) => {
+        const noSupplier = res.filter((o) => !o.supplierId).length;
+        return `Đã tách thành ${res.length} đơn theo danh mục`
+          + (noSupplier ? `, ${noSupplier} đơn chưa có nhà cung cấp bán danh mục đó.` : ', đơn nào cũng đã có nhà cung cấp.');
+      }
+    );
+    if (list?.length) await refreshWith(list[0]);
+  };
+
   const cancel = async () => {
     if (!(await confirmDialog(`Hủy đơn đặt hàng #${current.id}?`, { title: 'Hủy đơn đặt hàng', confirmText: 'Hủy đơn', cancelText: 'Không', danger: true }))) return;
     const o = await run(() => purchaseOrderService.cancel(current.id), 'Đã hủy đơn');
@@ -462,6 +484,12 @@ export default function PurchaseOrderPage() {
                       <Button variant="primary" disabled={busy || lines.length === 0 || !current.supplierId} onClick={send}
                         title={!current.supplierId ? 'Chọn nhà cung cấp trước' : undefined}>
                         Gửi nhà cung cấp
+                      </Button>
+                    )}
+                    {editable && splitGroups >= 2 && (
+                      <Button variant="secondary" disabled={busy} onClick={splitByCategory}
+                        title="Mỗi danh mục một đơn riêng, tự gán nhà cung cấp bán danh mục đó">
+                        Tách ra các đơn theo danh mục
                       </Button>
                     )}
                     {receivable && (

@@ -31,6 +31,10 @@ export const purchaseOrderService = {
   async receive(id, lines, note) {
     return unwrap(await api.post(`/purchase-orders/${id}/receive`, { lines, note, clientRequestId: newRequestId() }));
   },
+  /** Tách đơn nháp thành nhiều đơn, mỗi đơn một danh mục; trả về đơn gốc trước, các đơn mới sau */
+  async splitByCategory(id) {
+    return unwrap(await api.post(`/purchase-orders/${id}/split-by-category`));
+  },
   async cancel(id) {
     return unwrap(await api.post(`/purchase-orders/${id}/cancel`));
   },
