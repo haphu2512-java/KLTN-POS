@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/products")
@@ -18,6 +19,7 @@ import java.util.List;
 public class ProductController {
 
     private final ProductService productService;
+    private final BarcodeSyncService barcodeSyncService;
 
     @GetMapping
     @Operation(summary = "Lấy danh sách sản phẩm (hỗ trợ tìm kiếm theo tên, mã vạch hoặc lọc danh mục)")
@@ -40,21 +42,28 @@ public class ProductController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Tạo mới sản phẩm")
     public ResponseEntity<ApiResponse<Product>> create(@Valid @RequestBody ProductRequest req) {
         return ResponseEntity.ok(ApiResponse.ok("Tạo sản phẩm thành công", productService.createProduct(req)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Cập nhật sản phẩm")
     public ResponseEntity<ApiResponse<Product>> update(@PathVariable Long id, @Valid @RequestBody ProductRequest req) {
         return ResponseEntity.ok(ApiResponse.ok("Cập nhật sản phẩm thành công", productService.updateProduct(id, req)));
     }
 
+    @PostMapping("/barcodes/sync")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Đồng bộ mã vạch: sản phẩm mang mã cũ không quét được được gán mã nội bộ 20 + ID + số kiểm tra")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> syncBarcodes() {
+        return ResponseEntity.ok(ApiResponse.ok("Đồng bộ mã vạch thành công", barcodeSyncService.syncLegacyBarcodes()));
+    }
+
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Xóa sản phẩm (Soft delete)")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         productService.deleteProduct(id);

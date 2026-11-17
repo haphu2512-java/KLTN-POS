@@ -81,49 +81,49 @@ public class ShiftController {
     }
 
     @GetMapping("/current")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Ca đang mở ở chi nhánh đăng nhập, hoặc gợi ý ca, người được xếp và tiền ca trước để lại")
     public ResponseEntity<ApiResponse<CurrentShiftResponse>> getCurrent() {
         return ResponseEntity.ok(ApiResponse.ok(shiftService.getCurrent(currentUserService.getCurrentUser())));
     }
 
     @PostMapping("/open")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Mở ca cho nhân viên được xếp (quản lý chọn được người trực thay) với số tiền mặt đầu ca")
     public ResponseEntity<ApiResponse<ShiftSessionResponse>> open(@Valid @RequestBody OpenShiftRequest req) {
         return ResponseEntity.ok(ApiResponse.ok("Đã mở ca", shiftService.openShift(req, currentUserService.getCurrentUser())));
     }
 
     @PostMapping("/current/close")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Đóng ca đang mở ở chi nhánh: đối soát tiền mặt, VietQR, thẻ và bàn giao")
     public ResponseEntity<ApiResponse<ShiftSessionResponse>> closeCurrent(@Valid @RequestBody CloseShiftRequest req) {
         return ResponseEntity.ok(ApiResponse.ok("Đã đóng ca", shiftService.closeCurrentShift(req, currentUserService.getCurrentUser())));
     }
 
     @GetMapping("/current/cash-movements")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Thu/chi két của ca đang mở (cả khoản đã xóa)")
     public ResponseEntity<ApiResponse<List<CashMovementResponse>>> currentCashMovements() {
         return ResponseEntity.ok(ApiResponse.ok(shiftService.getCurrentCashMovements(currentUserService.getCurrentUser())));
     }
 
     @PostMapping("/current/cash-movements")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Ghi chi trong ca, nộp quỹ giữa ca hoặc bổ sung tiền lẻ")
     public ResponseEntity<ApiResponse<CashMovementResponse>> addCashMovement(@Valid @RequestBody CashMovementRequest req) {
         return ResponseEntity.ok(ApiResponse.ok("Đã ghi thu/chi két", shiftService.addCashMovement(req, currentUserService.getCurrentUser())));
     }
 
     @PutMapping("/cash-movements/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Sửa khoản thu/chi khi ca còn mở")
     public ResponseEntity<ApiResponse<CashMovementResponse>> updateCashMovement(@PathVariable Long id, @Valid @RequestBody CashMovementRequest req) {
         return ResponseEntity.ok(ApiResponse.ok("Đã sửa thu/chi két", shiftService.updateCashMovement(id, req, currentUserService.getCurrentUser())));
     }
 
     @DeleteMapping("/cash-movements/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Xóa (mềm) khoản thu/chi khi ca còn mở")
     public ResponseEntity<ApiResponse<Void>> deleteCashMovement(@PathVariable Long id) {
         shiftService.deleteCashMovement(id, currentUserService.getCurrentUser());

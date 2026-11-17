@@ -44,6 +44,30 @@ public class Invoice {
     @Column(name = "discount", precision = 14, scale = 2)
     private BigDecimal discount = BigDecimal.ZERO;
 
+    /** Chương trình khuyến mãi đã áp (không ràng buộc khóa ngoại: xóa chương trình vẫn giữ hóa đơn) */
+    @Column(name = "promotion_id")
+    private Long promotionId;
+
+    /** Tên chương trình lúc bán, để in lại bill và báo cáo đúng kể cả khi chương trình đã sửa/xóa */
+    @Column(name = "promotion_name", length = 100)
+    private String promotionName;
+
+    /** Số tiền giảm nhờ khuyến mãi (tính trước giảm tay và đổi điểm) */
+    @Column(name = "promotion_discount", precision = 14, scale = 2)
+    private BigDecimal promotionDiscount;
+
+    /** Số điểm khách dùng để trả (null với hóa đơn trước khi có đổi điểm) */
+    @Column(name = "points_redeemed")
+    private Integer pointsRedeemed;
+
+    /** Số tiền được giảm nhờ đổi điểm (= pointsRedeemed x giá trị 1 điểm lúc bán) */
+    @Column(name = "points_discount", precision = 14, scale = 2)
+    private BigDecimal pointsDiscount;
+
+    /** Số điểm được cộng cho hóa đơn này; hoàn trả thu hồi đúng số này (null: hóa đơn cũ, tính lại theo công thức) */
+    @Column(name = "points_earned")
+    private Integer pointsEarned;
+
     @Column(name = "total_amount", nullable = false, precision = 14, scale = 2)
     private BigDecimal totalAmount;
 
@@ -64,6 +88,14 @@ public class Invoice {
 
     @Column(length = 255)
     private String note;
+
+    /** Lý do giảm giá (bắt buộc khi giảm vượt hạn mức của thu ngân) */
+    @Column(name = "discount_reason", length = 255)
+    private String discountReason;
+
+    /** Quản lý đã nhập PIN duyệt khoản giảm giá vượt hạn mức */
+    @Column(name = "discount_approved_by")
+    private Long discountApprovedBy;
 
     /** Mã do máy POS tạo cho mỗi đơn; gửi lại cùng mã (sau khi timeout) sẽ không tạo hóa đơn thứ hai */
     @Column(name = "client_request_id", length = 64, unique = true)
@@ -87,6 +119,13 @@ public class Invoice {
     @Column(name = "refund_shift_session_id")
     private Long refundShiftSessionId;
 
+    /**
+     * Tổng tiền đã hoàn qua các phiếu hoàn trả (InvoiceReturn). Null: chưa hoàn lần nào, hoặc hóa đơn hoàn
+     * cả đơn theo cách cũ (trước khi có hoàn trả từng món) — khi đó dùng status REFUNDED và totalAmount.
+     */
+    @Column(name = "refunded_amount", precision = 14, scale = 2)
+    private BigDecimal refundedAmount;
+
     @Builder.Default
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -95,4 +134,28 @@ public class Invoice {
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonManagedReference
     private List<InvoiceDetail> details = new ArrayList<>();
+
+    /** Số dư điểm của khách ngay sau khi tạo hóa đơn, để in lên bill */
+    @Transient
+    private Integer customerPointsBalance;
+
+    /** Tên nhân viên bán: in lại bill đúng người bán gốc và để quản lý biết ai chịu trách nhiệm hóa đơn */
+    @Transient
+    private String employeeName;
+
+    /** Tên người bấm hoàn trả, chỉ điền khi trả về cho ADMIN/MANAGER */
+    @Transient
+    private String refundedByName;
+
+    /** Doanh thu thực còn lại sau hoàn trả (hoàn cả đơn = 0) */
+    @Transient
+    public BigDecimal getNetAmount() {
+        if (status == InvoiceStatus.REFUNDED) return BigDecimal.ZERO;
+        BigDecimal total = totalAmount != null ? totalAmount : BigDecimal.ZERO;
+        return refundedAmount != null ? total.subtract(refundedAmount) : total;
+    }
+
+    /** Tên quản lý duyệt giảm giá, chỉ điền khi trả về cho ADMIN/MANAGER */
+    @Transient
+    private String discountApprovedByName;
 }

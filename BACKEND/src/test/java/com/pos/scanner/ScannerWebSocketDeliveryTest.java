@@ -153,7 +153,7 @@ class ScannerWebSocketDeliveryTest {
                 .findFirst().orElseThrow();
         if (userRepository.findByUsername("cashier2").isEmpty()) {
             userRepository.save(User.builder().username("cashier2").password(passwordEncoder.encode("123456"))
-                    .fullName("Thu ngân chi nhánh 2").role(Role.CASHIER).branchIds(TestAuth.branches(otherBranch)).build());
+                    .fullName("Thu ngân chi nhánh 2").role(Role.STAFF).branchIds(TestAuth.branches(otherBranch)).build());
         }
 
         String quay = registerTerminal("cashier", "Quầy 1");

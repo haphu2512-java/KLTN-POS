@@ -1,31 +1,43 @@
 package com.pos.sale;
 
+import com.pos.approval.ApprovalService;
 import com.pos.branch.Branch;
 import com.pos.branch.BranchRepository;
 import com.pos.common.BusinessException;
 import com.pos.customer.Customer;
 import com.pos.customer.CustomerRepository;
 import com.pos.inventory.InventoryService;
+import com.pos.loyalty.LoyaltyPolicy;
+import com.pos.loyalty.LoyaltyService;
+import com.pos.loyalty.PointTransactionRepository;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
+import com.pos.promotion.PromotionService;
 import com.pos.shift.ShiftService;
 import com.pos.user.Role;
 import com.pos.user.User;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -49,10 +61,30 @@ class InvoiceServiceTest {
     @Mock
     private ShiftService shiftService;
 
-    @InjectMocks
+    @Mock
+    private ApprovalService approvalService;
+
+    @Mock
+    private PointTransactionRepository pointTransactionRepository;
+
+    @Mock
+    private PromotionService promotionService;
+
+    @Mock
+    private InvoiceReturnRepository invoiceReturnRepository;
+
     private InvoiceService invoiceService;
 
-    private final User cashier = User.builder().id(7L).username("cashier").role(Role.CASHIER).currentBranchId(1L).build();
+    @BeforeEach
+    void setUp() {
+        // Dùng LoyaltyService thật (quy tắc mặc định) trên repository mock để kiểm tra đúng câu lệnh cộng/trừ điểm
+        LoyaltyService loyaltyService = new LoyaltyService(customerRepository, pointTransactionRepository,
+                new LoyaltyPolicy(BigDecimal.valueOf(10000), BigDecimal.valueOf(1000), BigDecimal.valueOf(50), 10));
+        invoiceService = new InvoiceService(invoiceRepository, branchRepository, customerRepository, productRepository,
+                inventoryService, shiftService, approvalService, loyaltyService, promotionService, invoiceReturnRepository);
+    }
+
+    private final User cashier = User.builder().id(7L).username("cashier").role(Role.STAFF).currentBranchId(1L).build();
     private final User manager = User.builder().id(8L).username("manager").role(Role.MANAGER).currentBranchId(1L).build();
 
     private Product milk() {
@@ -178,6 +210,46 @@ class InvoiceServiceTest {
     }
 
     @Test
+    @DisplayName("Thu ngân giảm vượt hạn mức: thiếu lý do hoặc mã duyệt thì bị từ chối, không lưu hóa đơn")
+    void testCashierDiscountOverLimitNeedsReasonAndApproval() {
+        when(branchRepository.findById(1L)).thenReturn(Optional.of(Branch.builder().id(1L).build()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(milk()));
+        when(approvalService.requiresDiscountApproval(eq(cashier), any(), any())).thenReturn(true);
+
+        InvoiceRequest noReason = cashRequest(null, BigDecimal.valueOf(20000), BigDecimal.valueOf(100000));
+        BusinessException ex = assertThrows(BusinessException.class, () -> invoiceService.createInvoice(noReason, cashier));
+        assertEquals("DISCOUNT_REASON_REQUIRED", ex.getCode());
+
+        InvoiceRequest noToken = cashRequest(null, BigDecimal.valueOf(20000), BigDecimal.valueOf(100000));
+        noToken.setDiscountReason("Khách quen");
+        when(approvalService.checkDiscountApproval(isNull(), eq(cashier), eq(1L), any()))
+                .thenThrow(new BusinessException("DISCOUNT_APPROVAL_REQUIRED", "cần PIN"));
+        ex = assertThrows(BusinessException.class, () -> invoiceService.createInvoice(noToken, cashier));
+        assertEquals("DISCOUNT_APPROVAL_REQUIRED", ex.getCode());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Thu ngân giảm vượt hạn mức có PIN quản lý: lưu lý do, người duyệt và đánh dấu mã đã dùng")
+    void testCashierDiscountWithApproval() {
+        when(branchRepository.findById(1L)).thenReturn(Optional.of(Branch.builder().id(1L).build()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(milk()));
+        when(invoiceRepository.save(any(Invoice.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(approvalService.requiresDiscountApproval(eq(cashier), any(), any())).thenReturn(true);
+        when(approvalService.checkDiscountApproval("tok", cashier, 1L, BigDecimal.valueOf(20000))).thenReturn(8L);
+
+        InvoiceRequest req = cashRequest(null, BigDecimal.valueOf(20000), BigDecimal.valueOf(100000));
+        req.setDiscountReason("  Hàng móp hộp ");
+        req.setDiscountApprovalToken("tok");
+        Invoice invoice = invoiceService.createInvoice(req, cashier);
+
+        assertEquals(BigDecimal.valueOf(52000), invoice.getTotalAmount());
+        assertEquals("Hàng móp hộp", invoice.getDiscountReason());
+        assertEquals(8L, invoice.getDiscountApprovedBy());
+        verify(approvalService).markUsed("tok");
+    }
+
+    @Test
     @DisplayName("Giảm giá âm hoặc lớn hơn tổng tiền bị từ chối")
     void testInvalidDiscountRejected() {
         when(branchRepository.findById(1L)).thenReturn(Optional.of(Branch.builder().id(1L).build()));
@@ -257,6 +329,9 @@ class InvoiceServiceTest {
         when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
 
         when(shiftService.resolveShiftForRefund(manager, 1L)).thenReturn(42L);
+        when(invoiceReturnRepository.save(any(InvoiceReturn.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(customerRepository.findPointsById(1L)).thenReturn(20);
+        when(customerRepository.deductPointsIfEnough(1L, 5)).thenReturn(1);
 
         Invoice refunded = invoiceService.refundInvoice(10L, "Khách đổi ý", manager);
 
@@ -266,7 +341,8 @@ class InvoiceServiceTest {
         assertNotNull(refunded.getRefundedAt());
         assertTrue(refunded.getNote().contains("Khách đổi ý"));
         verify(inventoryService).addStockAtomic(1L, 1L, 3);
-        verify(customerRepository).addPoints(1L, -5); // 50,000 VND = 5 points
+        // Hóa đơn cũ chưa lưu points_earned: tính lại 50.000đ = 5 điểm và thu hồi
+        verify(customerRepository).deductPointsIfEnough(1L, 5);
     }
 
     @Test
@@ -336,5 +412,146 @@ class InvoiceServiceTest {
         Invoice saved = invoiceService.createInvoice(req, cashier);
         assertEquals("req-3", saved.getClientRequestId());
         verify(inventoryService).deductStockAtomic(1L, 1L, 2);
+    }
+    @Test
+    @DisplayName("Danh sách hóa đơn cho quản lý: gắn tên nhân viên bán và người hoàn trả bằng một truy vấn")
+    void testInvoiceListFillsStaffNames() {
+        Invoice sold = Invoice.builder().id(1L).employeeId(7L).build();
+        Invoice refunded = Invoice.builder().id(2L).employeeId(7L).refundedBy(8L).status(InvoiceStatus.REFUNDED).build();
+        Invoice legacy = Invoice.builder().id(3L).build();
+        Pageable pageable = PageRequest.of(0, 50);
+        when(invoiceRepository.findByBranchIdOrderByCreatedAtDesc(1L, pageable))
+                .thenReturn(new PageImpl<>(List.of(sold, refunded, legacy)));
+        when(shiftService.userDisplayNames(any())).thenReturn(Map.of(7L, "Thu Ngân A", 8L, "Quản Lý B"));
+
+        Page<Invoice> page = invoiceService.getInvoices(1L, pageable);
+
+        assertEquals("Thu Ngân A", page.getContent().get(0).getEmployeeName());
+        assertNull(page.getContent().get(0).getRefundedByName());
+        assertEquals("Quản Lý B", page.getContent().get(1).getRefundedByName());
+        assertNull(page.getContent().get(2).getEmployeeName());
+        verify(shiftService, times(1)).userDisplayNames(any());
+    }
+
+    @Test
+    @DisplayName("Thu ngân xem chi tiết hóa đơn trong ca mình: chỉ có tên người bán, không có tên người hoàn trả")
+    void testCashierInvoiceDetailHidesRefunder() {
+        Invoice inv = Invoice.builder().id(5L).employeeId(7L).shiftSessionId(11L).refundedBy(8L).build();
+        when(invoiceRepository.findById(5L)).thenReturn(Optional.of(inv));
+        when(shiftService.isOwnShift(11L, cashier)).thenReturn(true);
+        when(shiftService.userDisplayName(7L)).thenReturn("Thu Ngân A");
+
+        Invoice result = invoiceService.getInvoiceForViewer(5L, cashier);
+
+        assertEquals("Thu Ngân A", result.getEmployeeName());
+        assertNull(result.getRefundedByName());
+        verify(shiftService, never()).userDisplayNames(any());
+    }
+
+    // ---------- Hoàn trả từng món ----------
+
+    /** Hóa đơn 2 dòng: 2 x 30.000 + 1 x 40.000 = 100.000, giảm 10.000 → khách trả 90.000, được cộng 9 điểm */
+    private Invoice twoLineInvoice(long id) {
+        Product a = Product.builder().id(1L).name("Sữa").build();
+        Product b = Product.builder().id(2L).name("Bánh").build();
+        Invoice inv = Invoice.builder().id(id).branch(Branch.builder().id(1L).build())
+                .customer(com.pos.customer.Customer.builder().id(5L).name("Lan").points(9).build())
+                .status(InvoiceStatus.PAID).paymentMethod(PaymentMethod.CASH)
+                .subtotal(BigDecimal.valueOf(100000)).discount(BigDecimal.valueOf(10000))
+                .totalAmount(BigDecimal.valueOf(90000)).pointsEarned(9).pointsRedeemed(0).build();
+        inv.getDetails().add(InvoiceDetail.builder().id(101L).invoice(inv).product(a).quantity(2)
+                .unitPrice(BigDecimal.valueOf(30000)).totalPrice(BigDecimal.valueOf(60000)).returnedQuantity(0).build());
+        inv.getDetails().add(InvoiceDetail.builder().id(102L).invoice(inv).product(b).quantity(1)
+                .unitPrice(BigDecimal.valueOf(40000)).totalPrice(BigDecimal.valueOf(40000)).returnedQuantity(0).build());
+        return inv;
+    }
+
+    @Test
+    @DisplayName("Trả 1 món: hoàn theo tỷ lệ tiền khách thực trả, cộng kho đúng số lượng, thu hồi điểm theo tỷ lệ, trạng thái hoàn một phần")
+    void partialReturnIsProportional() {
+        Invoice inv = twoLineInvoice(20L);
+        when(invoiceRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(inv));
+        when(invoiceRepository.save(any(Invoice.class))).thenAnswer(x -> x.getArgument(0));
+        when(invoiceReturnRepository.save(any(InvoiceReturn.class))).thenAnswer(x -> x.getArgument(0));
+        when(customerRepository.findPointsById(5L)).thenReturn(9);
+        when(customerRepository.deductPointsIfEnough(5L, 2)).thenReturn(1);
+
+        InvoiceService.ReturnResult r = invoiceService.createReturn(20L,
+                List.of(new InvoiceService.ReturnLine(101L, 1)), "Hộp móp", null, manager);
+
+        // 30.000 / 100.000 x 90.000 = 27.000; điểm thu hồi floor(9 x 27.000 / 90.000) = 2
+        assertEquals(0, BigDecimal.valueOf(27000).compareTo(r.invoiceReturn().getRefundAmount()));
+        assertEquals(2, r.invoiceReturn().getPointsRevoked());
+        assertEquals(InvoiceStatus.PARTIALLY_REFUNDED, r.invoice().getStatus());
+        assertEquals(1, inv.getDetails().get(0).getReturnedQuantity());
+        assertEquals(0, BigDecimal.valueOf(63000).compareTo(r.invoice().getNetAmount()));
+        verify(inventoryService).addStockAtomic(1L, 1L, 1);
+        verify(customerRepository).deductPointsIfEnough(5L, 2);
+    }
+
+    @Test
+    @DisplayName("Lần trả cuối hoàn nốt phần tiền và điểm còn lại, hóa đơn chuyển sang đã hoàn trả")
+    void finalReturnSettlesRemainder() {
+        Invoice inv = twoLineInvoice(21L);
+        inv.getDetails().get(0).setReturnedQuantity(1);
+        inv.setRefundedAmount(BigDecimal.valueOf(27000));
+        inv.setStatus(InvoiceStatus.PARTIALLY_REFUNDED);
+        when(invoiceRepository.findByIdForUpdate(21L)).thenReturn(Optional.of(inv));
+        when(invoiceRepository.save(any(Invoice.class))).thenAnswer(x -> x.getArgument(0));
+        when(invoiceReturnRepository.save(any(InvoiceReturn.class))).thenAnswer(x -> x.getArgument(0));
+        when(invoiceReturnRepository.findByInvoiceIdOrderByCreatedAtAsc(21L)).thenReturn(List.of(
+                InvoiceReturn.builder().refundAmount(BigDecimal.valueOf(27000)).pointsReturned(0).pointsRevoked(2).build()));
+        when(customerRepository.findPointsById(5L)).thenReturn(7);
+        when(customerRepository.deductPointsIfEnough(5L, 7)).thenReturn(1);
+        when(shiftService.resolveShiftForRefund(manager, 1L)).thenReturn(42L);
+
+        InvoiceService.ReturnResult r = invoiceService.createReturn(21L, null, null, null, manager);
+
+        assertEquals(0, BigDecimal.valueOf(63000).compareTo(r.invoiceReturn().getRefundAmount()));
+        assertEquals(7, r.invoiceReturn().getPointsRevoked());
+        assertEquals(InvoiceStatus.REFUNDED, r.invoice().getStatus());
+        assertEquals(42L, r.invoice().getRefundShiftSessionId());
+        BigDecimal lines = r.invoiceReturn().getDetails().stream().map(InvoiceReturnDetail::getRefundAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertEquals(0, BigDecimal.valueOf(63000).compareTo(lines));
+        verify(inventoryService).addStockAtomic(1L, 1L, 1);
+        verify(inventoryService).addStockAtomic(2L, 1L, 1);
+    }
+
+    @Test
+    @DisplayName("Không trả quá số lượng còn lại; thu ngân phải nhập lý do và có mã duyệt PIN đủ số tiền hoàn")
+    void returnValidation() {
+        Invoice inv = twoLineInvoice(22L);
+        when(invoiceRepository.findByIdForUpdate(22L)).thenReturn(Optional.of(inv));
+
+        BusinessException tooMany = assertThrows(BusinessException.class, () -> invoiceService.createReturn(22L,
+                List.of(new InvoiceService.ReturnLine(102L, 2)), "x", null, manager));
+        assertEquals("RETURN_QTY_EXCEEDED", tooMany.getCode());
+
+        BusinessException noReason = assertThrows(BusinessException.class, () -> invoiceService.createReturn(22L,
+                List.of(new InvoiceService.ReturnLine(102L, 1)), " ", null, cashier));
+        assertEquals("RETURN_REASON_REQUIRED", noReason.getCode());
+
+        when(approvalService.checkRefundApproval(eq("tok"), eq(cashier), eq(1L), any()))
+                .thenThrow(new BusinessException("REFUND_APPROVAL_REQUIRED", "cần duyệt"));
+        BusinessException noPin = assertThrows(BusinessException.class, () -> invoiceService.createReturn(22L,
+                List.of(new InvoiceService.ReturnLine(102L, 1)), "Lỗi", "tok", cashier));
+        assertEquals("REFUND_APPROVAL_REQUIRED", noPin.getCode());
+        // 40.000 / 100.000 x 90.000 = 36.000 là số tiền cần quản lý duyệt
+        verify(approvalService).checkRefundApproval("tok", cashier, 1L, BigDecimal.valueOf(36000));
+        verify(inventoryService, never()).addStockAtomic(anyLong(), anyLong(), anyInt());
+    }
+
+    @Test
+    @DisplayName("Quá hạn đổi trả: thu ngân bị chặn, quản lý làm được nhưng phải ghi lý do")
+    void overdueReturnNeedsManagerAndReason() {
+        Invoice inv = twoLineInvoice(23L);
+        inv.setCreatedAt(java.time.LocalDateTime.now().minusDays(10));
+        when(invoiceRepository.findByIdForUpdate(23L)).thenReturn(Optional.of(inv));
+
+        assertEquals("RETURN_EXPIRED", assertThrows(BusinessException.class,
+                () -> invoiceService.createReturn(23L, null, "Lỗi", null, cashier)).getCode());
+        assertEquals("RETURN_REASON_REQUIRED", assertThrows(BusinessException.class,
+                () -> invoiceService.createReturn(23L, null, null, null, manager)).getCode());
     }
 }

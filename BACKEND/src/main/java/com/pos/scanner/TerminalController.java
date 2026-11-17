@@ -36,7 +36,7 @@ public class TerminalController {
     // ===== Phía máy POS =====
 
     @PostMapping("/terminals")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Máy POS đăng ký mình là một quầy (gọi một lần, lưu id trên máy)")
     public ResponseEntity<ApiResponse<Map<String, Object>>> register(@Valid @RequestBody(required = false) TerminalRequest req) {
         PosTerminal t = terminalService.register(req == null ? null : req.name(), currentUserService.getCurrentUser());
@@ -44,14 +44,14 @@ public class TerminalController {
     }
 
     @GetMapping("/terminals/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Thông tin quầy (404 nếu không tồn tại hoặc khác chi nhánh)")
     public ResponseEntity<ApiResponse<Map<String, Object>>> get(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.ok(toDto(terminalService.get(id, currentUserService.getCurrentUser()))));
     }
 
     @PutMapping("/terminals/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Đổi tên quầy (ví dụ: Quầy 1)")
     public ResponseEntity<ApiResponse<Map<String, Object>>> rename(@PathVariable String id,
                                                                    @Valid @RequestBody TerminalRequest req) {
@@ -60,21 +60,21 @@ public class TerminalController {
     }
 
     @PostMapping("/terminals/{id}/pairing-code")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Tạo mã ghép cặp 6 số để hiện QR trên máy POS")
     public ResponseEntity<ApiResponse<Map<String, Object>>> pairingCode(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.ok(terminalService.createPairingCode(id, currentUserService.getCurrentUser())));
     }
 
     @GetMapping("/terminals/{id}/pairings")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Danh sách điện thoại đã ghép với quầy")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> pairings(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.ok(terminalService.listPairings(id, currentUserService.getCurrentUser())));
     }
 
     @DeleteMapping("/terminals/{id}/pairings/{pairingId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Gỡ một điện thoại khỏi quầy")
     public ResponseEntity<ApiResponse<Void>> unpairFromTerminal(@PathVariable String id, @PathVariable String pairingId) {
         terminalService.unpairFromTerminal(id, pairingId, currentUserService.getCurrentUser());
@@ -84,7 +84,7 @@ public class TerminalController {
     // ===== Phía điện thoại =====
 
     @PostMapping("/pair")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Điện thoại gửi mã đọc từ QR để ghép cặp với quầy")
     public ResponseEntity<ApiResponse<Map<String, Object>>> pair(@Valid @RequestBody PairRequest req) {
         ScannerPairing p = terminalService.pair(req.code(), req.deviceName(), req.deviceId(), currentUserService.getCurrentUser());
@@ -92,7 +92,7 @@ public class TerminalController {
     }
 
     @GetMapping("/pairings/{pairingId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Điện thoại kiểm tra ghép cặp của mình còn hiệu lực không")
     public ResponseEntity<ApiResponse<Map<String, Object>>> myPairing(@PathVariable String pairingId) {
         return ResponseEntity.ok(ApiResponse.ok(TerminalService.toDto(
@@ -100,7 +100,7 @@ public class TerminalController {
     }
 
     @DeleteMapping("/pairings/{pairingId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Điện thoại hủy ghép cặp của mình")
     public ResponseEntity<ApiResponse<Void>> unpairOwn(@PathVariable String pairingId) {
         terminalService.unpairOwn(pairingId, currentUserService.getCurrentUser());

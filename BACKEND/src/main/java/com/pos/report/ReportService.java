@@ -41,7 +41,7 @@ public class ReportService {
         DateTimeFormatter df = DateTimeFormatter.ofPattern("dd/MM");
 
         for (Invoice inv : invoices) {
-            totalRevenue = totalRevenue.add(inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO);
+            totalRevenue = totalRevenue.add(inv.getNetAmount());
             totalCost = totalCost.add(invoiceCost(inv));
 
             LocalDate dateKey = inv.getCreatedAt() != null ? inv.getCreatedAt().toLocalDate() : LocalDate.now();
@@ -68,7 +68,7 @@ public class ReportService {
             BigDecimal dayCost = BigDecimal.ZERO;
 
             for (Invoice i : entry.getValue()) {
-                dayRev = dayRev.add(i.getTotalAmount() != null ? i.getTotalAmount() : BigDecimal.ZERO);
+                dayRev = dayRev.add(i.getNetAmount());
                 dayCost = dayCost.add(invoiceCost(i));
             }
 
@@ -102,7 +102,8 @@ public class ReportService {
                 unitCost = item.getProduct().getCostPrice();
             }
             if (unitCost != null && item.getQuantity() != null) {
-                cost = cost.add(unitCost.multiply(BigDecimal.valueOf(item.getQuantity())));
+                // Món khách đã trả lại không còn tính giá vốn (hàng đã về kho)
+                cost = cost.add(unitCost.multiply(BigDecimal.valueOf(item.getRemainingQuantity())));
             }
         }
         return cost;

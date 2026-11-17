@@ -21,5 +21,14 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     @Modifying
     @Query("UPDATE Customer c SET c.points = c.points + :pts WHERE c.id = :id")
     int addPoints(@Param("id") Long id, @Param("pts") int pts);
+
+    /** Trừ điểm chỉ khi đủ số dư; trả 0 nếu không đủ (không để điểm âm khi hai quầy đổi cùng lúc) */
+    @Modifying
+    @Query("UPDATE Customer c SET c.points = c.points - :pts WHERE c.id = :id AND c.points >= :pts")
+    int deductPointsIfEnough(@Param("id") Long id, @Param("pts") int pts);
+
+    /** Đọc số dư mới nhất từ DB (sau các câu UPDATE trên) */
+    @Query("SELECT c.points FROM Customer c WHERE c.id = :id")
+    Integer findPointsById(@Param("id") Long id);
 }
 

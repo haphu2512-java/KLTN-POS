@@ -1,5 +1,8 @@
 package com.pos.purchase;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import com.pos.audit.AuditService;
+import com.pos.audit.AuditAction;
 import com.pos.branch.Branch;
 import com.pos.branch.BranchRepository;
 import com.pos.common.BusinessException;
@@ -26,6 +29,14 @@ public class StockInService {
     private final SupplierRepository supplierRepository;
     private final ProductRepository productRepository;
     private final InventoryService inventoryService;
+
+    /** Nhật ký thao tác; để trống trong unit test dựng service bằng tay */
+    @Autowired(required = false)
+    private AuditService auditService;
+
+    private void audit(AuditAction action, String entityType, Object entityId, Long branchId, String summary) {
+        if (auditService != null) auditService.log(action, entityType, entityId, branchId, summary);
+    }
 
     public List<StockIn> getAllStockIn(Long branchId) {
         if (branchId != null) {
@@ -90,7 +101,13 @@ public class StockInService {
                     .product(product)
                     .quantity(itemReq.getQuantity())
                     .unitCost(unitCost)
+                    .lotNumber(itemReq.getLotNumber() != null && !itemReq.getLotNumber().isBlank()
+                            ? itemReq.getLotNumber().trim() : null)
+                    .expiryDate(itemReq.getExpiryDate())
                     .build();
+            if (itemReq.getExpiryDate() != null && itemReq.getExpiryDate().isBefore(java.time.LocalDate.now())) {
+                throw new BusinessException("EXPIRY_IN_PAST", product.getName() + ": hạn sử dụng đã qua, không nhập hàng hết hạn");
+            }
 
             stockIn.getDetails().add(detail);
             totalCost = totalCost.add(unitCost.multiply(BigDecimal.valueOf(itemReq.getQuantity())));
@@ -104,6 +121,10 @@ public class StockInService {
         }
 
         stockIn.setTotalCost(totalCost);
-        return stockInRepository.save(stockIn);
+        StockIn saved = stockInRepository.save(stockIn);
+        audit(AuditAction.STOCK_IN, "STOCK_IN", saved.getId(), branch.getId(),
+                "Phiếu nhập #" + saved.getId() + ": " + saved.getDetails().size() + " mặt hàng, tổng " + AuditService.money(totalCost)
+                        + (supplier != null ? " - NCC " + supplier.getName() : ""));
+        return saved;
     }
 }

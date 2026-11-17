@@ -15,9 +15,11 @@ export function escapeHtml(value) {
 /**
  * Dữ liệu in lấy từ hóa đơn server trả về (mã, giá, tiền thối là số đã được ghi nhận),
  * không lấy từ giỏ hàng trên màn hình.
+ * reprint = { at, by } khi in lại bill cũ, để bill có dấu BẢN IN LẠI.
  */
-export function receiptFromInvoice(invoice, cashierName) {
+export function receiptFromInvoice(invoice, cashierName, reprint = null) {
   return {
+    reprint,
     code: `HD${String(invoice.id).padStart(6, '0')}`,
     createdAt: invoice.createdAt,
     branchName: invoice.branch?.name || '',
@@ -31,6 +33,13 @@ export function receiptFromInvoice(invoice, cashierName) {
     })),
     subtotal: invoice.subtotal,
     discount: invoice.discount,
+    promotionName: invoice.promotionName,
+    promotionDiscount: invoice.promotionDiscount,
+    pointsDiscount: invoice.pointsDiscount,
+    pointsRedeemed: invoice.pointsRedeemed,
+    pointsEarned: invoice.pointsEarned,
+    // Số dư chỉ có ngay lúc bán; in lại bill cũ thì không in số dư (có thể đã đổi)
+    pointsBalance: invoice.customerPointsBalance ?? null,
     total: invoice.totalAmount,
     received: invoice.receivedAmount,
     change: invoice.changeAmount,
@@ -49,6 +58,9 @@ export function generateReceiptHtml(receipt) {
   `).join('');
 
   const discount = Number(receipt.discount) || 0;
+  const promotionDiscount = Number(receipt.promotionDiscount) || 0;
+  const pointsDiscount = Number(receipt.pointsDiscount) || 0;
+  const hasPoints = receipt.pointsEarned != null && receipt.customerName !== 'Khách lẻ';
   const paymentLabel = PAYMENT_LABELS[receipt.paymentMethod] || receipt.paymentMethod;
 
   return `
@@ -84,6 +96,7 @@ export function generateReceiptHtml(receipt) {
         <div style="font-size: 11px;">${escapeHtml(receipt.branchName)}</div>
         ${receipt.branchAddress ? `<div style="font-size: 10px;">${escapeHtml(receipt.branchAddress)}</div>` : ''}
         <div style="font-size: 10px;">Hotline: 1900 1234 • Giờ mở cửa: 07:00 - 22:00</div>
+        ${receipt.reprint ? '<div class="bold" style="font-size: 13px; margin-top: 4px;">*** BẢN IN LẠI ***</div>' : ''}
       </div>
 
       <div class="divider"></div>
@@ -92,6 +105,7 @@ export function generateReceiptHtml(receipt) {
         <div>Mã HĐ: <span class="bold">${escapeHtml(receipt.code)}</span></div>
         <div>Ngày giờ: ${formatDateTime(receipt.createdAt || new Date())}</div>
         <div>Thu ngân: ${escapeHtml(receipt.cashierName)}</div>
+        ${receipt.reprint ? `<div>In lại: ${formatDateTime(receipt.reprint.at)} bởi ${escapeHtml(receipt.reprint.by)}</div>` : ''}
         <div>Khách hàng: ${escapeHtml(receipt.customerName)}</div>
       </div>
 
@@ -118,10 +132,22 @@ export function generateReceiptHtml(receipt) {
           <td>Tổng tiền hàng:</td>
           <td class="text-right">${formatCurrency(receipt.subtotal)}</td>
         </tr>
+        ${promotionDiscount > 0 ? `
+        <tr>
+          <td>KM: ${escapeHtml(receipt.promotionName || 'Khuyến mãi')}</td>
+          <td class="text-right">-${formatCurrency(promotionDiscount)}</td>
+        </tr>
+        ` : ''}
         ${discount > 0 ? `
         <tr>
           <td>Giảm giá / Chiết khấu:</td>
           <td class="text-right">-${formatCurrency(discount)}</td>
+        </tr>
+        ` : ''}
+        ${pointsDiscount > 0 ? `
+        <tr>
+          <td>Dùng ${escapeHtml(receipt.pointsRedeemed)} điểm:</td>
+          <td class="text-right">-${formatCurrency(pointsDiscount)}</td>
         </tr>
         ` : ''}
         <tr style="font-size: 14px;" class="bold">
@@ -137,6 +163,22 @@ export function generateReceiptHtml(receipt) {
           <td class="text-right bold">${formatCurrency(receipt.change)}</td>
         </tr>
       </table>
+
+      ${hasPoints ? `
+      <div class="divider"></div>
+      <table style="margin: 0;">
+        <tr>
+          <td>Điểm tích lũy đơn này:</td>
+          <td class="text-right">+${escapeHtml(receipt.pointsEarned)}</td>
+        </tr>
+        ${receipt.pointsBalance != null ? `
+        <tr>
+          <td>Điểm hiện có:</td>
+          <td class="text-right bold">${escapeHtml(receipt.pointsBalance)}</td>
+        </tr>
+        ` : ''}
+      </table>
+      ` : ''}
 
       <div class="divider"></div>
 
@@ -190,6 +232,123 @@ export async function printInvoiceReceipt(receipt) {
     }
   }
 
+  printInHiddenIframe(html);
+  return { success: true };
+}
+
+/**
+ * Dữ liệu phiếu hoàn trả từ kết quả server: invoice (hóa đơn gốc sau khi hoàn) và invoiceReturn (phiếu vừa tạo).
+ */
+export function returnSlipFrom(invoice, invoiceReturn, cashierName) {
+  return {
+    code: `PT${String(invoiceReturn.id).padStart(6, '0')}`,
+    invoiceCode: `HD${String(invoice.id).padStart(6, '0')}`,
+    createdAt: invoiceReturn.createdAt,
+    invoiceCreatedAt: invoice.createdAt,
+    branchName: invoice.branch?.name || '',
+    branchAddress: invoice.branch?.address || '',
+    cashierName,
+    customerName: invoice.customer?.name || 'Khách lẻ',
+    items: (invoiceReturn.details || []).map((d) => ({
+      name: d.productName || '',
+      quantity: d.quantity,
+      refundAmount: d.refundAmount
+    })),
+    refundAmount: invoiceReturn.refundAmount,
+    paymentMethod: invoiceReturn.paymentMethod,
+    pointsReturned: invoiceReturn.pointsReturned || 0,
+    pointsRevoked: invoiceReturn.pointsRevoked || 0,
+    reason: invoiceReturn.reason,
+    fullyRefunded: invoice.status === 'REFUNDED'
+  };
+}
+
+export function generateReturnSlipHtml(slip) {
+  const itemsHtml = slip.items.map((item) => `
+    <tr>
+      <td style="padding: 4px 0; font-size: 12px;">${escapeHtml(item.name)}</td>
+      <td style="padding: 4px 0; text-align: center; font-size: 12px;">${escapeHtml(item.quantity)}</td>
+      <td style="padding: 4px 0; text-align: right; font-size: 12px; font-weight: bold;">${formatCurrency(item.refundAmount)}</td>
+    </tr>
+  `).join('');
+  const paymentLabel = PAYMENT_LABELS[slip.paymentMethod] || slip.paymentMethod;
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>Phiếu hoàn trả ${escapeHtml(slip.code)}</title>
+      <style>
+        @page { size: 80mm auto; margin: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; width: 76mm; margin: 0 auto;
+               padding: 8px 4px; color: #000; font-size: 12px; line-height: 1.3; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .bold { font-weight: bold; }
+        .divider { border-top: 1px dashed #000; margin: 6px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+        th { font-size: 11px; border-bottom: 1px solid #000; padding: 3px 0; text-align: left; }
+      </style>
+    </head>
+    <body>
+      <div class="text-center">
+        <h2 style="margin: 0; font-size: 16px;">PHIẾU HOÀN TRẢ</h2>
+        <div style="font-size: 11px;">${escapeHtml(slip.branchName)}</div>
+        ${slip.branchAddress ? `<div style="font-size: 10px;">${escapeHtml(slip.branchAddress)}</div>` : ''}
+      </div>
+      <div class="divider"></div>
+      <div>
+        <div>Số phiếu: <span class="bold">${escapeHtml(slip.code)}</span></div>
+        <div>Ngày giờ: ${formatDateTime(slip.createdAt || new Date())}</div>
+        <div>Hóa đơn gốc: ${escapeHtml(slip.invoiceCode)} (${formatDateTime(slip.invoiceCreatedAt)})</div>
+        <div>Thu ngân: ${escapeHtml(slip.cashierName)}</div>
+        <div>Khách hàng: ${escapeHtml(slip.customerName)}</div>
+        ${slip.reason ? `<div>Lý do: ${escapeHtml(slip.reason)}</div>` : ''}
+      </div>
+      <div class="divider"></div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 58%;">Mặt hàng trả</th>
+            <th style="width: 14%; text-align: center;">SL</th>
+            <th style="width: 28%; text-align: right;">Tiền hoàn</th>
+          </tr>
+        </thead>
+        <tbody>${itemsHtml}</tbody>
+      </table>
+      <div class="divider"></div>
+      <table style="margin: 0;">
+        <tr style="font-size: 14px;" class="bold">
+          <td>HOÀN KHÁCH (${escapeHtml(paymentLabel)}):</td>
+          <td class="text-right">${formatCurrency(slip.refundAmount)}</td>
+        </tr>
+        ${slip.pointsReturned > 0 ? `<tr><td>Trả lại điểm đã dùng:</td><td class="text-right">+${escapeHtml(slip.pointsReturned)}</td></tr>` : ''}
+        ${slip.pointsRevoked > 0 ? `<tr><td>Thu hồi điểm đã tích:</td><td class="text-right">-${escapeHtml(slip.pointsRevoked)}</td></tr>` : ''}
+      </table>
+      <div class="divider"></div>
+      <div class="text-center" style="font-size: 11px;">
+        ${slip.fullyRefunded ? 'Hóa đơn gốc đã được hoàn trả toàn bộ.' : 'Các món còn lại trên hóa đơn gốc vẫn được đổi trả trong hạn.'}
+      </div>
+      <div style="margin-top: 18px; display: flex; justify-content: space-between; font-size: 11px;">
+        <span>Khách hàng ký</span><span>Thu ngân ký</span>
+      </div>
+      <div style="height: 36px;"></div>
+    </body>
+    </html>
+  `;
+}
+
+/** In phiếu hoàn trả K80 (cùng cơ chế in với hóa đơn) */
+export async function printReturnSlip(slip) {
+  const html = generateReturnSlipHtml(slip);
+  if (window.electronAPI && typeof window.electronAPI.printReceipt === 'function') {
+    try {
+      return await window.electronAPI.printReceipt({ html, silent: true });
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
   printInHiddenIframe(html);
   return { success: true };
 }

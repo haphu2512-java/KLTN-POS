@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Button, Table, Badge, Modal, Loading } from '../../components/common';
+import { Button, Table, Badge, Loading } from '../../components/common';
 import { formatCurrency, formatNumber, formatDateTime } from '../../utils/formatters';
 import { reportService } from '../../services/reportService';
 import { saleService } from '../../services/saleService';
 import { exportToCsv } from '../../utils/exportCsv';
 import useBranches, { branchNameOf } from '../../hooks/useBranches';
+import ReturnModal from '../pos/ReturnModal';
 import './ReportPage.css';
+import { toast } from '../../components/common/toastStore';
 
 export default function ReportPage({
   currentUser,
@@ -25,8 +27,6 @@ export default function ReportPage({
   const [viewMode, setViewMode] = useState('charts'); // 'charts' | 'invoices' (lịch sử ca đã chuyển sang tab Ca làm)
   const [invoices, setInvoices] = useState([]);
   const [refundTarget, setRefundTarget] = useState(null);
-  const [refundReason, setRefundReason] = useState('');
-  const [showRefundModal, setShowRefundModal] = useState(false);
 
   const [summaryData, setSummaryData] = useState({
     totalRevenue: 0,
@@ -97,29 +97,31 @@ export default function ReportPage({
     };
   }, [viewMode, selectedBranchId, isOnline]);
 
-  const handleProcessRefund = async (e) => {
-    e.preventDefault();
-    if (!refundTarget) return;
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const handleExportExcel = async () => {
+    setExportingExcel(true);
     try {
-      await saleService.refundInvoice(refundTarget.id, refundReason);
-      alert(`Đã hoàn trả hóa đơn #${refundTarget.id} thành công! Số lượng tồn kho đã được hoàn lại.`);
-      setShowRefundModal(false);
-      setRefundReason('');
-      setRefundTarget(null);
-      fetchInvoices();
+      await reportService.downloadExcel(selectedBranchId, days);
     } catch (err) {
-      alert(err.response?.data?.message || 'Có lỗi khi hoàn trả hóa đơn');
+      toast.error(`Không xuất được file Excel: ${err?.response?.status === 403 ? 'không có quyền' : err.message}`);
+    } finally {
+      setExportingExcel(false);
     }
   };
 
   const handleExportCsv = () => {
     if (viewMode === 'invoices') {
-      const headers = ['Mã hóa đơn', 'Thời gian', 'Thu ngân', 'Khách hàng', 'Tổng tiền (VND)', 'Phương thức', 'Trạng thái', 'Ghi chú'];
+      const headers = ['Mã hóa đơn', 'Thời gian', 'Thu ngân', 'Khách hàng', 'Khuyến mãi', 'Tiền khuyến mãi (VND)', 'Giảm giá (VND)', 'Lý do giảm', 'Người duyệt giảm', 'Tổng tiền (VND)', 'Phương thức', 'Trạng thái', 'Ghi chú'];
       const rows = invoices.map((i) => [
         `HD-${i.id}`,
         formatDateTime(i.createdAt),
-        `Nhân viên ${i.employeeId || 1}`,
+        i.employeeName || '',
         i.customer ? i.customer.name : 'Khách lẻ',
+        i.promotionName || '',
+        i.promotionDiscount || 0,
+        i.discount || 0,
+        i.discountReason || '',
+        i.discountApprovedByName || '',
         i.totalAmount,
         i.paymentMethod,
         i.status === 'REFUNDED' ? 'Đã hoàn trả' : 'Đã thanh toán',
@@ -226,6 +228,23 @@ export default function ReportPage({
       }
     },
     {
+      key: 'employeeName',
+      title: 'Nhân viên',
+      render: (val, i) => (
+        <div>
+          <div>{val || '—'}</div>
+          {i?.status === 'REFUNDED' && i?.refundedByName && (
+            <small style={{ color: 'var(--text-muted)' }}>Hoàn trả: {i.refundedByName}</small>
+          )}
+          {Number(i?.discount) > 0 && i?.discountApprovedByName && (
+            <small style={{ display: 'block', color: 'var(--text-muted)' }}>
+              Duyệt giảm {formatCurrency(i.discount)}: {i.discountApprovedByName}
+            </small>
+          )}
+        </div>
+      )
+    },
+    {
       key: 'totalAmount',
       title: 'Tổng tiền',
       align: 'right',
@@ -247,8 +266,8 @@ export default function ReportPage({
       render: (val, i) => {
         const st = val || i?.status;
         return (
-          <Badge variant={st === 'REFUNDED' ? 'danger' : 'success'}>
-            {st === 'REFUNDED' ? 'Đã hoàn trả' : 'Đã thanh toán'}
+          <Badge variant={st === 'REFUNDED' ? 'danger' : st === 'PARTIALLY_REFUNDED' ? 'warning' : 'success'}>
+            {st === 'REFUNDED' ? 'Đã hoàn trả' : st === 'PARTIALLY_REFUNDED' ? 'Hoàn một phần' : 'Đã thanh toán'}
           </Badge>
         );
       }
@@ -270,11 +289,8 @@ export default function ReportPage({
               <Button
                 size="sm"
                 variant="danger"
-                onClick={() => {
-                  setRefundTarget(i);
-                  setShowRefundModal(true);
-                }}
-                title="Thực hiện hoàn trả hàng và hoàn tiền cho khách"
+                onClick={() => setRefundTarget(i)}
+                title="Hoàn trả một số món hoặc cả hóa đơn"
               >
                 Trả hàng
               </Button>
@@ -336,6 +352,18 @@ export default function ReportPage({
                 </button>
               ))}
             </div>
+
+            {isOnline && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleExportExcel}
+                disabled={exportingExcel}
+                title="Tải file Excel gồm tổng quan, doanh thu theo ngày, sản phẩm bán chạy, danh sách hóa đơn và hao hụt kho"
+              >
+                {exportingExcel ? 'Đang xuất...' : 'Xuất Excel'}
+              </Button>
+            )}
 
             <Button
               variant="secondary"
@@ -473,6 +501,10 @@ export default function ReportPage({
                       const totalBars = summaryData.dailyTrend.length;
                       const slotWidth = 600 / totalBars;
                       const xCenter = slotWidth * idx + slotWidth / 2;
+                      // Thu hẹp cột và giãn nhãn ngày khi khoảng thời gian dài (30/90 ngày) để không chồng lên nhau
+                      const barWidth = Math.min(12, slotWidth * 0.4);
+                      const labelStep = Math.ceil(totalBars / 10);
+                      const showLabel = idx % labelStep === 0 || idx === totalBars - 1;
 
                       const revHeight = Math.max(4, ((Number(d.revenue) || 0) / maxRevenue) * 140);
                       const profHeight = Math.max(2, ((Number(d.profit) || 0) / maxRevenue) * 140);
@@ -483,9 +515,9 @@ export default function ReportPage({
                       return (
                         <g key={idx}>
                           <rect
-                            x={xCenter - 14}
+                            x={xCenter - barWidth - 1}
                             y={revY}
-                            width="12"
+                            width={barWidth}
                             height={revHeight}
                             fill="var(--primary-600)"
                             rx="2"
@@ -494,9 +526,9 @@ export default function ReportPage({
                           </rect>
 
                           <rect
-                            x={xCenter + 2}
+                            x={xCenter + 1}
                             y={profY}
-                            width="12"
+                            width={barWidth}
                             height={profHeight}
                             fill="var(--warning-600)"
                             rx="2"
@@ -504,15 +536,17 @@ export default function ReportPage({
                             <title>{`${d.date}: Lợi nhuận ${formatCurrency(d.profit)}`}</title>
                           </rect>
 
-                          <text
-                            x={xCenter}
-                            y="180"
-                            fill="var(--text-muted)"
-                            fontSize="10"
-                            textAnchor="middle"
-                          >
-                            {d.date}
-                          </text>
+                          {showLabel && (
+                            <text
+                              x={xCenter}
+                              y="180"
+                              fill="var(--text-muted)"
+                              fontSize="10"
+                              textAnchor="middle"
+                            >
+                              {d.date}
+                            </text>
+                          )}
                         </g>
                       );
                     })}
@@ -542,66 +576,14 @@ export default function ReportPage({
         )}
       </main>
 
-      {/* Modal Refund Invoice */}
-      <Modal
-        isOpen={showRefundModal}
-        onClose={() => {
-          setShowRefundModal(false);
-          setRefundTarget(null);
-        }}
-        title={`Xác nhận trả hàng cho hóa đơn #${refundTarget?.id}`}
-        width="440px"
-      >
-        <form onSubmit={handleProcessRefund}>
-          <p style={{ color: 'var(--text-main)', fontSize: '14px', marginBottom: '12px' }}>
-            Bạn đang thao tác hoàn trả hóa đơn giá trị:{' '}
-            <strong style={{ color: 'var(--primary-600)' }}>{formatCurrency(refundTarget?.totalAmount || 0)}</strong>.
-          </p>
-          <div style={{ backgroundColor: 'var(--bg-canvas)', padding: '12px', borderRadius: '6px', marginBottom: '14px', border: '1px solid var(--border-subtle)' }}>
-            <p style={{ fontSize: '12px', color: 'var(--warning-600)', margin: 0 }}>
-              Toàn bộ số lượng sản phẩm trong đơn sẽ được <strong>hoàn trả tự động vào kho hàng nguyên tử</strong>. Điểm tích lũy thành viên đã tặng cũng sẽ được thu hồi.
-            </p>
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>
-              Lý do trả hàng / ghi chú hoàn tiền:
-            </label>
-            <input
-              type="text"
-              placeholder="vd: Hàng bị lỗi bao bì / Khách đổi ý..."
-              style={{
-                width: '100%',
-                backgroundColor: 'var(--bg-canvas)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: '6px',
-                padding: '8px 12px',
-                color: 'var(--text-main)',
-                boxSizing: 'border-box'
-              }}
-              value={refundReason}
-              onChange={(e) => setRefundReason(e.target.value)}
-              required
-            />
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                setShowRefundModal(false);
-                setRefundTarget(null);
-              }}
-            >
-              Hủy
-            </Button>
-            <Button type="submit" variant="danger">
-              Xác nhận Hoàn tiền & Hoàn kho
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      {/* Trả hàng từng món (dùng chung với máy quầy) */}
+      <ReturnModal
+        isOpen={!!refundTarget}
+        invoiceId={refundTarget?.id}
+        cashierName={currentUser?.fullName || currentUser?.username || 'Quản lý'}
+        onClose={() => setRefundTarget(null)}
+        onDone={() => fetchInvoices()}
+      />
     </div>
   );
 }

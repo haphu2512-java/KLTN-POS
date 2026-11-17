@@ -37,7 +37,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
      * Doanh số theo ngày của mọi sản phẩm tại 1 chi nhánh (bỏ hóa đơn đã hoàn trả), dùng cho dự báo.
      * Mỗi dòng: [productId, ngày, tổng số lượng].
      */
-    @Query("SELECT d.product.id, CAST(i.createdAt AS LocalDate), SUM(d.quantity) " +
+    @Query("SELECT d.product.id, CAST(i.createdAt AS LocalDate), SUM(d.quantity - COALESCE(d.returnedQuantity, 0)) " +
            "FROM InvoiceDetail d JOIN d.invoice i " +
            "WHERE i.branch.id = :branchId AND i.createdAt >= :since " +
            "AND i.status <> com.pos.sale.InvoiceStatus.REFUNDED " +
@@ -55,8 +55,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
      * Top sản phẩm bán chạy (bỏ hóa đơn đã hoàn trả).
      * Mỗi dòng: [productId, tên, mã vạch, tổng SL, doanh thu, giá vốn (giá vốn lúc bán, fallback giá vốn hiện tại)].
      */
-    @Query("SELECT d.product.id, d.product.name, d.product.barcode, SUM(d.quantity), SUM(d.totalPrice), " +
-           "SUM(d.quantity * COALESCE(d.costPrice, d.product.costPrice)) " +
+    @Query("SELECT d.product.id, d.product.name, d.product.barcode, SUM(d.quantity - COALESCE(d.returnedQuantity, 0)), " +
+           "SUM(d.totalPrice - d.unitPrice * COALESCE(d.returnedQuantity, 0)), " +
+           "SUM((d.quantity - COALESCE(d.returnedQuantity, 0)) * COALESCE(d.costPrice, d.product.costPrice)) " +
            "FROM InvoiceDetail d JOIN d.invoice i " +
            "WHERE (:branchId IS NULL OR i.branch.id = :branchId) AND i.createdAt BETWEEN :start AND :end " +
            "AND i.status <> com.pos.sale.InvoiceStatus.REFUNDED " +
@@ -79,17 +80,19 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     List<Object[]> sumSoldByShift(@Param("shiftId") Long shiftId);
 
     /**
-     * Tiền hoàn trả chi ra từ két của một ca, theo phương thức. Hóa đơn hoàn trả chưa ghi ca chi tiền
+     * Tiền hoàn trả chi ra từ két của một ca, theo phương thức — chỉ hóa đơn hoàn cả đơn theo cách cũ
+     * (refundedAmount null); hoàn trả mới tính theo phiếu ở InvoiceReturnRepository.sumByShift. Hóa đơn hoàn trả chưa ghi ca chi tiền
      * (dữ liệu cũ, hoặc lúc hoàn trả không có ca nào đang mở) được tính vào ca đã bán.
      * Mỗi dòng: [phương thức, số hóa đơn, tổng tiền].
      */
     @Query("SELECT i.paymentMethod, COUNT(i), SUM(i.totalAmount) FROM Invoice i " +
-           "WHERE i.status = com.pos.sale.InvoiceStatus.REFUNDED AND (i.refundShiftSessionId = :shiftId " +
+           "WHERE i.status = com.pos.sale.InvoiceStatus.REFUNDED AND i.refundedAmount IS NULL AND (i.refundShiftSessionId = :shiftId " +
            "OR (i.refundShiftSessionId IS NULL AND i.shiftSessionId = :shiftId)) GROUP BY i.paymentMethod")
     List<Object[]> sumRefundedByShift(@Param("shiftId") Long shiftId);
 
     /** Hóa đơn bán trong ca và hóa đơn (của ca khác) được hoàn trả bằng tiền két của ca này */
     @Query("SELECT i FROM Invoice i WHERE i.shiftSessionId = :shiftId OR i.refundShiftSessionId = :shiftId " +
+           "OR i.id IN (SELECT r.invoice.id FROM InvoiceReturn r WHERE r.shiftSessionId = :shiftId) " +
            "ORDER BY i.createdAt ASC")
     List<Invoice> findForShift(@Param("shiftId") Long shiftId);
 }

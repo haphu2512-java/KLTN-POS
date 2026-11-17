@@ -5,11 +5,12 @@ import { formatDateTime } from '../../utils/formatters';
 export default function PosHeader({
   branchName = 'Chi nhánh 1',
   cashierName = 'Thu ngân',
-  role = 'CASHIER',
+  role = 'STAFF',
   shiftName = 'Chưa mở ca',
   shiftOpen = false,
   onOpenShift,
   onOpenCashMovement,
+  onOpenRecentInvoices,
   isOnline = true,
   isWsConnected = false,
   terminalName,
@@ -26,7 +27,7 @@ export default function PosHeader({
     return () => clearInterval(timer);
   }, []);
 
-  const roleLabel = { ADMIN: 'Quản trị', MANAGER: 'Quản lý', WAREHOUSE: 'Thủ kho' }[role] || 'Thu ngân';
+  const roleLabel = { ADMIN: 'Quản trị', MANAGER: 'Quản lý' }[role] || 'Nhân viên';
   const status = !isOnline ? 'offline' : isWsConnected ? 'live' : 'online';
   const statusText = {
     offline: 'Ngoại tuyến',
@@ -52,6 +53,17 @@ export default function PosHeader({
           {statusText}
         </span>
         <span className="pos-time">{timeStr}</span>
+        {onOpenRecentInvoices && (
+          <Button
+            variant="secondary"
+            size="sm"
+            hotkey="F7"
+            onClick={onOpenRecentInvoices}
+            title="Xem lịch sử hóa đơn gần đây và in lại bill (F7)"
+          >
+            Hóa đơn gần đây
+          </Button>
+        )}
         {shiftOpen && onOpenCashMovement && (
           <Button variant="secondary" size="sm" onClick={onOpenCashMovement} title="Chi trong ca, nộp quỹ, bổ sung tiền lẻ">
             Thu/chi két

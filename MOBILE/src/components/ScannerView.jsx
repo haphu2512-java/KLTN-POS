@@ -16,12 +16,12 @@ import { colors, fonts, radius, type } from '../theme';
 
 // Mã mẫu để thử nhanh khi không có hàng thật trong tay
 const MOCK_BARCODES = [
-  { barcode: '1053044001004', name: 'Snack mực Talaethong' },
-  { barcode: '1053820000425', name: 'Ô mai cầu vồng Plum' },
-  { barcode: '1053086000170', name: 'Bánh gạo Poca' },
-  { barcode: '1052850001654', name: 'Kẹo Golia C' },
-  { barcode: '8934563148268', name: 'Mì Hảo Hảo' },
-  { barcode: '8934588012117', name: 'Coca-Cola 320ml' }
+  { barcode: '2000000000015', name: 'Snack mực Talaethong' },
+  { barcode: '2000000000022', name: 'Ô mai cầu vồng Plum' },
+  { barcode: '2000000000039', name: 'Bánh gạo Poca' },
+  { barcode: '2000000000046', name: 'Kẹo Golia C' },
+  { barcode: '8934588012228', name: 'Pepsi lon 320ml' },
+  { barcode: '8935049510123', name: 'Coca-Cola lon 320ml' }
 ];
 
 const BARCODE_TYPES = ['ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e', 'qr'];
@@ -162,7 +162,7 @@ export default function ScannerView({ onBarcodeDetected, isScanningActive, isPro
         {/* Camera nằm gọn trong thẻ có kích thước cố định; tắt hẳn khi rời tab Quét */}
         <CameraView
           key={cameraKey}
-          style={StyleSheet.absoluteFill}
+          style={fill}
           facing={facing}
           enableTorch={enableTorch}
           barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
@@ -267,6 +267,10 @@ function ControlButton({ icon, label, active, onPress }) {
   );
 }
 
+// Phủ kín thẻ camera bằng toạ độ tường minh. Trước đây spread StyleSheet.absoluteFillObject
+// thì trên máy thật lớp phủ co về đầu thẻ, khiến khung ngắm bị đẩy lên trên thay vì nằm giữa.
+const fill = { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 };
+
 const styles = StyleSheet.create({
   cameraCard: {
     borderRadius: radius.xl,
@@ -276,7 +280,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...fill,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -303,7 +307,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#7FC8A0'
   },
   cameraState: {
-    ...StyleSheet.absoluteFillObject,
+    ...fill,
     backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',

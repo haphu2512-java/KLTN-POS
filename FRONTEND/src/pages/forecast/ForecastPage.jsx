@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Button, Table, Badge, Loading } from '../../components/common';
 import SalesTrendChart from '../../components/forecast/SalesTrendChart';
 import {
@@ -10,18 +10,24 @@ import { formatCurrency } from '../../utils/formatters';
 import { forecastService } from '../../services/forecastService';
 import { productService } from '../../services/productService';
 import { reportService } from '../../services/reportService';
+import { purchaseOrderService } from '../../services/purchaseOrderService';
 import './ForecastPage.css';
+import { toast } from '../../components/common/toastStore';
+
+const TABLE_PAGE_SIZE = 50;
 
 export default function ForecastPage({
   branchId = 1,
   isOnline = true,
-  onCreateStockInDraft
+  onCreateStockInDraft,
+  onOpenPurchaseOrder
 }) {
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState([]);
   const [algorithm, setAlgorithm] = useState('EXP_SMOOTHING'); // 'EXP_SMOOTHING' | 'MOVING_AVG'
   const [forecastDays, setForecastDays] = useState(7); // 7 | 14 | 30
   const [selectedProductId, setSelectedProductId] = useState(null);
+  const [tablePage, setTablePage] = useState(1);
   const [backendForecasts, setBackendForecasts] = useState([]);
   const [productForecast, setProductForecast] = useState(null);
   const [revenueSummary, setRevenueSummary] = useState({
@@ -119,13 +125,13 @@ export default function ForecastPage({
     return new Array(30).fill(0);
   }, [selectedForecast]);
 
-  // Nhãn ngày cho phần lịch sử (ngày cuối là hôm nay)
+  // Nhãn ngày cho phần lịch sử (ngày cuối là hôm qua, server bỏ ngày hôm nay chưa bán xong)
   const historyLabels = useMemo(() => {
     const labels = [];
     const today = new Date();
     for (let i = actualSales.length - 1; i >= 0; i--) {
       const d = new Date(today);
-      d.setDate(today.getDate() - i);
+      d.setDate(today.getDate() - i - 1);
       const dd = String(d.getDate()).padStart(2, '0');
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       labels.push(`${dd}/${mm}`);
@@ -150,7 +156,8 @@ export default function ForecastPage({
     const labels = [];
     const today = new Date();
 
-    for (let i = 1; i <= forecastDays; i++) {
+    // Dự báo bắt đầu từ hôm nay, nối tiếp ngày cuối của lịch sử
+    for (let i = 0; i < forecastDays; i++) {
       const nextDate = new Date(today);
       nextDate.setDate(today.getDate() + i);
       const dd = String(nextDate.getDate()).padStart(2, '0');
@@ -216,7 +223,7 @@ export default function ForecastPage({
   // Mở phiếu nhập điền sẵn ở trang Kho. Dự báo chỉ đề xuất, quản lý xem lại và quyết định lưu phiếu.
   const openStockInDraft = (rows) => {
     if (!onCreateStockInDraft) {
-      alert('Không mở được phiếu nhập từ trang này.');
+      toast.error('Không mở được phiếu nhập từ trang này.');
       return;
     }
     onCreateStockInDraft(rows.map((r) => ({ productId: r.id, quantity: r.suggestedQty > 0 ? r.suggestedQty : 1 })));
@@ -225,12 +232,45 @@ export default function ForecastPage({
   const handleRestockClick = (item) => openStockInDraft([item]);
 
   const restockRows = replenishmentList.filter((r) => r.suggestedQty > 0);
+
+  // Bảng gợi ý có thể tới vài nghìn dòng (mỗi sản phẩm một dòng): chỉ render từng trang để không giật
+  const totalPages = Math.ceil(replenishmentList.length / TABLE_PAGE_SIZE) || 1;
+  const currentPage = Math.min(tablePage, totalPages);
+  const pagedReplenishment = useMemo(
+    () => replenishmentList.slice((currentPage - 1) * TABLE_PAGE_SIZE, currentPage * TABLE_PAGE_SIZE),
+    [replenishmentList, currentPage]
+  );
   const handleBulkRestockClick = () => {
     if (restockRows.length === 0) {
-      alert('Hiện chưa có mặt hàng nào cần nhập thêm.');
+      toast.info('Hiện chưa có mặt hàng nào cần nhập thêm.');
       return;
     }
     openStockInDraft(restockRows);
+  };
+
+  // Lập đơn đặt hàng nháp ở máy chủ từ đề xuất AI (mỗi nhà cung cấp một đơn) rồi mở trang Đặt hàng để duyệt
+  const [creatingPo, setCreatingPo] = useState(false);
+  const creatingPoRef = useRef(false);
+  const handleCreatePurchaseOrders = async () => {
+    // Chặn bấm liên tiếp trước khi nút kịp chuyển sang trạng thái vô hiệu
+    if (creatingPoRef.current) return;
+    creatingPoRef.current = true;
+    setCreatingPo(true);
+    try {
+      const orders = await purchaseOrderService.fromForecast(forecastDays);
+      onOpenPurchaseOrder(orders[0]?.id, `Đã lập ${orders.length} đơn đặt hàng nháp từ đề xuất AI (${forecastDays} ngày). Kiểm tra số lượng, chọn nhà cung cấp rồi gửi đơn.`);
+    } catch (err) {
+      const data = err?.response?.data;
+      if (data?.code === 'NO_SUGGESTION') {
+        // Không có gì cần nhập không phải là lỗi: chỉ báo thông tin
+        toast.info('Hiện AI chưa đề xuất nhập mặt hàng nào cho chi nhánh này, chưa cần lập đơn đặt hàng.');
+      } else {
+        toast.error(data?.message || 'Không lập được đơn đặt hàng');
+      }
+    } finally {
+      creatingPoRef.current = false;
+      setCreatingPo(false);
+    }
   };
 
   // Restock Table Columns
@@ -448,7 +488,7 @@ export default function ForecastPage({
               Biểu đồ xu hướng & dự báo theo sản phẩm:
             </span>
             <select
-              value={selectedProductId}
+              value={selectedProductId ?? ''}
               onChange={(e) => setSelectedProductId(Number(e.target.value))}
               style={{
                 height: '32px',
@@ -503,6 +543,18 @@ export default function ForecastPage({
                 (Z × σ × √Lead time). Di chuột lên số đề xuất để xem lý do.
               </p>
             </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {onOpenPurchaseOrder && isOnline && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleCreatePurchaseOrders}
+                disabled={creatingPo}
+                title="Gom các mặt hàng cần nhập theo nhà cung cấp gần nhất, tạo đơn nháp để gửi NCC"
+              >
+                {creatingPo ? 'Đang lập đơn...' : 'Lập đơn đặt hàng từ đề xuất'}
+              </Button>
+            )}
             <Button
               variant="success"
               size="sm"
@@ -511,15 +563,34 @@ export default function ForecastPage({
             >
               + Tạo phiếu nhập tổng hợp ({restockRows.length} mặt hàng)
             </Button>
+            </div>
           </div>
 
           <Table
             columns={restockColumns}
-            data={replenishmentList}
+            data={pagedReplenishment}
             loading={loading}
             loadingText="Đang tính toán gợi ý nhập hàng AI..."
             emptyText="Không có gợi ý nhập hàng"
           />
+          {!loading && replenishmentList.length > TABLE_PAGE_SIZE && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', padding: '0 8px' }}>
+              <span className="text-muted" style={{ fontSize: '13px' }}>
+                Hiển thị {(currentPage - 1) * TABLE_PAGE_SIZE + 1} - {Math.min(currentPage * TABLE_PAGE_SIZE, replenishmentList.length)} / {replenishmentList.length} mặt hàng
+              </span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <Button size="sm" variant="secondary" disabled={currentPage <= 1} onClick={() => setTablePage(currentPage - 1)}>
+                  ← Trước
+                </Button>
+                <span style={{ fontSize: '13px', fontWeight: 600 }}>
+                  Trang {currentPage} / {totalPages}
+                </span>
+                <Button size="sm" variant="secondary" disabled={currentPage >= totalPages} onClick={() => setTablePage(currentPage + 1)}>
+                  Sau →
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
       </main>
     </div>

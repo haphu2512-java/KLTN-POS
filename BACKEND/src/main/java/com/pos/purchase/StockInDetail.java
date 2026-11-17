@@ -36,4 +36,10 @@ public class StockInDetail {
 
     @Column(name = "unit_cost", precision = 14, scale = 2)
     private BigDecimal unitCost;
+
+    @Column(name = "lot_number", length = 50)
+    private String lotNumber;
+
+    @Column(name = "expiry_date")
+    private java.time.LocalDate expiryDate;
 }

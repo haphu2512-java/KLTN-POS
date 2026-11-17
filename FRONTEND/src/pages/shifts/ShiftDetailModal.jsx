@@ -120,6 +120,9 @@ export default function ShiftDetailModal({ shiftId, canForceClose, onClose, onCh
         if (val === 'REFUND_OTHER_SHIFT') {
           return <Badge variant="warning">Hoàn trả HĐ ca khác</Badge>;
         }
+        if (inv.status === 'PARTIALLY_REFUNDED' && inv.refundCountedHere) {
+          return <Badge variant="warning">Hoàn một phần trong ca ({formatCurrency(inv.refundAmountHere)})</Badge>;
+        }
         if (inv.status === 'REFUNDED') {
           return inv.refundCountedHere ? (
             <Badge variant="warning">Đã hoàn trả trong ca</Badge>

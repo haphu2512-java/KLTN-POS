@@ -8,9 +8,13 @@ import VietQRModal from './VietQRModal';
 import ScannerPairingModal from './ScannerPairingModal';
 import ShiftModal from './ShiftModal';
 import CashMovementModal from './CashMovementModal';
+import RecentInvoicesModal from './RecentInvoicesModal';
+import ManagerApprovalModal from './ManagerApprovalModal';
 import { Modal, Button } from '../../components/common';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { useHotkeys } from '../../hooks/useHotkeys';
+import usePageActive from '../../hooks/usePageActive';
+import { normalizeRole } from '../../utils/permissions';
 import { playBeepSuccess, playBeepWarning } from '../../utils/audio';
 import { formatCurrency } from '../../utils/formatters';
 import { printInvoiceReceipt, receiptFromInvoice } from '../../utils/receiptPrinter';
@@ -19,10 +23,15 @@ import { inventoryService } from '../../services/inventoryService';
 import { customerService } from '../../services/customerService';
 import { saleService } from '../../services/saleService';
 import { websocketService } from '../../services/websocketService';
+import { DATA_EVENTS, onDataChange } from '../../utils/dataEvents';
 import { scannerPairingService } from '../../services/scannerPairingService';
 import { shiftService } from '../../services/shiftService';
+import { approvalService } from '../../services/approvalService';
+import { loyaltyService, maxRedeemablePoints } from '../../services/loyaltyService';
+import { promotionService } from '../../services/promotionService';
 import { newRequestId } from '../../utils/requestId';
 import './PosPage.css';
+import { toast, confirmDialog } from '../../components/common/toastStore';
 
 
 function emptyOrder() {
@@ -30,6 +39,13 @@ function emptyOrder() {
     items: [],
     customer: null,
     discount: 0,
+    discountReason: '',
+    // Mã duyệt sau khi quản lý nhập PIN: { token, approverName, maxDiscount }
+    discountApproval: null,
+    // Số điểm khách muốn dùng để trả
+    redeemPoints: 0,
+    // Khuyến mãi: 'auto' chọn chương trình giảm nhiều nhất, null không áp, số là id chương trình thu ngân chọn
+    promotionChoice: 'auto',
     paymentMethod: 'CASH',
     receivedAmount: 0,
     note: '',
@@ -102,8 +118,9 @@ export default function PosPage({
 
     // Subscribe to STOMP WebSocket inventory updates
     const unsubWs = websocketService.on('inventory-update', (event) => {
-      if (event && event.productId) {
-        setProducts(prev => prev.map(p => p.id === event.productId ? { ...p, stock: event.newQuantity ?? p.stock } : p));
+      // Chỉ cập nhật tồn của chi nhánh đang xem; máy chủ gửi kèm tồn mới (newQuantity)
+      if (event?.productId && event.newQuantity != null && Number(event.branchId) === Number(branchId)) {
+        setProducts(prev => prev.map(p => p.id === event.productId ? { ...p, stock: event.newQuantity } : p));
       }
     });
 
@@ -133,6 +150,7 @@ export default function PosPage({
   const [isPairingOpen, setIsPairingOpen] = useState(false);
   const [isShiftOpen, setIsShiftOpen] = useState(false);
   const [isCashOpen, setIsCashOpen] = useState(false);
+  const [isRecentInvoicesOpen, setIsRecentInvoicesOpen] = useState(false);
   // Ca đang trực của tài khoản: { session, shiftRequired, suggested..., previousShift }
   const [shiftInfo, setShiftInfo] = useState(null);
   // Lý do mở hộp ca: 'sale' khi thu ngân bán hàng lúc chưa mở ca, null khi tự bấm nút Mở ca / Đóng ca
@@ -168,9 +186,65 @@ export default function PosPage({
     );
   }, [currentOrder.items]);
 
+  // Khuyến mãi áp được cho giỏ hiện tại do máy chủ tính (giảm nhiều nhất trước).
+  // quotesKey ghi lại giỏ/khách đã hỏi để biết danh sách còn khớp với giỏ đang hiện hay chưa.
+  const [promotionQuotes, setPromotionQuotes] = useState({ key: null, list: [] });
+  const [promotionRefresh, setPromotionRefresh] = useState(0);
+  const promotionKey = useMemo(
+    () =>
+      JSON.stringify([
+        activeTabId,
+        currentOrder.customer?.id || null,
+        currentOrder.customer?.points || 0,
+        currentOrder.items.map((it) => [it.id, it.quantity, it.price]),
+        promotionRefresh
+      ]),
+    [activeTabId, currentOrder.customer, currentOrder.items, promotionRefresh]
+  );
+  const promotionsEnabled = !!(isOnline && currentUser?.userId);
+  const promotionsReady = !promotionsEnabled || currentOrder.items.length === 0 || promotionQuotes.key === promotionKey;
+  const applicablePromotions = useMemo(
+    () => (promotionQuotes.key === promotionKey ? promotionQuotes.list : []),
+    [promotionQuotes, promotionKey]
+  );
+  const promotionChoice = currentOrder.promotionChoice === undefined ? 'auto' : currentOrder.promotionChoice;
+  const selectedPromotion = useMemo(() => {
+    if (promotionChoice === null) return null;
+    if (promotionChoice !== 'auto') {
+      const chosen = applicablePromotions.find((p) => p.promotionId === promotionChoice);
+      if (chosen) return chosen;
+    }
+    // Chương trình đã chọn không còn áp được (giỏ đổi, hết hạn...) thì quay về mức có lợi nhất
+    return applicablePromotions[0] || null;
+  }, [promotionChoice, applicablePromotions]);
+  const promotionDiscount = selectedPromotion ? Number(selectedPromotion.discountAmount) || 0 : 0;
+
+  // Đổi điểm: tính trên số tiền sau khuyến mãi và giảm tay, không vượt trần % và số dư của khách
+  const [loyaltyPolicy, setLoyaltyPolicy] = useState(null);
+  const afterDiscount = Math.max(0, subtotal - promotionDiscount - (currentOrder.discount || 0));
+  const maxRedeem = maxRedeemablePoints(loyaltyPolicy, afterDiscount, currentOrder.customer?.points || 0);
+  // Giỏ hoặc giảm giá đổi sau khi nhập điểm: tự hạ về mức còn hợp lệ, dưới mức tối thiểu thì bỏ
+  const redeemPoints = useMemo(() => {
+    const wanted = Math.min(currentOrder.redeemPoints || 0, maxRedeem);
+    return loyaltyPolicy && wanted >= Number(loyaltyPolicy.minRedeemPoints) ? wanted : 0;
+  }, [currentOrder.redeemPoints, maxRedeem, loyaltyPolicy]);
+  const pointsDiscount = loyaltyPolicy ? redeemPoints * Number(loyaltyPolicy.pointValue) : 0;
+
   const finalAmount = useMemo(() => {
-    return Math.max(0, subtotal - (currentOrder.discount || 0));
-  }, [subtotal, currentOrder.discount]);
+    return Math.max(0, afterDiscount - pointsDiscount);
+  }, [afterDiscount, pointsDiscount]);
+
+  // Hạn mức giảm giá của thu ngân (ADMIN/MANAGER không giới hạn)
+  const isCashier = normalizeRole(currentUser?.role) === 'STAFF';
+  const [cashierMaxDiscountPercent, setCashierMaxDiscountPercent] = useState(null);
+  const discountLimit = isCashier && cashierMaxDiscountPercent != null
+    ? Math.floor((subtotal * cashierMaxDiscountPercent) / 100)
+    : null;
+  const isOverDiscountLimit = (order) => discountLimit != null && (order.discount || 0) > discountLimit;
+  const isDiscountApproved = (order) => Number(order.discountApproval?.maxDiscount || 0) >= (order.discount || 0);
+  const discountOverLimit = isOverDiscountLimit(currentOrder);
+  const discountApproved = isDiscountApproved(currentOrder);
+  const [isApprovalOpen, setIsApprovalOpen] = useState(false);
 
   const changeAmount = useMemo(() => {
     if (currentOrder.paymentMethod !== 'CASH') return 0;
@@ -214,7 +288,7 @@ export default function PosPage({
       }
       if (product.stock <= 0) {
         playBeepWarning();
-        alert(`Sản phẩm "${product.name}" đã hết hàng trong kho!`);
+        toast.warning(`Sản phẩm "${product.name}" đã hết hàng trong kho!`);
         return;
       }
 
@@ -228,7 +302,7 @@ export default function PosPage({
           const currentQty = prev.items[existingIndex].quantity;
           if (currentQty >= product.stock) {
             playBeepWarning();
-            alert(
+            toast.warning(
               `Kho chỉ còn ${product.stock} ${product.unit}. Không thể thêm vượt quá tồn kho!`
             );
             return prev;
@@ -284,19 +358,23 @@ export default function PosPage({
         handleAddProduct(found);
       } else {
         playBeepWarning();
-        alert(`Không tìm thấy sản phẩm có mã vạch: ${scannedCode}`);
+        toast.warning(`Không tìm thấy sản phẩm có mã vạch: ${scannedCode}`);
       }
     },
     [products, handleAddProduct]
   );
 
+  // Màn hình POS được giữ lại khi chuyển sang trang khác: chỉ nghe máy quét/phím tắt khi đang hiển thị
+  const isPageActive = usePageActive();
+
   // Hook Barcode scanner
   useBarcodeScanner(handleBarcodeScanned, {
-    enabled: !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !isPairingOpen && !isShiftOpen && !isCashOpen && !remoteBatch
+    enabled: isPageActive && !isSearchOpen && !isCustomerOpen && !isVietQROpen && !isHelpOpen && !isPairingOpen && !isShiftOpen && !isCashOpen && !isRecentInvoicesOpen && !isApprovalOpen && !remoteBatch
   });
 
   // Listen to simulated scan events (e.g. from BarcodePrintModal or mock tester)
   useEffect(() => {
+    if (!isPageActive) return undefined;
     const handleCustomScan = (e) => {
       if (e.detail?.barcode) {
         handleBarcodeScanned(e.detail.barcode);
@@ -304,7 +382,73 @@ export default function PosPage({
     };
     window.addEventListener('pos:barcode_scanned', handleCustomScan);
     return () => window.removeEventListener('pos:barcode_scanned', handleCustomScan);
-  }, [handleBarcodeScanned]);
+  }, [handleBarcodeScanned, isPageActive]);
+
+  // Khuyến mãi vừa được bật/tắt/sửa (ở cửa sổ này hoặc máy khác qua WebSocket): hỏi lại máy chủ ngay
+  useEffect(() => {
+    const refresh = () => setPromotionRefresh((n) => n + 1);
+    const offLocal = onDataChange(DATA_EVENTS.PROMOTION_CHANGED, refresh);
+    const offWs = websocketService.on('promotion-update', refresh);
+    return () => {
+      offLocal();
+      offWs();
+    };
+  }, []);
+
+  // Hỏi máy chủ khuyến mãi áp được mỗi khi giỏ hoặc khách đổi (chờ 300ms để quét liên tục không gọi dồn)
+  useEffect(() => {
+    if (!promotionsEnabled || currentOrder.items.length === 0) return;
+    let cancelled = false;
+    const key = promotionKey;
+    const timer = setTimeout(() => {
+      promotionService
+        .getApplicable(
+          currentOrder.customer?.id,
+          currentOrder.items.map((it) => ({ productId: it.id, quantity: it.quantity, unitPrice: it.price }))
+        )
+        .then((list) => {
+          if (!cancelled) setPromotionQuotes({ key, list });
+        })
+        .catch(() => {
+          // Không tải được thì bán không khuyến mãi thay vì chặn thanh toán
+          if (!cancelled) setPromotionQuotes({ key, list: [] });
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // promotionKey đã gồm giỏ hàng và khách của đơn đang mở
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promotionKey, promotionsEnabled]);
+
+  useEffect(() => {
+    if (!isOnline || !currentUser?.userId) return;
+    let cancelled = false;
+    loyaltyService
+      .getPolicy()
+      .then((p) => {
+        if (!cancelled) setLoyaltyPolicy(p);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnline, currentUser?.userId]);
+
+  useEffect(() => {
+    if (!isOnline || !currentUser?.userId || !isCashier) return;
+    let cancelled = false;
+    approvalService
+      .getPolicy()
+      .then((p) => {
+        if (!cancelled) setCashierMaxDiscountPercent(Number(p?.cashierMaxDiscountPercent));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnline, currentUser?.userId, isCashier]);
 
   // Tải ca đang trực. Không tự bật hộp mở ca: thu ngân vẫn đi các màn hình khác hay đăng xuất được
   const userId = currentUser?.userId; // chế độ demo ngoại tuyến không có userId nên không gọi API ca
@@ -418,7 +562,7 @@ export default function PosPage({
             const nextQty = item.quantity + delta;
             if (nextQty > item.stock) {
               playBeepWarning();
-              alert(`Số lượng vượt quá tồn kho hiện tại (${item.stock})!`);
+              toast.warning(`Số lượng vượt quá tồn kho hiện tại (${item.stock})!`);
               return item;
             }
             return nextQty > 0 ? { ...item, quantity: nextQty } : null;
@@ -451,12 +595,16 @@ export default function PosPage({
   };
 
   // Cancel Order (F9)
-  const handleCancelOrder = () => {
+  const handleCancelOrder = async () => {
     if (isProcessing || currentOrder.items.length === 0) return;
-    if (window.confirm('Bạn có chắc chắn muốn hủy đơn hàng hiện tại?')) {
+    if ((await confirmDialog('Bạn có chắc chắn muốn hủy đơn hàng hiện tại?', { title: 'Hủy đơn hàng', confirmText: 'Hủy đơn', cancelText: 'Không', danger: true }))) {
       updateCurrentOrder({
         items: [],
         discount: 0,
+        discountReason: '',
+        discountApproval: null,
+        redeemPoints: 0,
+        promotionChoice: 'auto',
         receivedAmount: 0,
         note: '',
         requestId: newRequestId()
@@ -465,16 +613,35 @@ export default function PosPage({
   };
 
   // Process Payment (F4)
-  const handleProcessPayment = () => {
+  // order: truyền đơn đã có mã duyệt ngay sau khi quản lý nhập PIN (state chưa kịp cập nhật)
+  const handleProcessPayment = (order = currentOrder) => {
     if (isProcessing) return;
     if (needsShift) {
       playBeepWarning();
       promptOpenShift();
       return;
     }
-    if (finalAmount <= 0) {
-      alert('Đơn hàng chưa có sản phẩm để thanh toán!');
+    if (finalAmount <= 0 && order.items.length === 0) {
+      toast.warning('Đơn hàng chưa có sản phẩm để thanh toán!');
       return;
+    }
+    if (!promotionsReady) {
+      playBeepWarning();
+      toast.info('Đang tính khuyến mãi cho đơn hàng, vui lòng bấm thanh toán lại sau giây lát.');
+      return;
+    }
+
+    // Thu ngân giảm vượt hạn mức: cần lý do và PIN quản lý trước khi thu tiền
+    if (isOverDiscountLimit(order)) {
+      if (!order.discountReason?.trim()) {
+        playBeepWarning();
+        toast.warning('Giảm giá vượt hạn mức, vui lòng nhập lý do giảm giá.');
+        return;
+      }
+      if (!isDiscountApproved(order)) {
+        setIsApprovalOpen(true);
+        return;
+      }
     }
 
     if (currentOrder.paymentMethod === 'VIETQR') {
@@ -484,18 +651,18 @@ export default function PosPage({
 
     if (currentOrder.paymentMethod === 'CASH' && changeAmount < 0) {
       playBeepWarning();
-      alert('Số tiền khách đưa chưa đủ để hoàn tất đơn hàng!');
+      toast.warning('Số tiền khách đưa chưa đủ để hoàn tất đơn hàng!');
       return;
     }
 
-    executeFinishPayment();
+    executeFinishPayment(order);
   };
 
   // Finalize payment & receipt
-  const executeFinishPayment = async () => {
+  const executeFinishPayment = async (orderOverride) => {
     if (processingRef.current) return;
     processingRef.current = true;
-    const order = currentOrder;
+    const order = orderOverride || currentOrder;
     const orderTabId = activeTabId;
     const cashierName = currentUser?.fullName || currentUser?.username || 'Thu ngân';
     let receipt;
@@ -511,6 +678,10 @@ export default function PosPage({
             branchId: Number(branchId) || undefined,
             customerId: order.customer?.id || null,
             discount: order.discount || 0,
+            promotionId: selectedPromotion?.promotionId || null,
+            discountReason: order.discount > 0 ? order.discountReason || '' : '',
+            discountApprovalToken: order.discountApproval?.token || undefined,
+            redeemPoints: order.customer ? redeemPoints : 0,
             paymentMethod: order.paymentMethod,
             receivedAmount: order.receivedAmount || finalAmount,
             note: order.note || '',
@@ -523,21 +694,35 @@ export default function PosPage({
           });
         } catch (err) {
           playBeepWarning();
-          if (err.response) {
+          if (err.response?.data?.code === 'DISCOUNT_APPROVAL_REQUIRED') {
+            // Mã duyệt hết hạn hoặc chưa có: bỏ mã cũ, mời quản lý nhập PIN lại
+            setOrders((prev) => ({ ...prev, [orderTabId]: { ...prev[orderTabId], discountApproval: null } }));
+            setIsApprovalOpen(true);
+          } else if (err.response?.data?.code === 'PROMOTION_NOT_APPLICABLE') {
+            // Khuyến mãi vừa bị tắt/hết hạn: tải lại danh sách để thu ngân xem số tiền mới trước khi thu
+            setPromotionRefresh((n) => n + 1);
+            toast.warning(`${err.response.data.message}\n\nĐã cập nhật lại khuyến mãi, vui lòng kiểm tra số tiền rồi thanh toán lại.`);
+          } else if (err.response) {
             // Server từ chối (sai giá, giảm giá không hợp lệ, hết hàng, không có quyền...)
-            alert(`Không thể thanh toán: ${err.response.data?.message || 'Máy chủ từ chối hóa đơn'}`);
+            toast.error(`Không thể thanh toán: ${err.response.data?.message || 'Máy chủ từ chối hóa đơn'}`);
           } else {
             // Mất kết nối / hết thời gian chờ: chưa biết server đã lưu hay chưa.
             // Giữ nguyên giỏ và mã đơn; bấm thanh toán lại sẽ không tạo hóa đơn trùng.
-            alert(
+            toast.error(
               'Không nhận được phản hồi từ máy chủ, hóa đơn CHƯA được xác nhận.\n\n' +
                 'Đơn hàng vẫn được giữ nguyên. Kiểm tra kết nối mạng rồi bấm Thanh toán lại ' +
-                '(hệ thống sẽ không ghi trùng hóa đơn). Chưa giao hàng hoặc in hóa đơn cho khách.'
+                '(hệ thống sẽ không ghi trùng hóa đơn). Chưa giao hàng hoặc in hóa đơn cho khách.',
+              { duration: 15000 }
             );
           }
           return;
         }
         receipt = receiptFromInvoice(invoice, cashierName);
+        // Cập nhật số dư điểm của khách trong danh sách để lần chọn sau thấy đúng
+        if (invoice.customer?.id != null && invoice.customerPointsBalance != null) {
+          setCustomers((prev) => prev.map((c) =>
+            c.id === invoice.customer.id ? { ...c, points: invoice.customerPointsBalance } : c));
+        }
       } else {
         // Chế độ demo ngoại tuyến (chưa đăng nhập): không có máy chủ, hóa đơn chỉ để trình diễn
         receipt = {
@@ -548,6 +733,9 @@ export default function PosPage({
           items: order.items.map(it => ({ name: it.name, quantity: it.quantity, unitPrice: it.price })),
           subtotal,
           discount: order.discount || 0,
+          promotionName: selectedPromotion?.name,
+          promotionDiscount,
+          pointsDiscount,
           total: finalAmount,
           received: order.paymentMethod === 'CASH' ? order.receivedAmount || finalAmount : finalAmount,
           change: Math.max(0, changeAmount),
@@ -577,6 +765,10 @@ export default function PosPage({
           items: [],
           customer: null,
           discount: 0,
+          discountReason: '',
+          discountApproval: null,
+          redeemPoints: 0,
+          promotionChoice: 'auto',
           receivedAmount: 0,
           note: '',
           requestId: newRequestId()
@@ -587,15 +779,21 @@ export default function PosPage({
       // In hóa đơn K80 từ dữ liệu server đã ghi nhận
       const printResult = await printInvoiceReceipt(receipt);
 
-      alert(
+      toast.success(
         `Thanh toán thành công [${receipt.code}]!\n\n` +
           `• Khách hàng: ${receipt.customerName}\n` +
+          (receipt.pointsBalance != null
+            ? `• Điểm: +${receipt.pointsEarned || 0}` +
+              (receipt.pointsRedeemed ? `, dùng ${receipt.pointsRedeemed}` : '') +
+              ` → còn ${receipt.pointsBalance}\n`
+            : '') +
           `• Tổng thanh toán: ${formatCurrency(receipt.total)}\n` +
           `• Phương thức: ${receipt.paymentMethod}\n` +
           `• Tiền thừa trả khách: ${formatCurrency(receipt.change)}\n\n` +
           (printResult?.success
             ? 'Hóa đơn K80 đã được gửi đến máy in.'
-            : `Hóa đơn đã lưu nhưng KHÔNG in được: ${printResult?.error || 'lỗi máy in'}.`)
+            : `Hóa đơn đã lưu nhưng KHÔNG in được: ${printResult?.error || 'lỗi máy in'}.`),
+        { duration: printResult?.success ? 6000 : 12000 }
       );
     } finally {
       processingRef.current = false;
@@ -640,6 +838,7 @@ export default function PosPage({
     F2: () => setIsSearchOpen(true),
     F3: () => setIsCustomerOpen(true),
     F4: () => handleProcessPayment(),
+    F7: () => isOnline && setIsRecentInvoicesOpen(true),
     F8: () => handleAddTab(),
     F9: () => handleCancelOrder(),
     Escape: () => {
@@ -648,9 +847,10 @@ export default function PosPage({
       setIsVietQROpen(false);
       setIsHelpOpen(false);
       setIsPairingOpen(false);
+      setIsRecentInvoicesOpen(false);
       setRemoteBatch(null);
     }
-  });
+  }, isPageActive);
 
   return (
     <div className="pos-container">
@@ -658,7 +858,7 @@ export default function PosPage({
       <PosHeader
         branchName={branchLabel}
         cashierName={currentUser?.fullName || currentUser?.username || 'Thu ngân'}
-        role={currentUser?.role || 'CASHIER'}
+        role={normalizeRole(currentUser?.role) || 'STAFF'}
         shiftName={
           shiftInfo?.session
             ? `${shiftInfo.session.workShiftName} · ${shiftInfo.session.employeeName}`
@@ -669,6 +869,7 @@ export default function PosPage({
         onOpenCashMovement={isOnline && userId ? () => loadShift().then(() => setIsCashOpen(true)) : undefined}
         isOnline={isOnline}
         isWsConnected={isWsConnected}
+        onOpenRecentInvoices={isOnline ? () => setIsRecentInvoicesOpen(true) : undefined}
         terminalName={terminal?.name}
         pairedCount={pairedCount}
         onOpenPairing={() => setIsPairingOpen(true)}
@@ -709,8 +910,23 @@ export default function PosPage({
           customer={currentOrder.customer}
           onOpenCustomerModal={() => setIsCustomerOpen(true)}
           subtotal={subtotal}
+          promotionsEnabled={promotionsEnabled}
+          promotionsLoading={!promotionsReady}
+          applicablePromotions={applicablePromotions}
+          selectedPromotion={selectedPromotion}
+          promotionDiscount={promotionDiscount}
+          onChangePromotion={(choice) => updateCurrentOrder({ promotionChoice: choice })}
           discount={currentOrder.discount}
           onChangeDiscount={(val) => updateCurrentOrder({ discount: val })}
+          discountReason={currentOrder.discountReason || ''}
+          onChangeDiscountReason={(val) => updateCurrentOrder({ discountReason: val })}
+          loyaltyPolicy={loyaltyPolicy}
+          redeemPoints={redeemPoints}
+          maxRedeem={maxRedeem}
+          pointsDiscount={pointsDiscount}
+          onChangeRedeemPoints={(val) => updateCurrentOrder({ redeemPoints: val })}
+          discountLimit={discountLimit}
+          discountApproverName={discountOverLimit && discountApproved ? currentOrder.discountApproval?.approverName : null}
           finalAmount={finalAmount}
           paymentMethod={currentOrder.paymentMethod}
           onChangePaymentMethod={(method) =>
@@ -722,7 +938,7 @@ export default function PosPage({
           }
           changeAmount={changeAmount}
           onCancelOrder={handleCancelOrder}
-          onProcessPayment={handleProcessPayment}
+          onProcessPayment={() => handleProcessPayment()}
           isProcessing={isProcessing}
         />
       </div>
@@ -756,8 +972,12 @@ export default function PosPage({
         isOpen={isCustomerOpen}
         onClose={() => setIsCustomerOpen(false)}
         customers={customers}
-        onSelectCustomer={(cust) => updateCurrentOrder({ customer: cust })}
-        onAddNewCustomer={(newCust) => setCustomers([...customers, newCust])}
+        onSelectCustomer={(cust) => updateCurrentOrder({ customer: cust, redeemPoints: 0 })}
+        onAddNewCustomer={async (data) => {
+          const created = await customerService.createCustomer(data);
+          setCustomers((prev) => [...prev, created]);
+          return created;
+        }}
       />
 
       {isShiftOpen && (
@@ -795,7 +1015,7 @@ export default function PosPage({
         onClose={() => setIsVietQROpen(false)}
         amount={finalAmount}
         orderId={activeTabId.replace('order-', 'DH')}
-        onConfirmSuccess={executeFinishPayment}
+        onConfirmSuccess={() => executeFinishPayment()}
       />
 
       {/* Help Modal */}
@@ -834,6 +1054,28 @@ export default function PosPage({
         </div>
       </Modal>
 
+      <ManagerApprovalModal
+        isOpen={isApprovalOpen}
+        onClose={() => setIsApprovalOpen(false)}
+        amount={currentOrder.discount || 0}
+        maxWithoutApproval={discountLimit}
+        reason={currentOrder.discountReason}
+        onApproved={(grant) => {
+          updateCurrentOrder({ discountApproval: grant });
+          setIsApprovalOpen(false);
+          handleProcessPayment({ ...currentOrder, discountApproval: grant });
+        }}
+      />
+
+      <RecentInvoicesModal
+        isOpen={isRecentInvoicesOpen}
+        onClose={() => setIsRecentInvoicesOpen(false)}
+        shiftSession={shiftInfo?.session}
+        branchId={branchId}
+        cashierName={currentUser?.fullName || currentUser?.username || 'Thu ngân'}
+        canViewAll={currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER'}
+      />
+
       <Modal
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
@@ -857,6 +1099,10 @@ export default function PosPage({
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
             <span>Thực hiện thanh toán & In hóa đơn</span>
             <kbd>F4</kbd>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+            <span>Xem lịch sử hóa đơn gần đây / In lại bill</span>
+            <kbd>F7</kbd>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
             <span>Tạo thêm tab đơn hàng mới</span>

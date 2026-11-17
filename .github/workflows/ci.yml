@@ -22,7 +22,7 @@ jobs:
       - run: mvn -B test
 
   frontend:
-    name: Frontend (lint + build)
+    name: Frontend (lint + test + build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -38,6 +38,7 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - run: npm run lint
+      - run: npm test
       - run: npm run build
 
   mobile:

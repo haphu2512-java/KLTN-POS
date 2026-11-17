@@ -31,7 +31,7 @@ public class ScannerController {
     }
 
     @GetMapping("/lookup")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER', 'WAREHOUSE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Tra giá và tồn kho theo mã vạch (không gửi gì tới POS)")
     public ResponseEntity<ApiResponse<ScannerProductDto>> lookup(@RequestParam String barcode) {
         ScannerProductDto product = scannerService.lookup(barcode, currentUserService.getCurrentUser())
@@ -41,7 +41,7 @@ public class ScannerController {
     }
 
     @PostMapping("/broadcast")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Bắn mã vạch vào giỏ hàng của quầy POS đã ghép cặp (409 NOT_PAIRED nếu chưa ghép)")
     public ResponseEntity<ApiResponse<Map<String, Object>>> broadcastBarcode(
             @Valid @RequestBody BarcodeScanRequest req) {
@@ -50,7 +50,7 @@ public class ScannerController {
     }
 
     @GetMapping("/products/cache")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER', 'WAREHOUSE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Tải danh mục sản phẩm (không có giá vốn) để tra cứu khi mất mạng")
     public ResponseEntity<ApiResponse<List<ScannerProductDto>>> getProductsForOfflineCache() {
         return ResponseEntity.ok(ApiResponse.ok("Tải dữ liệu Offline thành công",
@@ -58,14 +58,14 @@ public class ScannerController {
     }
 
     @GetMapping("/products/search")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Tìm sản phẩm theo tên hoặc mã để gán mã vạch vừa quét")
     public ResponseEntity<ApiResponse<List<ScannerProductDto>>> searchProducts(@RequestParam String q) {
         return ResponseEntity.ok(ApiResponse.ok(scannerService.search(q, currentUserService.getCurrentUser())));
     }
 
     @PutMapping("/products/{id}/barcode")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Gán mã vạch vừa quét cho sản phẩm (thay mã cũ; 409 nếu mã đã thuộc sản phẩm khác)")
     public ResponseEntity<ApiResponse<ScannerProductDto>> assignBarcode(
             @PathVariable Long id, @Valid @RequestBody AssignBarcodeRequest req) {
@@ -74,7 +74,7 @@ public class ScannerController {
     }
 
     @PostMapping("/sync-batch")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'CASHIER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     @Operation(summary = "Đồng bộ các mã quét lúc offline; POS sẽ hỏi xác nhận trước khi thêm vào giỏ")
     public ResponseEntity<ApiResponse<Map<String, Object>>> syncBatch(
             @Valid @RequestBody SyncBatchRequest req) {

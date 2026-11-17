@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Modal, Button, Input } from '../../components/common';
 import { newRequestId } from '../../utils/requestId';
+import { toast } from '../../components/common/toastStore';
 
 export default function StockTransferModal({
   isOpen,
@@ -32,12 +33,12 @@ export default function StockTransferModal({
     // Chặn bấm 2 lần liên tiếp trước khi React kịp vẽ lại nút
     if (savingRef.current) return;
     if (!toBranchId || fromBranchId === Number(toBranchId)) {
-      alert('Chọn chi nhánh nhận khác chi nhánh đang đăng nhập!');
+      toast.warning('Chọn chi nhánh nhận khác chi nhánh đang đăng nhập!');
       return;
     }
     if (!selectedProduct) return;
     if (quantity > selectedProduct.stock) {
-      alert(`Tồn kho tại chi nhánh xuất chỉ còn ${selectedProduct.stock} ${selectedProduct.unit}!`);
+      toast.warning(`Tồn kho tại chi nhánh xuất chỉ còn ${selectedProduct.stock} ${selectedProduct.unit}!`);
       return;
     }
 

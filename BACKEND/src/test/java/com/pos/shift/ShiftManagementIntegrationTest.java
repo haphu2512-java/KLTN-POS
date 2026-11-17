@@ -149,7 +149,7 @@ class ShiftManagementIntegrationTest {
     @DisplayName("Quản lý xếp ca; quầy chỉ mở được ca cho người được xếp, quản lý mở trực thay phải ghi lý do")
     void openShiftFollowsAssignment() throws Exception {
         Long branch = newBranch("CN xếp ca");
-        String counter = newUser("assign_counter", Role.CASHIER, branch);
+        String counter = newUser("assign_counter", Role.STAFF, branch);
         String manager = newUser("assign_manager", Role.MANAGER, branch);
         long lan = staffId(manager, "Lan");
         long minh = staffId(manager, "Minh");
@@ -208,7 +208,7 @@ class ShiftManagementIntegrationTest {
     @DisplayName("Ngoài khung giờ: thu ngân bị chặn, quản lý mở được khi ghi lý do")
     void openWindowEnforced() throws Exception {
         Long branch = newBranch("CN khung giờ");
-        String counter = newUser("window_counter", Role.CASHIER, branch);
+        String counter = newUser("window_counter", Role.STAFF, branch);
         String manager = newUser("window_manager", Role.MANAGER, branch);
         // Ca không mở được vào giờ chạy test (5 ca mặc định không trùng giờ nên luôn có)
         long closedSlot = workShiftService.activeShiftsOf(branch).stream()
@@ -237,7 +237,7 @@ class ShiftManagementIntegrationTest {
     @DisplayName("Thu/chi két làm đổi tiền dự kiến; đối soát VietQR, thẻ; ca lệch chờ duyệt; ca sau nhận két")
     void cashMovementsReconcileAndReview() throws Exception {
         Long branch = newBranch("CN đối soát");
-        String counter = newUser("recon_counter", Role.CASHIER, branch);
+        String counter = newUser("recon_counter", Role.STAFF, branch);
         String manager = newUser("recon_manager", Role.MANAGER, branch);
         long shift = open(counter, branch, "Hoa", 500000);
         sell(counter); // +36.000 tiền mặt
@@ -332,10 +332,10 @@ class ShiftManagementIntegrationTest {
     void counterSeesOnlyOwnShifts() throws Exception {
         Long branch = newBranch("CN ca riêng");
         Long other = newBranch("CN khác");
-        String alice = newUser("alice_shift", Role.CASHIER, branch);
-        String carol = newUser("carol_shift", Role.CASHIER, branch);
+        String alice = newUser("alice_shift", Role.STAFF, branch);
+        String carol = newUser("carol_shift", Role.STAFF, branch);
         String manager = newUser("alice_manager", Role.MANAGER, branch);
-        String bob = newUser("bob_shift", Role.CASHIER, other);
+        String bob = newUser("bob_shift", Role.STAFF, other);
 
         long aliceShift = open(alice, branch, "Alice", 200000);
         sell(alice);
@@ -376,8 +376,8 @@ class ShiftManagementIntegrationTest {
     void adminFiltersAcrossBranches() throws Exception {
         Long b1 = newBranch("CN lọc 1");
         Long b2 = newBranch("CN lọc 2");
-        String c1 = newUser("filter_c1", Role.CASHIER, b1);
-        String c2 = newUser("filter_c2", Role.CASHIER, b2);
+        String c1 = newUser("filter_c1", Role.STAFF, b1);
+        String c2 = newUser("filter_c2", Role.STAFF, b2);
         String admin = newUser("filter_admin", Role.ADMIN, b1);
 
         long c1Shift = open(c1, b1, "Nhân viên lọc", 100000);
@@ -416,7 +416,7 @@ class ShiftManagementIntegrationTest {
     @DisplayName("Hoàn trả khi ca bán đã đóng: tiền trừ vào két ca đang mở, hiện trong hóa đơn của ca đó")
     void refundCountsAgainstShiftOpenAtRefundTime() throws Exception {
         Long branch = newBranch("CN hoàn trả");
-        String counter = newUser("refund_counter", Role.CASHIER, branch);
+        String counter = newUser("refund_counter", Role.STAFF, branch);
         String manager = newUser("refund_manager", Role.MANAGER, branch);
 
         long morningShift = open(counter, branch, "Ca sáng", 100000);
@@ -452,7 +452,7 @@ class ShiftManagementIntegrationTest {
     @DisplayName("Hoàn trả ngay trong ca đang mở: doanh số giữ nguyên, tiền mặt dự kiến trừ phần hoàn trả")
     void refundWithinSameShift() throws Exception {
         Long branch = newBranch("CN hoàn trong ca");
-        String cashier = newUser("same_shift_cashier", Role.CASHIER, branch);
+        String cashier = newUser("same_shift_cashier", Role.STAFF, branch);
         String manager = newUser("same_shift_manager", Role.MANAGER, branch);
 
         long shift = open(cashier, branch, "Trong ca", 50000);
@@ -473,7 +473,7 @@ class ShiftManagementIntegrationTest {
     @DisplayName("Chỉ quản trị thêm/sửa lịch ca cố định")
     void onlyAdminEditsSchedule() throws Exception {
         Long branch = newBranch("CN lịch ca");
-        String cashier = newUser("schedule_cashier", Role.CASHIER, branch);
+        String cashier = newUser("schedule_cashier", Role.STAFF, branch);
         String admin = newUser("schedule_admin", Role.ADMIN, branch);
         String body = "{\"name\":\"Ca đêm\",\"startTime\":\"22:00\",\"endTime\":\"06:00\"}";
 
@@ -499,8 +499,8 @@ class ShiftManagementIntegrationTest {
         Long custom = newBranch("CN 2 ca");
         Long other = newBranch("CN lịch mẫu");
         String admin = newUser("custom_admin", Role.ADMIN, custom);
-        String counter = newUser("custom_counter", Role.CASHIER, custom);
-        String otherCounter = newUser("other_counter", Role.CASHIER, other);
+        String counter = newUser("custom_counter", Role.STAFF, custom);
+        String otherCounter = newUser("other_counter", Role.STAFF, other);
         int templateSize = workShiftService.shiftsOf(null).size();
 
         // Tạo lịch riêng từ lịch mẫu rồi xoá bớt cho còn 2 ca

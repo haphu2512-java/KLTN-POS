@@ -8,6 +8,9 @@ Hai bản được giữ khớp nhau: `python -m pos_forecast.parity` sinh `test
 kiểm tra file này khớp code Python, còn JUnit `ForecastParityTest` kiểm tra Java ra cùng kết quả trên từng ca.
 Khi đổi công thức ở một bên, phải đổi bên kia và chạy lại lệnh trên.
 
+Kết quả chạy các công thức này trên dữ liệu bán tạp hóa thật (công khai) nằm ở
+[`real_data_eval/outputs/KET_QUA.md`](real_data_eval/outputs/KET_QUA.md).
+
 ## Công thức (theo AI_for_POS.md mục 3)
 
 | Đại lượng | Công thức | Mặc định |

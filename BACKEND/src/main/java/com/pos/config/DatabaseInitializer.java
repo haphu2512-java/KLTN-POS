@@ -4,6 +4,7 @@ import com.pos.branch.Branch;
 import com.pos.branch.BranchRepository;
 import com.pos.inventory.Inventory;
 import com.pos.inventory.InventoryRepository;
+import com.pos.product.BarcodeSyncService;
 import com.pos.product.Product;
 import com.pos.product.ProductRepository;
 import com.pos.purchase.Supplier;
@@ -26,6 +27,8 @@ import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 @Component
@@ -41,13 +44,18 @@ public class DatabaseInitializer implements CommandLineRunner {
     private final WorkShiftRepository workShiftRepository;
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbcTemplate;
+    private final BarcodeSyncService barcodeSyncService;
 
     @Value("${app.seed.default-password:}")
     private String seedPassword;
 
+    @Value("${app.barcode.sync-on-startup:true}")
+    private boolean syncBarcodesOnStartup;
+
     @Override
     public void run(String... args) {
         seedWorkShifts();
+        migrateRolesToStaff();
         migrateSingleBranchColumn();
 
         if (branchRepository.count() == 0) {
@@ -85,7 +93,7 @@ public class DatabaseInitializer implements CommandLineRunner {
                     .username("cashier")
                     .password(passwordEncoder.encode(seedPassword))
                     .fullName("Nguyễn Văn A")
-                    .role(Role.CASHIER)
+                    .role(Role.STAFF)
                     .branchIds(new HashSet<>(Set.of(branch1.getId())))
                     .active(true)
                     .build());
@@ -132,6 +140,47 @@ public class DatabaseInitializer implements CommandLineRunner {
 
             log.info("Đã khởi tạo thành công dữ liệu mẫu cho hệ thống POS!");
         }
+
+        seedSupplierCategories();
+
+        if (syncBarcodesOnStartup) {
+            barcodeSyncService.syncLegacyBarcodes();
+        }
+    }
+
+    /** Danh mục mặc định cho 5 NCC mẫu, khớp theo tên (danh mục mẫu và danh mục dữ liệu Bách Hóa Xanh) */
+    private static final Map<String, List<String>> DEFAULT_SUPPLIER_CATEGORIES = Map.of(
+            "vinamilk", List.of("Sữa & Bơ", "Sữa tươi", "Sữa chua", "Sữa chua uống", "Sữa hạt, sữa đậu",
+                    "Sữa bột & Sữa dinh dưỡng"),
+            "coca-cola", List.of("Nước giải khát", "Nước ngọt", "Nước khoáng, nước suối", "Nước tăng lực", "Nước ép trái cây"),
+            "acecook", List.of("Thực phẩm khô", "Mì ăn liền", "Hủ tiếu, miến", "Phở, bún ăn liền", "Cháo gói, cháo tươi"),
+            "cái lân", List.of("Gia vị & Dầu ăn", "Dầu ăn"),
+            "unilever", List.of("Hóa mỹ phẩm", "Dầu gội & Xả tóc", "Sữa tắm", "Kem đánh răng", "Nước xả vải",
+                    "Nước rửa chén", "Bột giặt & Nước giặt"));
+
+    /**
+     * NCC tạo trước khi có danh mục thì chưa nhận mặt hàng nào khi lập đơn từ đề xuất AI. Chỉ chạy khi chưa NCC nào
+     * có danh mục (database cũ hoặc mới tạo): gán danh mục mặc định cho NCC mẫu theo tên. Đã gán rồi thì bỏ qua,
+     * để không ghi đè danh mục người dùng sửa.
+     */
+    void seedSupplierCategories() {
+        List<Supplier> suppliers = supplierRepository.findAll();
+        if (suppliers.isEmpty() || suppliers.stream().anyMatch(s -> !s.getCategories().isEmpty())) return;
+        int updated = 0;
+        for (Supplier s : suppliers) {
+            String name = s.getName() == null ? "" : s.getName().toLowerCase(Locale.ROOT);
+            for (Map.Entry<String, List<String>> e : DEFAULT_SUPPLIER_CATEGORIES.entrySet()) {
+                if (name.contains(e.getKey())) {
+                    s.getCategories().addAll(e.getValue());
+                    updated++;
+                    break;
+                }
+            }
+        }
+        if (updated > 0) {
+            supplierRepository.saveAll(suppliers);
+            log.info("Đã gán danh mục mặc định cho {} nhà cung cấp mẫu", updated);
+        }
     }
 
     /**
@@ -139,6 +188,34 @@ public class DatabaseInitializer implements CommandLineRunner {
      * nhiều chi nhánh (bảng user_branch) và chọn chi nhánh lúc đăng nhập: chuyển giá trị cũ sang
      * bảng mới rồi xóa ở cột cũ để lần chạy sau không chép lại. Database mới không có cột này thì bỏ qua.
      */
+    /**
+     * Gộp vai trò cũ: CASHIER (thu ngân) và WAREHOUSE (thủ kho) thành STAFF.
+     * Cột users.role trên MySQL cũ là enum('ADMIN','CASHIER','MANAGER','WAREHOUSE') (ddl-auto=update không tự sửa),
+     * nên đổi sang VARCHAR trước rồi mới cập nhật dữ liệu. Chạy lại nhiều lần không ảnh hưởng.
+     */
+    void migrateRolesToStaff() {
+        try {
+            List<String> types = jdbcTemplate.queryForList(
+                    "SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                            + "AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'", String.class);
+            if (!types.isEmpty() && types.get(0) != null
+                    && types.get(0).toLowerCase().startsWith("enum") && !types.get(0).contains("'STAFF'")) {
+                jdbcTemplate.execute("ALTER TABLE users MODIFY role VARCHAR(20) NOT NULL");
+                log.info("Đã đổi cột users.role sang VARCHAR để thêm vai trò STAFF");
+            }
+        } catch (DataAccessException e) {
+            log.debug("Không kiểm tra được kiểu cột users.role, bỏ qua: {}", e.getMessage());
+        }
+        try {
+            int changed = jdbcTemplate.update("UPDATE users SET role = 'STAFF' WHERE role IN ('CASHIER', 'WAREHOUSE')");
+            if (changed > 0) {
+                log.info("Đã chuyển {} tài khoản Thu ngân / Thủ kho sang vai trò STAFF", changed);
+            }
+        } catch (DataAccessException e) {
+            log.warn("Không chuyển được vai trò cũ sang STAFF: {}", e.getMessage());
+        }
+    }
+
     void migrateSingleBranchColumn() {
         try {
             int moved = jdbcTemplate.update("INSERT INTO user_branch (user_id, branch_id) "

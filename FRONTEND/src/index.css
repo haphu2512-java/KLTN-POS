@@ -64,7 +64,7 @@
   --shadow-modal: 0 12px 32px rgba(35, 33, 28, 0.18);
 
   /* Kích thước bố cục */
-  --rail-width: 88px;
+  --rail-width: 216px; /* AppShell ghi đè khi thu gọn */
   --header-height: 60px;
   --bottombar-height: 40px;
   --titlebar-height: 38px;

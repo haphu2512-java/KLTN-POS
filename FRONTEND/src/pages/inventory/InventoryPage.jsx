@@ -1,10 +1,13 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, Input, Table, Badge, BarcodeView, Loading } from '../../components/common';
 import StockInModal from './StockInModal';
 import StockTransferModal from './StockTransferModal';
 import StockInDetailModal from './StockInDetailModal';
 import BarcodePrintModal from './BarcodePrintModal';
+import ProductFormModal from './ProductFormModal';
+import ExpiryModal from './ExpiryModal';
+import { expiryService } from '../../services/expiryService';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 import { productService } from '../../services/productService';
 import { inventoryService } from '../../services/inventoryService';
@@ -13,8 +16,11 @@ import { websocketService } from '../../services/websocketService';
 import { exportToCsv } from '../../utils/exportCsv';
 import { newRequestId } from '../../utils/requestId';
 import useBranches from '../../hooks/useBranches';
-import { PERMS } from '../../utils/permissions';
+import usePageActive from '../../hooks/usePageActive';
+import { DATA_EVENTS, onDataChange } from '../../utils/dataEvents';
+import { PERMS, normalizeRole } from '../../utils/permissions';
 import './InventoryPage.css';
+import { toast, confirmDialog } from '../../components/common/toastStore';
 
 export default function InventoryPage({
   currentUser,
@@ -26,8 +32,10 @@ export default function InventoryPage({
   // Chi nhánh của phiên đăng nhập: nhập kho và điều chuyển luôn từ chi nhánh này.
   // Quản trị xem được tồn kho chi nhánh khác nhưng muốn nhập/xuất ở đó thì đăng nhập vào chi nhánh đó.
   const isAdmin = currentUser?.role === 'ADMIN';
-  // Thu ngân chỉ xem tồn kho; nhập kho, điều chuyển và lịch sử phiếu nhập dành cho kho/quản lý
+  // Nhân viên (STAFF) chỉ xem tồn kho; nhập kho, điều chuyển và lịch sử phiếu nhập dành cho quản lý
+  const isCashier = normalizeRole(currentUser?.role) === 'STAFF';
   const canEdit = can(PERMS.INVENTORY_EDIT);
+  const canViewCost = canEdit && !isCashier;
   // State from Database
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -39,16 +47,57 @@ export default function InventoryPage({
   const viewingSessionBranch = Number(currentBranchId) === Number(branchId);
   const otherBranchHint = 'Đang xem chi nhánh khác. Đăng nhập vào chi nhánh đó để nhập kho hoặc điều chuyển.';
   const [activeTab, setActiveTab] = useState('inventory'); // 'inventory' | 'history'
+  // Cảnh báo hàng cận date / hết hạn (theo lô nhập có khai hạn dùng)
+  const [expirySummary, setExpirySummary] = useState(null);
+  const [isExpiryOpen, setIsExpiryOpen] = useState(false);
 
   // Barcode Printing State
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
+  // Thêm/sửa sản phẩm: product = null là thêm mới
+  const [productForm, setProductForm] = useState({ open: false, product: null });
+  const [reloadKey, setReloadKey] = useState(0);
+  const [syncingBarcodes, setSyncingBarcodes] = useState(false);
   const [selectedBarcodeProduct, setSelectedBarcodeProduct] = useState(null);
+  // Tải lại ngầm (không hiện vòng tải, giữ nguyên bảng đang xem) khi dữ liệu đổi từ màn hình khác
+  const silentReloadRef = useRef(false);
+  const staleRef = useRef(false);
+  const isPageActive = usePageActive();
+
+  // Màn hình khác (vd. Đặt hàng → Nhận hàng vào kho) vừa tạo phiếu nhập: trang này được giữ sống
+  // nên không tự tải lại. Đang hiển thị thì tải lại ngay, đang ẩn thì đánh dấu để tải khi mở lại.
+  useEffect(() => onDataChange(DATA_EVENTS.STOCK_IN_CHANGED, () => {
+    staleRef.current = true;
+    if (isPageActive) {
+      staleRef.current = false;
+      silentReloadRef.current = true;
+      setReloadKey((k) => k + 1);
+    }
+  }), [isPageActive]);
+
+  // Mở lại màn hình Kho hàng: tải lại nếu có thay đổi trong lúc ẩn hoặc đã ẩn đủ lâu
+  // (phiếu nhập do máy khác tạo không có sự kiện realtime riêng)
+  const hiddenAtRef = useRef(null);
+  useEffect(() => {
+    if (!isPageActive) {
+      hiddenAtRef.current = Date.now();
+      return;
+    }
+    const hiddenFor = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0;
+    hiddenAtRef.current = null;
+    if (staleRef.current || hiddenFor > 30000) {
+      staleRef.current = false;
+      silentReloadRef.current = true;
+      setReloadKey((k) => k + 1);
+    }
+  }, [isPageActive]);
 
   // Sync data from Backend
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
-      setLoading(true);
+      const silent = silentReloadRef.current;
+      silentReloadRef.current = false;
+      if (!silent) setLoading(true);
       try {
         const [prodRes, invRes, supRes, slipRes] = await Promise.allSettled([
           productService.getProducts(),
@@ -90,19 +139,31 @@ export default function InventoryPage({
           }
 
           if (Array.isArray(slipList) && slipList.length > 0) {
-            const mappedHistory = slipList.map(s => ({
+            const mappedHistory = slipList.map(s => {
+              // Máy chủ trả chi tiết trong details (kèm product), thời gian createdAt, tổng totalCost
+              const items = (s.details || s.items || []).map((d) => ({
+                productId: d.product?.id ?? d.productId,
+                productName: d.product?.name ?? d.productName,
+                quantity: d.quantity,
+                unitCost: Number(d.unitCost) || 0,
+                lotNumber: d.lotNumber || '',
+                expiryDate: d.expiryDate || ''
+              }));
+              const created = s.createdAt || s.createdDate;
+              return {
               id: s.code || `NK-${s.id}`,
               supplierId: s.supplier?.id || s.supplierId,
               supplierName: s.supplier?.name || 'Nhà cung cấp',
               branchId: s.branch?.id || currentBranchId,
               branchName: s.branch?.name || `Chi nhánh ${currentBranchId}`,
-              createdDate: s.createdDate ? new Date(s.createdDate).toLocaleString('vi-VN') : new Date().toLocaleString('vi-VN'),
+              createdDate: created ? new Date(created).toLocaleString('vi-VN') : new Date().toLocaleString('vi-VN'),
               employeeName: s.employee?.fullName || currentUser?.fullName || 'Quản trị viên',
-              totalItems: s.items?.reduce((sum, it) => sum + it.quantity, 0) || 0,
-              totalCost: s.totalAmount || s.items?.reduce((sum, it) => sum + it.quantity * it.unitCost, 0) || 0,
-              items: s.items || [],
+              totalItems: items.reduce((sum, it) => sum + it.quantity, 0),
+              totalCost: Number(s.totalCost ?? s.totalAmount) || items.reduce((sum, it) => sum + it.quantity * it.unitCost, 0),
+              items,
               note: s.note || ''
-            }));
+              };
+            });
             setStockInHistory(mappedHistory);
           }
         }
@@ -117,8 +178,9 @@ export default function InventoryPage({
 
     // Subscribe to STOMP WebSocket inventory updates
     const unsubWs = websocketService.on('inventory-update', (event) => {
-      if (event && event.productId) {
-        setProducts(prev => prev.map(p => p.id === event.productId ? { ...p, stock: event.newQuantity ?? p.stock } : p));
+      // Chỉ cập nhật tồn của chi nhánh đang xem; máy chủ gửi kèm tồn mới (newQuantity)
+      if (event?.productId && event.newQuantity != null && Number(event.branchId) === Number(currentBranchId)) {
+        setProducts(prev => prev.map(p => p.id === event.productId ? { ...p, stock: event.newQuantity } : p));
       }
     });
 
@@ -126,7 +188,45 @@ export default function InventoryPage({
       isMounted = false;
       unsubWs();
     };
-  }, [currentBranchId, isOnline, currentUser?.fullName, canEdit]);
+  }, [currentBranchId, isOnline, currentUser?.fullName, canEdit, reloadKey]);
+
+  // Tải tóm tắt hạn dùng (chỉ khi có máy chủ và có quyền quản lý kho)
+  useEffect(() => {
+    if (!isOnline || !canEdit) return undefined;
+    let alive = true;
+    expiryService
+      .report(30, isAdmin ? currentBranchId : undefined)
+      .then((r) => alive && setExpirySummary(r))
+      .catch(() => alive && setExpirySummary(null));
+    return () => {
+      alive = false;
+    };
+  }, [currentBranchId, isOnline, canEdit, isAdmin, reloadKey]);
+
+  const handleProductSaved = (saved, action) => {
+    setProductForm({ open: false, product: null });
+    setReloadKey((k) => k + 1);
+    if (action === 'created' && saved?.barcode) {
+      toast.success(`Đã thêm sản phẩm "${saved.name}" (mã vạch ${saved.barcode}). Nhập kho để có tồn bán.`);
+    }
+  };
+
+  const handleSyncBarcodes = async () => {
+    if (!(await confirmDialog('Gán mã vạch nội bộ cho các sản phẩm đang mang mã cũ không quét được?', { title: 'Đồng bộ mã vạch', confirmText: 'Đồng bộ' }))) return;
+    setSyncingBarcodes(true);
+    try {
+      const result = await productService.syncBarcodes();
+      toast.success(
+        `Đồng bộ mã vạch xong: kiểm tra ${result?.checked ?? 0} sản phẩm, ` +
+          `đổi mã ${result?.updated ?? 0}, bỏ qua ${result?.skipped ?? 0}.`
+      );
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không đồng bộ được mã vạch.');
+    } finally {
+      setSyncingBarcodes(false);
+    }
+  };
 
   // Filter states
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -136,6 +236,7 @@ export default function InventoryPage({
   // Modals state
   const [isStockInOpen, setIsStockInOpen] = useState(false);
   const [stockInModalKey, setStockInModalKey] = useState(0);
+  const [quickStockInItems, setQuickStockInItems] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -166,6 +267,7 @@ export default function InventoryPage({
   };
 
   const openEmptyStockIn = () => {
+    setQuickStockInItems(null);
     setStockInModalKey((k) => k + 1);
     setIsStockInOpen(true);
   };
@@ -244,13 +346,15 @@ export default function InventoryPage({
       try {
         // Chi nhánh và người nhập do máy chủ lấy từ phiên đăng nhập
         const payload = {
-          supplierId: Number(newStockIn.supplierId) || 1,
+          supplierId: Number(newStockIn.supplierId) || null,
           note: newStockIn.note || '',
           clientRequestId: newStockIn.requestId || newRequestId(),
           items: newStockIn.items.map(it => ({
             productId: it.productId,
             quantity: it.quantity,
-            unitCost: it.unitCost
+            unitCost: it.unitCost,
+            lotNumber: it.lotNumber?.trim() || undefined,
+            expiryDate: it.expiryDate || undefined
           }))
         };
         const created = await purchaseService.createStockIn(payload);
@@ -260,11 +364,11 @@ export default function InventoryPage({
       } catch (err) {
         // Server từ chối (ví dụ tài khoản thu ngân không có quyền nhập kho): không cộng kho giả trên giao diện
         if (err.response) {
-          alert(`Không thể nhập kho: ${err.response.data?.message || 'Máy chủ từ chối phiếu nhập'}`);
+          toast.error(`Không thể nhập kho: ${err.response.data?.message || 'Máy chủ từ chối phiếu nhập'}`);
           return false;
         }
         // Mất phản hồi: phiếu có thể đã được lưu. Giữ form để bấm lại với cùng mã, máy chủ sẽ không cộng kho lần hai
-        alert(`Chưa nhận được phản hồi từ máy chủ (${err.message}). Hãy bấm lại "Hoàn tất & Nhập Kho" để thử lại, phiếu sẽ không bị nhập trùng.`);
+        toast.error(`Chưa nhận được phản hồi từ máy chủ (${err.message}). Hãy bấm lại "Hoàn tất & Nhập Kho" để thử lại, phiếu sẽ không bị nhập trùng.`);
         return false;
       }
     }
@@ -288,7 +392,7 @@ export default function InventoryPage({
 
     // 3. Append to history
     setStockInHistory([newStockIn, ...stockInHistory]);
-    alert(`Đã hoàn tất nhập kho phiếu: ${newStockIn.id}! Tồn kho đã được cộng tự động.`);
+    toast.success(`Đã hoàn tất nhập kho phiếu: ${newStockIn.id}! Tồn kho đã được cộng tự động.`);
     return true;
   };
 
@@ -299,7 +403,7 @@ export default function InventoryPage({
         await inventoryService.transfer({ productId, quantity, toBranchId, note, clientRequestId: requestId });
       } catch (err) {
         const hint = err.response ? '' : ' Bấm xác nhận lại để thử, hàng sẽ không bị chuyển hai lần.';
-        alert(`Không thể điều chuyển: ${err.response?.data?.message || err.message}.${hint}`);
+        toast.error(`Không thể điều chuyển: ${err.response?.data?.message || err.message}.${hint}`);
         return false;
       }
     }
@@ -312,62 +416,56 @@ export default function InventoryPage({
       })
     );
     const targetBranch = branches.find((b) => b.id === toBranchId);
-    alert(
+    toast.success(
       `Đã chuyển thành công ${quantity} sản phẩm sang ${targetBranch?.name}!`
     );
     return true;
   };
 
-  // Quick action: Stock-in single product
+  // Nút "+ Nhập hàng" trên từng dòng: mở cùng form phiếu nhập với trang Dự báo, điền sẵn mặt hàng này
+  // để người dùng chọn nhà cung cấp, chỉnh số lượng / giá / lô / hạn dùng rồi mới lưu.
   const handleQuickStockIn = (product) => {
-    const qty = prompt(`Nhập thêm số lượng cho "${product.name}":`, '10');
-    if (!qty) return;
-    const num = Number(qty);
-    if (isNaN(num) || num <= 0) {
-      alert('Số lượng không hợp lệ!');
-      return;
-    }
-
-    const quickSlip = {
-      id: `NK-${Date.now().toString().slice(-6)}`,
-      supplierId: 1,
-      supplierName: suppliers[0]?.name || 'Nhà cung cấp',
-      branchId: currentBranchId,
-      branchName: branches.find((b) => b.id === currentBranchId)?.name || 'Chi nhánh',
-      createdDate: new Date().toLocaleString('vi-VN'),
-      employeeName: 'Nguyễn Văn A',
-      totalItems: num,
-      totalCost: num * product.costPrice,
-      items: [
-        {
-          productId: product.id,
-          productName: product.name,
-          barcode: product.barcode,
-          unit: product.unit,
-          quantity: num,
-          unitCost: product.costPrice
-        }
-      ],
-      note: 'Nhập nhanh trực tiếp từ bảng tồn kho',
-      requestId: newRequestId()
-    };
-
-    handleSaveStockIn(quickSlip);
+    setQuickStockInItems([
+      {
+        productId: product.id,
+        productName: product.name,
+        barcode: product.barcode,
+        unit: product.unit,
+        quantity: 10,
+        unitCost: product.costPrice || 0
+      }
+    ]);
+    setStockInModalKey((k) => k + 1);
+    setIsStockInOpen(true);
   };
 
   const handleExportInventory = () => {
-    const headers = ['Mã vạch', 'Tên sản phẩm', 'Danh mục', 'ĐVT', 'Tồn kho', 'Ngưỡng an toàn', 'Giá vốn (VND)', 'Giá bán (VND)', 'Tổng giá trị tồn (VND)'];
-    const rows = filteredProducts.map((p) => [
-      p.barcode,
-      p.name,
-      p.category,
-      p.unit,
-      p.stock,
-      p.minThreshold,
-      p.costPrice,
-      p.salePrice,
-      (Number(p.stock) || 0) * (Number(p.costPrice) || 0)
-    ]);
+    const headers = canViewCost
+      ? ['Mã vạch', 'Tên sản phẩm', 'Danh mục', 'ĐVT', 'Tồn kho', 'Ngưỡng an toàn', 'Giá vốn (VND)', 'Giá bán (VND)', 'Tổng giá trị tồn (VND)']
+      : ['Mã vạch', 'Tên sản phẩm', 'Danh mục', 'ĐVT', 'Tồn kho', 'Ngưỡng an toàn', 'Giá bán (VND)'];
+    const rows = filteredProducts.map((p) =>
+      canViewCost
+        ? [
+            p.barcode,
+            p.name,
+            p.category,
+            p.unit,
+            p.stock,
+            p.minThreshold,
+            p.costPrice,
+            p.salePrice,
+            (Number(p.stock) || 0) * (Number(p.costPrice) || 0)
+          ]
+        : [
+            p.barcode,
+            p.name,
+            p.category,
+            p.unit,
+            p.stock,
+            p.minThreshold,
+            p.salePrice
+          ]
+    );
     exportToCsv(`BaoCaoTonKho_ChiNhanh_${currentBranchId}`, headers, rows);
   };
 
@@ -502,10 +600,18 @@ export default function InventoryPage({
     {
       key: 'actions',
       title: 'Thao tác',
-      width: '140px',
+      width: '190px',
       align: 'center',
       render: (_, row) => (
         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setProductForm({ open: true, product: row })}
+            title="Sửa thông tin, giá bán hoặc ngừng kinh doanh"
+          >
+            Sửa
+          </Button>
           <Button
             size="sm"
             variant="secondary"
@@ -608,6 +714,25 @@ export default function InventoryPage({
         <div className="page-header-spacer" />
         {canEdit && (
         <>
+        {isAdmin && (
+          <Button
+            variant="ghost"
+            size="md"
+            onClick={handleSyncBarcodes}
+            disabled={syncingBarcodes}
+            title="Gán mã nội bộ cho sản phẩm mang mã vạch cũ không quét được"
+          >
+            {syncingBarcodes ? 'Đang đồng bộ...' : 'Đồng bộ mã vạch'}
+          </Button>
+        )}
+        <Button
+          variant="secondary"
+          size="md"
+          onClick={() => setProductForm({ open: true, product: null })}
+          title="Thêm sản phẩm mới vào danh mục"
+        >
+          + Sản phẩm
+        </Button>
         <Button
           variant="secondary"
           size="md"
@@ -632,6 +757,20 @@ export default function InventoryPage({
 
       {/* Main Body */}
       <main className="inv-body">
+        {expirySummary && (expirySummary.expiredLots > 0 || expirySummary.nearLots > 0) && (
+          <div className="inv-expiry-banner" role="status">
+            <span>
+              {expirySummary.expiredLots > 0 && (
+                <strong className="text-danger">{expirySummary.expiredLots} lô đã hết hạn ({formatCurrency(expirySummary.expiredValue)})</strong>
+              )}
+              {expirySummary.expiredLots > 0 && expirySummary.nearLots > 0 && ' · '}
+              {expirySummary.nearLots > 0 && (
+                <strong style={{ color: 'var(--warning-700)' }}>{expirySummary.nearLots} lô sắp hết hạn trong {expirySummary.warnDays} ngày</strong>
+              )}
+            </span>
+            <Button size="sm" variant="secondary" onClick={() => setIsExpiryOpen(true)}>Xem lô hàng</Button>
+          </div>
+        )}
         {/* Metric Summary Cards */}
         <section className="inv-metrics-grid">
           <div
@@ -669,13 +808,15 @@ export default function InventoryPage({
             <span className="inv-metric-sub">Cần lên phiếu nhập ngay</span>
           </div>
 
-          <div className="inv-metric-card">
-            <span className="inv-metric-label">Giá trị tồn kho (Giá vốn)</span>
-            <span className="inv-metric-val tabular-nums text-success" style={{ fontSize: '20px' }}>
-              {loading ? <Loading size="sm" inline text="" /> : formatCurrency(totalInventoryValuation)}
-            </span>
-            <span className="inv-metric-sub">Ước tính theo giá nhập mới nhất</span>
-          </div>
+          {canViewCost && (
+            <div className="inv-metric-card">
+              <span className="inv-metric-label">Giá trị tồn kho (Giá vốn)</span>
+              <span className="inv-metric-val tabular-nums text-success" style={{ fontSize: '20px' }}>
+                {loading ? <Loading size="sm" inline text="" /> : formatCurrency(totalInventoryValuation)}
+              </span>
+              <span className="inv-metric-sub">Ước tính theo giá nhập mới nhất</span>
+            </div>
+          )}
         </section>
 
         {/* Toolbar & Filter Options */}
@@ -780,7 +921,11 @@ export default function InventoryPage({
         {activeTab === 'inventory' ? (
           <>
             <Table
-              columns={canEdit ? productColumns : productColumns.filter((col) => col.key !== 'actions')}
+              columns={productColumns.filter((col) => {
+                if (col.key === 'actions' && !canEdit) return false;
+                if (col.key === 'costPrice' && !canViewCost) return false;
+                return true;
+              })}
               data={paginatedProducts}
               loading={loading}
               loadingText="Đang tải danh sách tồn kho..."
@@ -827,9 +972,20 @@ export default function InventoryPage({
       </main>
 
       {/* Modals */}
+      <ExpiryModal
+        isOpen={isExpiryOpen}
+        onClose={() => setIsExpiryOpen(false)}
+        branchId={isAdmin ? currentBranchId : undefined}
+        canDispose={viewingSessionBranch}
+        onDisposalCreated={(count) =>
+          navigate('/stock-counts', {
+            state: { openCountId: count?.id, message: 'Đã lập phiếu hủy hàng hết hạn. Kiểm lại số thực tế rồi gửi duyệt.' }
+          })
+        }
+      />
       <StockInModal
         key={showDraft ? `draft-${location.key}` : `empty-${stockInModalKey}`}
-        initialItems={showDraft ? draftItems : null}
+        initialItems={showDraft ? draftItems : quickStockInItems}
         isOpen={isStockInOpen || showDraft}
         onClose={closeStockIn}
         products={products}
@@ -853,6 +1009,14 @@ export default function InventoryPage({
         isOpen={!!selectedSlip}
         onClose={() => setSelectedSlip(null)}
         slip={selectedSlip}
+      />
+
+      <ProductFormModal
+        isOpen={productForm.open}
+        onClose={() => setProductForm({ open: false, product: null })}
+        product={productForm.product}
+        categories={categories.filter((c) => c !== 'ALL' && c)}
+        onSaved={handleProductSaved}
       />
 
       <BarcodePrintModal

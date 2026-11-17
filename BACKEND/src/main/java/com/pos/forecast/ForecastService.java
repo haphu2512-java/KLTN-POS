@@ -99,7 +99,7 @@ public class ForecastService {
     public List<ForecastResponse> getDemandForecastAndReplenishment(Long branchId, int forecastDays, String algorithm) {
         String normalizedAlgorithm = ForecastCalculator.normalizeAlgorithm(algorithm);
         ForecastCalculator calc = calculator();
-        LocalDate firstDay = LocalDate.now().minusDays(historyDays - 1);
+        LocalDate firstDay = historyStart();
         Map<Long, double[]> salesByProduct = loadDailySales(branchId, firstDay);
         Map<Long, Integer> stockByProduct = loadBranchStock(branchId);
 
@@ -117,7 +117,7 @@ public class ForecastService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new BusinessException("PRODUCT_NOT_FOUND",
                         "Không tìm thấy sản phẩm " + productId, HttpStatus.NOT_FOUND));
-        LocalDate firstDay = LocalDate.now().minusDays(historyDays - 1);
+        LocalDate firstDay = historyStart();
         double[] series = loadDailySales(branchId, firstDay).get(productId);
         int stock = loadBranchStock(branchId).getOrDefault(productId, 0);
         return forecast(calculator(), product, series, stock, forecastDays,
@@ -221,6 +221,15 @@ public class ForecastService {
      * Doanh số theo ngày của mọi sản phẩm tại chi nhánh, mỗi sản phẩm là mảng historyDays phần tử
      * (ngày không bán = 0). Sản phẩm không bán được ngày nào trong cửa sổ sẽ không có trong map.
      */
+    /**
+     * Cửa sổ lịch sử kết thúc ở hôm qua: hôm nay mới bán được một phần, tính như một ngày đủ
+     * sẽ kéo mức bán trung bình xuống (giống default_as_of của dịch vụ AI_FORECAST).
+     * Hóa đơn hôm nay rơi ra ngoài mảng nhờ kiểm tra dayIndex trong loadDailySales.
+     */
+    private LocalDate historyStart() {
+        return LocalDate.now().minusDays(historyDays);
+    }
+
     private Map<Long, double[]> loadDailySales(Long branchId, LocalDate firstDay) {
         Map<Long, double[]> salesByProduct = new HashMap<>();
         List<Object[]> rows = invoiceRepository.getBranchDailyProductSales(branchId, firstDay.atStartOfDay());

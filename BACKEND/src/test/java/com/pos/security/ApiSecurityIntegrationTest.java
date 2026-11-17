@@ -5,7 +5,15 @@ import com.pos.user.Role;
 import com.pos.user.User;
 import com.pos.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
+import com.pos.branch.BranchRepository;
+import com.pos.sale.Invoice;
+import com.pos.sale.InvoiceRepository;
+import com.pos.sale.PaymentMethod;
 import com.pos.shift.ShiftAssignmentRepository;
+import com.pos.shift.ShiftSession;
+import com.pos.shift.ShiftSessionRepository;
+import com.pos.shift.ShiftStatus;
+import com.pos.shift.WorkShiftRepository;
 import com.pos.staff.StaffMemberRepository;
 import com.pos.support.ShiftTestData;
 import org.junit.jupiter.api.DisplayName;
@@ -15,10 +23,18 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.servlet.MvcResult;
+import com.jayway.jsonpath.JsonPath;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -55,6 +71,21 @@ class ApiSecurityIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private InvoiceRepository invoiceRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private BranchRepository branchRepository;
+
+    @Autowired
+    private ShiftSessionRepository shiftSessionRepository;
+
+    @Autowired
+    private WorkShiftRepository workShiftRepository;
+
     private String cashierToken;
 
     @BeforeEach
@@ -72,6 +103,37 @@ class ApiSecurityIntegrationTest {
     @DisplayName("Không có token → 401")
     void unauthenticatedGets401() throws Exception {
         mvc.perform(get("/api/products")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Health check mở công khai nhưng không lộ chi tiết khi chưa đăng nhập; các endpoint actuator khác bị chặn")
+    void healthEndpointPublicWithoutDetails() throws Exception {
+        mvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.components").doesNotExist());
+        mvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Trợ lý: cần đăng nhập; thu ngân hỏi doanh thu bị từ chối trong câu trả lời, admin xem được")
+    void assistantChatRespectsRole() throws Exception {
+        String body = "{\"message\":\"Doanh thu hôm nay\"}";
+        mvc.perform(post("/api/assistant/chat").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/assistant/chat").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.intent").value("REVENUE"))
+                .andExpect(jsonPath("$.data.reply").value(org.hamcrest.Matchers.containsString("không có quyền")));
+        mvc.perform(post("/api/assistant/chat").header("Authorization", tokenFor("admin"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reply").value(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("không có quyền"))));
+        mvc.perform(post("/api/assistant/chat").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"  \"}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -106,25 +168,24 @@ class ApiSecurityIntegrationTest {
     }
 
     @Test
-    @DisplayName("Thủ kho không bán hàng, không mở ca, không xem khách hàng; vẫn xem nhà cung cấp và phiếu nhập")
-    void warehouseBlockedFromSelling() throws Exception {
-        userRepository.save(User.builder().username("wh_user").password("x")
-                .fullName("Thủ kho").role(Role.WAREHOUSE).branchIds(TestAuth.branches(1L)).active(true).build());
-        String warehouse = tokenFor("wh_user");
+    @DisplayName("Nhân viên (STAFF) không làm nghiệp vụ kho: không xem nhà cung cấp, phiếu nhập, kiểm kê, đặt hàng, dự báo")
+    void staffBlockedFromWarehouseWork() throws Exception {
+        for (String url : new String[]{"/api/suppliers", "/api/stock-in", "/api/stock-counts", "/api/purchase-orders"}) {
+            mvc.perform(get(url).header("Authorization", cashierToken)).andExpect(status().isForbidden());
+        }
+        mvc.perform(get("/api/suppliers").header("Authorization", tokenFor("admin"))).andExpect(status().isOk());
+    }
 
-        mvc.perform(post("/api/invoices").header("Authorization", warehouse)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"branchId\":1,\"paymentMethod\":\"CARD\",\"items\":[{\"productId\":1,\"quantity\":1}]}"))
-                .andExpect(status().isForbidden());
-        mvc.perform(post("/api/shifts/open").header("Authorization", warehouse)
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"workShiftId\":1,\"openingCash\":0}"))
-                .andExpect(status().isForbidden());
-        for (String url : new String[]{"/api/shifts/current", "/api/staff", "/api/customers"}) {
-            mvc.perform(get(url).header("Authorization", warehouse)).andExpect(status().isForbidden());
-        }
-        for (String url : new String[]{"/api/suppliers", "/api/stock-in"}) {
-            mvc.perform(get(url).header("Authorization", warehouse)).andExpect(status().isOk());
-        }
+    @Test
+    @DisplayName("Giá vốn bị ẩn với thu ngân, admin vẫn thấy")
+    void costPriceHiddenFromCashier() throws Exception {
+        mvc.perform(get("/api/products/1").header("Authorization", cashierToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.salePrice").exists())
+                .andExpect(jsonPath("$.data.costPrice").value(org.hamcrest.Matchers.nullValue()));
+        mvc.perform(get("/api/products/1").header("Authorization", tokenFor("admin")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.costPrice").isNumber());
     }
 
     @Test
@@ -161,7 +222,7 @@ class ApiSecurityIntegrationTest {
     @DisplayName("Tài khoản bị khóa không dùng được token cũ")
     void disabledUserTokenRejected() throws Exception {
         User user = userRepository.save(User.builder().username("tmp_cashier").password("x")
-                .fullName("Tạm").role(Role.CASHIER).branchIds(TestAuth.branches(1L)).active(true).build());
+                .fullName("Tạm").role(Role.STAFF).branchIds(TestAuth.branches(1L)).active(true).build());
         String token = tokenFor("tmp_cashier");
 
         user.setActive(false);
@@ -169,5 +230,101 @@ class ApiSecurityIntegrationTest {
 
         mvc.perform(get("/api/products").header("Authorization", token))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Chi tiết hóa đơn: thu ngân chỉ xem hóa đơn trong ca của mình, admin xem được mọi hóa đơn")
+    void invoiceDetailScopedToOwnShift() throws Exception {
+        User cashier = userRepository.findByUsername("cashier").orElseThrow();
+        User other = userRepository.save(User.builder().username("other_cashier").password("x")
+                .fullName("Thu ngân khác").role(Role.STAFF).branchIds(TestAuth.branches(1L)).active(true).build());
+
+        Long ownShift = closedShift(cashier.getId());
+        Long otherShift = closedShift(other.getId());
+        Long ownInvoice = invoiceIn(ownShift, cashier.getId());
+        Long otherInvoice = invoiceIn(otherShift, other.getId());
+        Long noShiftInvoice = invoiceIn(null, other.getId());
+
+        mvc.perform(get("/api/invoices/" + ownInvoice).header("Authorization", cashierToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.employeeName").value(cashier.getFullName()));
+        for (Long id : new Long[]{otherInvoice, noShiftInvoice}) {
+            mvc.perform(get("/api/invoices/" + id).header("Authorization", cashierToken))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("INVOICE_FORBIDDEN"));
+        }
+        mvc.perform(get("/api/invoices/" + otherInvoice).header("Authorization", tokenFor("admin")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.employeeName").value("Thu ngân khác"));
+    }
+
+    private Long closedShift(Long employeeId) {
+        return shiftSessionRepository.save(ShiftSession.builder()
+                .branchId(1L).workShift(workShiftRepository.findAll().get(0)).employeeId(employeeId)
+                .shiftDate(LocalDate.now()).status(ShiftStatus.CLOSED)
+                .openedAt(LocalDateTime.now()).openingCash(BigDecimal.ZERO).build()).getId();
+    }
+
+    private Long invoiceIn(Long shiftId, Long employeeId) {
+        return invoiceRepository.save(Invoice.builder()
+                .branch(branchRepository.findById(1L).orElseThrow()).employeeId(employeeId)
+                .subtotal(BigDecimal.TEN).totalAmount(BigDecimal.TEN).paymentMethod(PaymentMethod.CARD)
+                .shiftSessionId(shiftId).build()).getId();
+    }
+
+    @Test
+    @DisplayName("Giảm giá vượt hạn mức: thu ngân bị chặn, quản lý nhập PIN thì bán được và hóa đơn ghi người duyệt")
+    void discountOverLimitNeedsManagerPin() throws Exception {
+        User manager = userRepository.save(User.builder().username("pin_manager").password(passwordEncoder.encode("mgr-pass"))
+                .fullName("Quản lý PIN").role(Role.MANAGER).branchIds(TestAuth.branches(1L)).active(true).build());
+        String managerToken = tokenFor("pin_manager");
+
+        mvc.perform(put("/api/approvals/pin").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"currentPassword\":\"x\",\"pin\":\"1234\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/approvals/pin").header("Authorization", managerToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"currentPassword\":\"mgr-pass\",\"pin\":\"2468\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/approvals/policy").header("Authorization", cashierToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cashierMaxDiscountPercent").value(5));
+
+        ShiftTestData.assignNewStaff(staffRepository, assignmentRepository, 1L, 1, "NV giảm giá");
+        mvc.perform(post("/api/shifts/open").header("Authorization", cashierToken)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"workShiftId\":1,\"openingCash\":0,\"handoverReason\":\"test\"}"));
+
+        // 2 hộp sữa = 72.000đ, hạn mức 5% = 3.600đ; giảm 10.000đ phải có PIN
+        String sale = "{\"branchId\":1,\"paymentMethod\":\"CARD\",\"discount\":10000,\"discountReason\":\"Hộp móp\"%s,"
+                + "\"items\":[{\"productId\":1,\"quantity\":2}]}";
+        mvc.perform(post("/api/invoices").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(String.format(sale, "")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("DISCOUNT_APPROVAL_REQUIRED"));
+
+        mvc.perform(post("/api/approvals/discount").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"approverUsername\":\"pin_manager\",\"pin\":\"0000\",\"amount\":10000}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("APPROVAL_PIN_INVALID"));
+        MvcResult granted = mvc.perform(post("/api/approvals/discount").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"approverUsername\":\"pin_manager\",\"pin\":\"2468\",\"amount\":10000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.approverName").value("Quản lý PIN"))
+                .andReturn();
+        String token = JsonPath.read(granted.getResponse().getContentAsString(), "$.data.token");
+
+        String withToken = String.format(sale, ",\"discountApprovalToken\":\"" + token + "\"");
+        mvc.perform(post("/api/invoices").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(withToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalAmount").value(62000.0))
+                .andExpect(jsonPath("$.data.discountReason").value("Hộp móp"))
+                .andExpect(jsonPath("$.data.discountApprovedBy").value(manager.getId()));
+        // Mã duyệt chỉ dùng một lần
+        mvc.perform(post("/api/invoices").header("Authorization", cashierToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(withToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("DISCOUNT_APPROVAL_REQUIRED"));
     }
 }

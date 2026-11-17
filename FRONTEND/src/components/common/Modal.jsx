@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import './Modal.css';
 
 /**
- * Desktop modal dialog with Esc key support and backdrop click handle
+ * Hộp thoại dùng chung. Chỉ đóng bằng nút × / nút Hủy (hoặc phím Esc);
+ * bấm ra ngoài vùng tối KHÔNG đóng, tránh mất dữ liệu đang nhập do bấm nhầm.
  */
 export default function Modal({
   isOpen,
@@ -12,9 +13,15 @@ export default function Modal({
   footer,
   maxWidth = '520px'
 }) {
+  const overlayRef = useRef(null);
+
   useEffect(() => {
     function handleKeyDown(e) {
-      if (e.key === 'Escape' && isOpen && onClose) {
+      if (e.key !== 'Escape' || !isOpen || !onClose) return;
+      // Chỉ hộp thoại trên cùng đang hiển thị mới đóng (bỏ qua hộp thoại trong trang đang ẩn
+      // khi chuyển màn hình, và hộp bên dưới khi đang mở hộp xác nhận chồng lên)
+      const shown = [...document.querySelectorAll('.modal-overlay')].filter((el) => el.getClientRects().length > 0);
+      if (shown[shown.length - 1] === overlayRef.current) {
         onClose();
       }
     }
@@ -25,12 +32,8 @@ export default function Modal({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-dialog"
-        style={{ maxWidth }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="modal-overlay" ref={overlayRef}>
+      <div className="modal-dialog" style={{ maxWidth }} role="dialog" aria-modal="true">
         <div className="modal-header">
           <h3 className="modal-title">{title}</h3>
           <button
