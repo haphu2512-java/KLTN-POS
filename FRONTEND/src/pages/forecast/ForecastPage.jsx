@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Button, Table, Badge, Loading } from '../../components/common';
 import SalesTrendChart from '../../components/forecast/SalesTrendChart';
 import {
@@ -250,14 +250,25 @@ export default function ForecastPage({
 
   // Lập đơn đặt hàng nháp ở máy chủ từ đề xuất AI (mỗi nhà cung cấp một đơn) rồi mở trang Đặt hàng để duyệt
   const [creatingPo, setCreatingPo] = useState(false);
+  const creatingPoRef = useRef(false);
   const handleCreatePurchaseOrders = async () => {
+    // Chặn bấm liên tiếp trước khi nút kịp chuyển sang trạng thái vô hiệu
+    if (creatingPoRef.current) return;
+    creatingPoRef.current = true;
     setCreatingPo(true);
     try {
       const orders = await purchaseOrderService.fromForecast(forecastDays);
       onOpenPurchaseOrder(orders[0]?.id, `Đã lập ${orders.length} đơn đặt hàng nháp từ đề xuất AI (${forecastDays} ngày). Kiểm tra số lượng, chọn nhà cung cấp rồi gửi đơn.`);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không lập được đơn đặt hàng');
+      const data = err?.response?.data;
+      if (data?.code === 'NO_SUGGESTION') {
+        // Không có gì cần nhập không phải là lỗi: chỉ báo thông tin
+        toast.info('Hiện AI chưa đề xuất nhập mặt hàng nào cho chi nhánh này, chưa cần lập đơn đặt hàng.');
+      } else {
+        toast.error(data?.message || 'Không lập được đơn đặt hàng');
+      }
     } finally {
+      creatingPoRef.current = false;
       setCreatingPo(false);
     }
   };

@@ -98,7 +98,12 @@ export default function PurchaseOrderPage() {
       if (okText) setMessage({ text: typeof okText === 'function' ? okText(res) : okText });
       return res;
     } catch (err) {
-      setMessage({ error: true, text: errMsg(err, 'Thao tác thất bại') });
+      if (err?.response?.data?.code === 'NO_SUGGESTION') {
+        // AI không có gì cần nhập: báo thông tin, không phải lỗi
+        setMessage({ text: 'Hiện AI chưa đề xuất nhập mặt hàng nào cho chi nhánh này, chưa cần lập đơn. Bạn vẫn có thể tạo đơn trống và thêm hàng thủ công.' });
+      } else {
+        setMessage({ error: true, text: errMsg(err, 'Thao tác thất bại') });
+      }
       return null;
     } finally {
       setBusy(false);

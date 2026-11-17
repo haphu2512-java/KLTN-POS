@@ -18,7 +18,7 @@ import { newRequestId } from '../../utils/requestId';
 import useBranches from '../../hooks/useBranches';
 import { PERMS, normalizeRole } from '../../utils/permissions';
 import './InventoryPage.css';
-import { toast, confirmDialog } from '../../components/common/toastStore';
+import { toast, confirmDialog, promptDialog } from '../../components/common/toastStore';
 
 export default function InventoryPage({
   currentUser,
@@ -385,14 +385,21 @@ export default function InventoryPage({
   };
 
   // Quick action: Stock-in single product
-  const handleQuickStockIn = (product) => {
-    const qty = prompt(`Nhập thêm số lượng cho "${product.name}":`, '10');
-    if (!qty) return;
+  const handleQuickStockIn = async (product) => {
+    const qty = await promptDialog(`Nhập thêm số lượng cho "${product.name}" (${product.unit || 'đơn vị'}):`, {
+      title: 'Nhập hàng nhanh',
+      defaultValue: 10,
+      inputType: 'number',
+      min: 1,
+      step: 1,
+      confirmText: 'Nhập kho',
+      validate: (v) => {
+        const n = Number(v);
+        return Number.isInteger(n) && n > 0 ? null : 'Số lượng phải là số nguyên lớn hơn 0';
+      }
+    });
+    if (qty == null) return;
     const num = Number(qty);
-    if (isNaN(num) || num <= 0) {
-      toast.warning('Số lượng không hợp lệ!');
-      return;
-    }
 
     const quickSlip = {
       id: `NK-${Date.now().toString().slice(-6)}`,

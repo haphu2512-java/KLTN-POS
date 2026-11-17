@@ -38,10 +38,29 @@ export const toast = {
 export function confirmDialog(message, opts = {}) {
   return new Promise((resolve) => {
     if (listeners.size === 0) {
-      // Chưa gắn ToastHost (vd. trong test): rơi về hộp thoại của trình duyệt
-      resolve(typeof window !== 'undefined' && window.confirm ? window.confirm(message) : false);
+      // Chưa gắn ToastHost (vd. trong test): không dùng hộp thoại trình duyệt, coi như bấm Hủy
+      resolve(false);
       return;
     }
     emit({ kind: 'confirm', confirm: { id: nextId++, message: String(message ?? ''), resolve, ...opts } });
+  });
+}
+
+/**
+ * Hộp nhập liệu thay cho window.prompt (Electron không hỗ trợ prompt()).
+ * Trả về Promise<string | null>: chuỗi đã nhập, hoặc null khi người dùng bấm Hủy.
+ * @param {string} message
+ * @param {{ title?: string, defaultValue?: string|number, inputType?: string, placeholder?: string,
+ *   confirmText?: string, cancelText?: string, min?: number, step?: number,
+ *   validate?: (value: string) => string | null }} opts
+ *   validate trả về chuỗi lỗi để giữ hộp mở và báo lỗi ngay dưới ô nhập.
+ */
+export function promptDialog(message, opts = {}) {
+  return new Promise((resolve) => {
+    if (listeners.size === 0) {
+      resolve(null);
+      return;
+    }
+    emit({ kind: 'prompt', prompt: { id: nextId++, message: String(message ?? ''), resolve, ...opts } });
   });
 }
