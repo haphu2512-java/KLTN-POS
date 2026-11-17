@@ -7,6 +7,7 @@ import { productService } from '../../services/productService';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import '../../components/layout/ManagePage.css';
 import { confirmDialog } from '../../components/common/toastStore';
+import { DATA_EVENTS, emitDataChange } from '../../utils/dataEvents';
 
 const STATUS = {
   DRAFT: { label: 'Nháp', variant: 'brand' },
@@ -183,6 +184,13 @@ export default function PurchaseOrderPage() {
       () => purchaseOrderService.receive(current.id, payload),
       (r) => `Đã nhận hàng, tạo phiếu nhập kho #${r?.stockIn?.id ?? ''} và cộng tồn kho`
     );
+    if (res) {
+      // Trang Kho hàng đang được giữ sống ở nền: báo để tải lại lịch sử phiếu nhập và tồn kho
+      emitDataChange(DATA_EVENTS.STOCK_IN_CHANGED, {
+        branchId: res.stockIn?.branch?.id ?? res.order?.branchId,
+        stockInId: res.stockIn?.id,
+      });
+    }
     if (res?.order) await refreshWith(res.order);
   };
 

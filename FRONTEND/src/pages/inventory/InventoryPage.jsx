@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, Input, Table, Badge, BarcodeView, Loading } from '../../components/common';
 import StockInModal from './StockInModal';
@@ -16,6 +16,8 @@ import { websocketService } from '../../services/websocketService';
 import { exportToCsv } from '../../utils/exportCsv';
 import { newRequestId } from '../../utils/requestId';
 import useBranches from '../../hooks/useBranches';
+import usePageActive from '../../hooks/usePageActive';
+import { DATA_EVENTS, onDataChange } from '../../utils/dataEvents';
 import { PERMS, normalizeRole } from '../../utils/permissions';
 import './InventoryPage.css';
 import { toast, confirmDialog, promptDialog } from '../../components/common/toastStore';
@@ -56,12 +58,46 @@ export default function InventoryPage({
   const [reloadKey, setReloadKey] = useState(0);
   const [syncingBarcodes, setSyncingBarcodes] = useState(false);
   const [selectedBarcodeProduct, setSelectedBarcodeProduct] = useState(null);
+  // Tải lại ngầm (không hiện vòng tải, giữ nguyên bảng đang xem) khi dữ liệu đổi từ màn hình khác
+  const silentReloadRef = useRef(false);
+  const staleRef = useRef(false);
+  const isPageActive = usePageActive();
+
+  // Màn hình khác (vd. Đặt hàng → Nhận hàng vào kho) vừa tạo phiếu nhập: trang này được giữ sống
+  // nên không tự tải lại. Đang hiển thị thì tải lại ngay, đang ẩn thì đánh dấu để tải khi mở lại.
+  useEffect(() => onDataChange(DATA_EVENTS.STOCK_IN_CHANGED, () => {
+    staleRef.current = true;
+    if (isPageActive) {
+      staleRef.current = false;
+      silentReloadRef.current = true;
+      setReloadKey((k) => k + 1);
+    }
+  }), [isPageActive]);
+
+  // Mở lại màn hình Kho hàng: tải lại nếu có thay đổi trong lúc ẩn hoặc đã ẩn đủ lâu
+  // (phiếu nhập do máy khác tạo không có sự kiện realtime riêng)
+  const hiddenAtRef = useRef(null);
+  useEffect(() => {
+    if (!isPageActive) {
+      hiddenAtRef.current = Date.now();
+      return;
+    }
+    const hiddenFor = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0;
+    hiddenAtRef.current = null;
+    if (staleRef.current || hiddenFor > 30000) {
+      staleRef.current = false;
+      silentReloadRef.current = true;
+      setReloadKey((k) => k + 1);
+    }
+  }, [isPageActive]);
 
   // Sync data from Backend
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
-      setLoading(true);
+      const silent = silentReloadRef.current;
+      silentReloadRef.current = false;
+      if (!silent) setLoading(true);
       try {
         const [prodRes, invRes, supRes, slipRes] = await Promise.allSettled([
           productService.getProducts(),
