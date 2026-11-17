@@ -14,7 +14,8 @@ export default function StockInModal({
   onSaveStockIn,
   initialItems
 }) {
-  const [supplierId, setSupplierId] = useState(suppliers[0]?.id || 1);
+  // Không chọn sẵn NCC đầu danh sách: chọn nhầm sẽ ghi sai NCC của mặt hàng, ảnh hưởng gợi ý đặt hàng sau này
+  const [supplierId, setSupplierId] = useState('');
   const [note, setNote] = useState('');
   // Một mã cho mỗi lần mở form: bấm lại sau khi lỗi mạng vẫn dùng mã này nên không bị nhập trùng
   const [requestId] = useState(newRequestId);
@@ -105,6 +106,10 @@ export default function StockInModal({
       toast.warning('Vui lòng thêm sản phẩm nhập kho!');
       return;
     }
+    if (!supplierId) {
+      toast.warning('Vui lòng chọn nhà cung cấp');
+      return;
+    }
 
     const supplier = suppliers.find((s) => s.id === Number(supplierId));
 
@@ -172,6 +177,7 @@ export default function StockInModal({
                 backgroundColor: 'var(--bg-surface)'
               }}
             >
+              <option value="">Chọn nhà cung cấp...</option>
               {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}

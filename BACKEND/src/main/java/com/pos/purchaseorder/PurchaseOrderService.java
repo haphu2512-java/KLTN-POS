@@ -28,11 +28,15 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Đơn đặt hàng nhà cung cấp: khép kín vòng AI dự báo → đặt hàng → nhận hàng → tồn kho.
@@ -75,8 +79,10 @@ public class PurchaseOrderService {
 
     /**
      * Lập đơn nháp từ đề xuất nhập hàng của AI (sản phẩm có suggestedRestockQty > 0) ở chi nhánh đang đăng nhập.
-     * Mỗi nhà cung cấp một đơn, theo NCC của lần nhập gần nhất; sản phẩm chưa từng nhập từ NCC nào gom vào
-     * một đơn chưa chọn NCC. Số lượng làm tròn lên theo đề xuất; đơn giá là giá vốn hiện tại.
+     * Mỗi mặt hàng chỉ vào đơn của NCC có bán danh mục của nó (Supplier.categories). Nhiều NCC cùng bán thì ưu tiên
+     * NCC của lần nhập gần nhất, sau đó NCC đã có đơn trong đợt này (để ít đơn hơn), cuối cùng NCC có id nhỏ nhất.
+     * Mặt hàng không NCC nào bán danh mục đó gom vào một đơn chưa chọn NCC, ghi chú nêu các danh mục cần gán.
+     * Số lượng làm tròn lên theo đề xuất; đơn giá là giá vốn hiện tại.
      */
     @Transactional
     public List<PurchaseOrder> createFromForecast(int days) {
@@ -88,21 +94,30 @@ public class PurchaseOrderService {
             throw new BusinessException("NO_SUGGESTION", "AI chưa đề xuất nhập mặt hàng nào cho chi nhánh này");
         }
 
-        Map<Long, Object[]> supplierOf = new HashMap<>();
+        Map<Long, Long> recentSupplierOf = new HashMap<>();
         for (Object[] row : stockInRepository.recentSuppliersByProduct(branchId)) {
-            supplierOf.putIfAbsent((Long) row[0], row);
+            recentSupplierOf.putIfAbsent((Long) row[0], (Long) row[1]);
         }
+        Map<String, List<Supplier>> suppliersByCategory = new HashMap<>();
+        supplierRepository.findAll().stream()
+                .sorted(Comparator.comparing(Supplier::getId))
+                .forEach(sup -> sup.getCategories().forEach(c ->
+                        suppliersByCategory.computeIfAbsent(categoryKey(c), k -> new ArrayList<>()).add(sup)));
 
+        String baseNote = "Lập từ đề xuất AI dự báo " + days + " ngày";
         Map<Long, PurchaseOrder> bySupplier = new LinkedHashMap<>();
+        Set<String> unmatchedCategories = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
         for (ForecastResponse s : suggestions) {
-            Object[] sup = supplierOf.get(s.getProductId());
-            Long supplierId = sup != null ? (Long) sup[1] : null;
-            PurchaseOrder order = bySupplier.computeIfAbsent(supplierId == null ? -1L : supplierId, k -> PurchaseOrder.builder()
+            String category = StringUtils.hasText(s.getCategory()) ? s.getCategory().trim() : null;
+            Supplier sup = pickSupplier(suppliersByCategory.getOrDefault(categoryKey(category), List.of()),
+                    recentSupplierOf.get(s.getProductId()), bySupplier.keySet());
+            if (sup == null) unmatchedCategories.add(category != null ? category : "(sản phẩm chưa có danh mục)");
+            PurchaseOrder order = bySupplier.computeIfAbsent(sup == null ? -1L : sup.getId(), k -> PurchaseOrder.builder()
                     .branchId(branchId)
-                    .supplierId(supplierId)
-                    .supplierName(sup != null ? (String) sup[2] : null)
+                    .supplierId(sup != null ? sup.getId() : null)
+                    .supplierName(sup != null ? sup.getName() : null)
                     .source("FORECAST")
-                    .note("Lập từ đề xuất AI dự báo " + days + " ngày")
+                    .note(baseNote)
                     .createdBy(actor.getId())
                     .createdAt(LocalDateTime.now())
                     .build());
@@ -111,16 +126,37 @@ public class PurchaseOrderService {
                     .productId(s.getProductId())
                     .productName(s.getProductName())
                     .barcode(s.getBarcode())
+                    .category(truncate(category, 100))
                     .orderedQty(s.getSuggestedRestockQty())
                     .suggestedQty(s.getSuggestedRestockQty())
                     .unitCost(s.getCostPrice())
                     .forecastNote(truncate(forecastNote(s), 255))
                     .build());
         }
+        PurchaseOrder unassigned = bySupplier.get(-1L);
+        if (unassigned != null) {
+            unassigned.setNote(truncate(baseNote + ". Chưa có NCC nào bán danh mục: " + String.join(", ", unmatchedCategories)
+                    + ". Gán danh mục cho NCC ở trang Đối tác rồi lập lại, hoặc chọn NCC cho đơn này.", 255));
+        }
         List<PurchaseOrder> saved = repository.saveAll(bySupplier.values());
         audit(AuditAction.PURCHASE_ORDER, null, branchId, "Lập " + saved.size() + " đơn đặt hàng nháp từ đề xuất AI ("
-                + suggestions.size() + " mặt hàng)");
+                + suggestions.size() + " mặt hàng"
+                + (unassigned != null ? ", " + unassigned.getLines().size() + " mặt hàng chưa có NCC theo danh mục" : "") + ")");
         return saved;
+    }
+
+    /** Chọn NCC trong số NCC bán danh mục: NCC nhập gần nhất → NCC đã có đơn trong đợt → NCC đầu tiên; không có thì null */
+    static Supplier pickSupplier(List<Supplier> candidates, Long recentSupplierId, Set<Long> alreadyUsed) {
+        if (candidates.isEmpty()) return null;
+        if (recentSupplierId != null) {
+            for (Supplier c : candidates) if (c.getId().equals(recentSupplierId)) return c;
+        }
+        for (Supplier c : candidates) if (alreadyUsed.contains(c.getId())) return c;
+        return candidates.get(0);
+    }
+
+    private static String categoryKey(String category) {
+        return category == null ? "" : category.trim().toLowerCase(Locale.ROOT);
     }
 
     @Transactional
@@ -274,7 +310,8 @@ public class PurchaseOrderService {
                     Product p = productRepository.findById(r.productId())
                             .orElseThrow(() -> new BusinessException("PRODUCT_NOT_FOUND", "Sản phẩm không tồn tại"));
                     l = PurchaseOrderLine.builder().purchaseOrder(o).productId(p.getId()).productName(p.getName())
-                            .barcode(p.getBarcode()).unitCost(p.getCostPrice()).build();
+                            .barcode(p.getBarcode()).category(truncate(p.getCategory(), 100))
+                            .unitCost(p.getCostPrice()).build();
                 }
                 l.setOrderedQty(r.orderedQty());
                 if (r.unitCost() != null) l.setUnitCost(r.unitCost());

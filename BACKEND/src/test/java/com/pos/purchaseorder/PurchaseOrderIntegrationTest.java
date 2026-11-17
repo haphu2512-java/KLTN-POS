@@ -3,6 +3,8 @@ package com.pos.purchaseorder;
 import com.jayway.jsonpath.JsonPath;
 import com.pos.inventory.InventoryRepository;
 import com.pos.product.ProductRepository;
+import com.pos.purchase.Supplier;
+import com.pos.purchase.SupplierRepository;
 import com.pos.security.CustomUserDetailsService;
 import com.pos.security.JwtTokenProvider;
 import com.pos.support.TestAuth;
@@ -42,6 +44,7 @@ class PurchaseOrderIntegrationTest {
     @Autowired private UserRepository userRepository;
     @Autowired private InventoryRepository inventoryRepository;
     @Autowired private ProductRepository productRepository;
+    @Autowired private SupplierRepository supplierRepository;
 
     private String tokenFor(String username) {
         User user = userRepository.findByUsername(username).orElseThrow();
@@ -125,8 +128,49 @@ class PurchaseOrderIntegrationTest {
             assertThat(JsonPath.<java.util.List<Object>>read(res, "$.data")).isNotEmpty();
             assertThat(JsonPath.<String>read(res, "$.data[0].status")).isEqualTo("DRAFT");
             assertThat(JsonPath.<String>read(res, "$.data[0].source")).isEqualTo("FORECAST");
+            // Mặt hàng chỉ vào đơn của NCC có bán đúng danh mục của nó
+            java.util.Map<Long, java.util.List<String>> catsOf = new java.util.HashMap<>();
+            for (Supplier sup : supplierRepository.findAll()) {
+                catsOf.put(sup.getId(), sup.getCategories().stream().map(c -> c.toLowerCase(java.util.Locale.ROOT)).toList());
+            }
+            java.util.List<java.util.Map<String, Object>> orders = JsonPath.read(res, "$.data");
+            for (java.util.Map<String, Object> o : orders) {
+                if (o.get("supplierId") == null) continue;
+                java.util.List<String> cats = catsOf.get(((Number) o.get("supplierId")).longValue());
+                for (java.util.Map<String, Object> line : (java.util.List<java.util.Map<String, Object>>) o.get("lines")) {
+                    assertThat(cats).contains(String.valueOf(line.get("category")).toLowerCase(java.util.Locale.ROOT));
+                }
+            }
         } else {
             assertThat(JsonPath.<String>read(res, "$.code")).isEqualTo("NO_SUGGESTION");
         }
+    }
+
+    @Test
+    @DisplayName("NCC: thêm/sửa danh mục cung cấp, bỏ trùng, và lấy được danh sách danh mục để chọn")
+    void supplierCategories() throws Exception {
+        String admin = tokenFor("admin");
+        String s = mvc.perform(post("/api/suppliers").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\" NCC bánh \",\"categories\":[\"Bánh gạo\",\" bánh gạo \",\"\",\"Bánh quy\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("NCC bánh"))
+                .andExpect(jsonPath("$.data.categories.length()").value(2))
+                .andReturn().getResponse().getContentAsString();
+        long id = JsonPath.<Integer>read(s, "$.data.id").longValue();
+        mvc.perform(put("/api/suppliers/" + id).header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"NCC bánh\",\"phone\":\"0900\",\"categories\":[\"Kẹo các loại\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.phone").value("0900"))
+                .andExpect(jsonPath("$.data.categories[0]").value("Kẹo các loại"))
+                .andExpect(jsonPath("$.data.categories.length()").value(1));
+        mvc.perform(put("/api/suppliers/" + id).header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"  \"}"))
+                .andExpect(status().isBadRequest());
+        String opts = mvc.perform(get("/api/suppliers/categories").header("Authorization", admin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<java.util.List<String>>read(opts, "$.data")).contains("Kẹo các loại", "Sữa & Bơ");
+        // NCC mẫu được gán danh mục mặc định lúc khởi động
+        assertThat(supplierRepository.findAll().stream().filter(x -> x.getName().contains("Vinamilk")).findFirst().orElseThrow()
+                .getCategories()).contains("Sữa & Bơ");
     }
 }

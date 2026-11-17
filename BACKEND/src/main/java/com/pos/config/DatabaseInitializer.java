@@ -27,6 +27,8 @@ import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 @Component
@@ -139,8 +141,45 @@ public class DatabaseInitializer implements CommandLineRunner {
             log.info("Đã khởi tạo thành công dữ liệu mẫu cho hệ thống POS!");
         }
 
+        seedSupplierCategories();
+
         if (syncBarcodesOnStartup) {
             barcodeSyncService.syncLegacyBarcodes();
+        }
+    }
+
+    /** Danh mục mặc định cho 5 NCC mẫu, khớp theo tên (danh mục mẫu và danh mục dữ liệu Bách Hóa Xanh) */
+    private static final Map<String, List<String>> DEFAULT_SUPPLIER_CATEGORIES = Map.of(
+            "vinamilk", List.of("Sữa & Bơ", "Sữa tươi", "Sữa chua", "Sữa chua uống", "Sữa hạt, sữa đậu",
+                    "Sữa bột & Sữa dinh dưỡng"),
+            "coca-cola", List.of("Nước giải khát", "Nước ngọt", "Nước khoáng, nước suối", "Nước tăng lực", "Nước ép trái cây"),
+            "acecook", List.of("Thực phẩm khô", "Mì ăn liền", "Hủ tiếu, miến", "Phở, bún ăn liền", "Cháo gói, cháo tươi"),
+            "cái lân", List.of("Gia vị & Dầu ăn", "Dầu ăn"),
+            "unilever", List.of("Hóa mỹ phẩm", "Dầu gội & Xả tóc", "Sữa tắm", "Kem đánh răng", "Nước xả vải",
+                    "Nước rửa chén", "Bột giặt & Nước giặt"));
+
+    /**
+     * NCC tạo trước khi có danh mục thì chưa nhận mặt hàng nào khi lập đơn từ đề xuất AI. Chỉ chạy khi chưa NCC nào
+     * có danh mục (database cũ hoặc mới tạo): gán danh mục mặc định cho NCC mẫu theo tên. Đã gán rồi thì bỏ qua,
+     * để không ghi đè danh mục người dùng sửa.
+     */
+    void seedSupplierCategories() {
+        List<Supplier> suppliers = supplierRepository.findAll();
+        if (suppliers.isEmpty() || suppliers.stream().anyMatch(s -> !s.getCategories().isEmpty())) return;
+        int updated = 0;
+        for (Supplier s : suppliers) {
+            String name = s.getName() == null ? "" : s.getName().toLowerCase(Locale.ROOT);
+            for (Map.Entry<String, List<String>> e : DEFAULT_SUPPLIER_CATEGORIES.entrySet()) {
+                if (name.contains(e.getKey())) {
+                    s.getCategories().addAll(e.getValue());
+                    updated++;
+                    break;
+                }
+            }
+        }
+        if (updated > 0) {
+            supplierRepository.saveAll(suppliers);
+            log.info("Đã gán danh mục mặc định cho {} nhà cung cấp mẫu", updated);
         }
     }
 
