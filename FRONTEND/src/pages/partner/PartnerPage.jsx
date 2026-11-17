@@ -5,6 +5,7 @@ import { purchaseService } from '../../services/purchaseService';
 import { formatNumber, formatDateTime } from '../../utils/formatters';
 import { PERMS } from '../../utils/permissions';
 import PointHistoryModal from './PointHistoryModal';
+import SupplierCategoryPicker from './SupplierCategoryPicker';
 import './PartnerPage.css';
 import { toast } from '../../components/common/toastStore';
 
@@ -29,7 +30,10 @@ export default function PartnerPage({
 
   // Forms
   const [customerForm, setCustomerForm] = useState({ name: '', phone: '' });
-  const [supplierForm, setSupplierForm] = useState({ name: '', phone: '', email: '', address: '' });
+  const emptySupplierForm = { name: '', phone: '', email: '', address: '', categories: [] };
+  const [supplierForm, setSupplierForm] = useState(emptySupplierForm);
+  const [editingSupplierId, setEditingSupplierId] = useState(null); // null = thêm mới
+  const [categoryOptions, setCategoryOptions] = useState([]);
 
   const fetchCustomers = async (search = '') => {
     setLoading(true);
@@ -93,20 +97,41 @@ export default function PartnerPage({
     }
   };
 
-  const handleCreateSupplier = async (e) => {
+  const openSupplierModal = (supplier = null) => {
+    setEditingSupplierId(supplier?.id ?? null);
+    setSupplierForm(supplier
+      ? {
+          name: supplier.name || '',
+          phone: supplier.phone || '',
+          email: supplier.email || '',
+          address: supplier.address || '',
+          categories: supplier.categories || [],
+        }
+      : emptySupplierForm);
+    setShowAddSupplierModal(true);
+    purchaseService.getSupplierCategories().then(setCategoryOptions).catch(() => {});
+  };
+
+  const handleSaveSupplier = async (e) => {
     e.preventDefault();
     if (!supplierForm.name.trim()) {
       toast.warning('Vui lòng nhập tên nhà cung cấp');
       return;
     }
     try {
-      await purchaseService.createSupplier(supplierForm);
-      toast.success('Thêm nhà cung cấp thành công!');
+      if (editingSupplierId) {
+        await purchaseService.updateSupplier(editingSupplierId, supplierForm);
+        toast.success('Đã cập nhật nhà cung cấp');
+      } else {
+        await purchaseService.createSupplier(supplierForm);
+        toast.success('Thêm nhà cung cấp thành công!');
+      }
       setShowAddSupplierModal(false);
-      setSupplierForm({ name: '', phone: '', email: '', address: '' });
+      setSupplierForm(emptySupplierForm);
+      setEditingSupplierId(null);
       fetchSuppliers();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi khi tạo nhà cung cấp');
+      toast.error(err.response?.data?.message || err.message || 'Lỗi khi lưu nhà cung cấp');
     }
   };
 
@@ -159,7 +184,8 @@ export default function PartnerPage({
     (s) =>
       s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (s.phone && s.phone.includes(searchTerm)) ||
-      (s.email && s.email.toLowerCase().includes(searchTerm.toLowerCase()))
+      (s.email && s.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (s.categories || []).some((c) => c.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const supplierColumns = [
@@ -183,9 +209,35 @@ export default function PartnerPage({
       render: (val, s) => val || s?.email || '—'
     },
     {
+      key: 'categories',
+      title: 'Danh mục cung cấp',
+      render: (val) => {
+        const cats = val || [];
+        if (cats.length === 0) return <Badge variant="warning">Chưa gán danh mục</Badge>;
+        const shown = cats.slice(0, 3);
+        return (
+          <div className="supplier-cat-cell" title={cats.join(', ')}>
+            {shown.map((c) => <Badge key={c} variant="neutral">{c}</Badge>)}
+            {cats.length > shown.length && <Badge variant="neutral">+{cats.length - shown.length}</Badge>}
+          </div>
+        );
+      }
+    },
+    {
       key: 'address',
       title: 'Địa chỉ',
       render: (val, s) => val || s?.address || '—'
+    },
+    {
+      key: 'actions',
+      title: '',
+      width: '80px',
+      align: 'center',
+      render: (_, s) => (
+        <Button size="sm" variant="secondary" onClick={() => openSupplierModal(s)} disabled={!isOnline}>
+          Sửa
+        </Button>
+      )
     }
   ];
 
@@ -244,7 +296,7 @@ export default function PartnerPage({
                 Thêm khách hàng mới
               </Button>
             ) : (
-              <Button variant="primary" onClick={() => setShowAddSupplierModal(true)}>
+              <Button variant="primary" onClick={() => openSupplierModal()}>
                 Thêm nhà cung cấp mới
               </Button>
             )}
@@ -329,10 +381,10 @@ export default function PartnerPage({
       <Modal
         isOpen={showAddSupplierModal}
         onClose={() => setShowAddSupplierModal(false)}
-        title="Thêm nhà cung cấp hàng hóa mới"
-        width="460px"
+        title={editingSupplierId ? 'Sửa nhà cung cấp' : 'Thêm nhà cung cấp hàng hóa mới'}
+        width="520px"
       >
-        <form onSubmit={handleCreateSupplier}>
+        <form onSubmit={handleSaveSupplier}>
           <div className="partner-form-group">
             <label>Tên nhà cung cấp *</label>
             <input
@@ -375,6 +427,15 @@ export default function PartnerPage({
               placeholder="vd: 123 Lê Lợi, Q.1, TP.HCM"
               value={supplierForm.address}
               onChange={(e) => setSupplierForm({ ...supplierForm, address: e.target.value })}
+            />
+          </div>
+
+          <div className="partner-form-group">
+            <label>Danh mục sản phẩm cung cấp</label>
+            <SupplierCategoryPicker
+              options={categoryOptions}
+              value={supplierForm.categories}
+              onChange={(categories) => setSupplierForm((f) => ({ ...f, categories }))}
             />
           </div>
 

@@ -19,6 +19,7 @@ const STATUS = {
 
 const errMsg = (err, fallback) => err?.response?.data?.message || fallback;
 const remainingOf = (l) => Math.max(0, (l.orderedQty || 0) - (l.receivedQty || 0));
+const catKey = (c) => (c || '').trim().toLowerCase();
 
 /**
  * Đơn đặt hàng nhà cung cấp: lập nháp từ đề xuất AI (mỗi NCC một đơn) hoặc tạo tay, sửa số lượng / đơn giá,
@@ -38,6 +39,8 @@ export default function PurchaseOrderPage() {
   const [receiveExpiry, setReceiveExpiry] = useState({});
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Mặc định ô NCC chỉ hiện NCC có bán danh mục của mặt hàng trong đơn; bật để chọn NCC bất kỳ
+  const [showAllSuppliers, setShowAllSuppliers] = useState(false);
 
   const loadList = async () => {
     try {
@@ -51,6 +54,11 @@ export default function PurchaseOrderPage() {
   };
 
   const select = (order) => {
+    if (order?.id !== current?.id) {
+      setShowAllSuppliers(false);
+      // Danh mục NCC có thể vừa sửa ở trang Đối tác: tải lại để gợi ý đúng
+      purchaseService.getSuppliers().then(setSuppliers).catch(() => {});
+    }
     setCurrent(order);
     const qty = {};
     (order?.lines || []).forEach((l) => {
@@ -119,7 +127,11 @@ export default function PurchaseOrderPage() {
   const createFromAi = async () => {
     const created = await run(
       () => purchaseOrderService.fromForecast(days),
-      (list) => `Đã lập ${list.length} đơn nháp từ đề xuất AI (${days} ngày). Kiểm tra số lượng, chọn NCC rồi gửi đơn.`
+      (list) => {
+        const noSupplier = list.find((o) => !o.supplierId);
+        return `Đã lập ${list.length} đơn nháp từ đề xuất AI (${days} ngày), mỗi NCC một đơn theo danh mục.`
+          + (noSupplier ? ` ${noSupplier.lines?.length || 0} mặt hàng chưa có NCC bán đúng danh mục, nằm ở đơn #${noSupplier.id}.` : ' Kiểm tra số lượng rồi gửi đơn.');
+      }
     );
     if (created?.length) await refreshWith(created[0]);
   };
@@ -132,6 +144,50 @@ export default function PurchaseOrderPage() {
   const editable = current?.status === 'DRAFT';
   const receivable = current?.status === 'SENT' || current?.status === 'PARTIALLY_RECEIVED';
   const lines = useMemo(() => current?.lines || [], [current]);
+
+  // Danh mục của từng dòng: lấy trên dòng đơn, đơn cũ chưa lưu thì tra theo sản phẩm
+  const productCategory = useMemo(() => new Map(products.map((p) => [p.id, p.category])), [products]);
+  const lineCategory = (l) => l.category || productCategory.get(l.productId) || null;
+  const orderCategories = useMemo(() => {
+    const m = new Map();
+    lines.forEach((l) => {
+      const c = lineCategory(l);
+      if (c) m.set(catKey(c), c);
+    });
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, productCategory]);
+  const supplierCats = (sup) => new Set((sup?.categories || []).map(catKey));
+  const anySupplierHasCategories = suppliers.some((sup) => (sup.categories || []).length > 0);
+  const currentSupplier = suppliers.find((sup) => sup.id === current?.supplierId);
+
+  /** NCC gợi ý cho đơn: bán ít nhất một danh mục trong đơn, NCC bán đủ lên trước */
+  const supplierChoices = useMemo(() => {
+    const total = orderCategories.size;
+    const rows = suppliers.map((sup) => {
+      const cats = supplierCats(sup);
+      const matched = [...orderCategories.keys()].filter((k) => cats.has(k)).length;
+      return { sup, matched, total };
+    });
+    if (showAllSuppliers || !anySupplierHasCategories || total === 0) return { rows, filtered: false };
+    const fit = rows.filter((r) => r.matched > 0 || r.sup.id === current?.supplierId).sort((a, b) => b.matched - a.matched);
+    return { rows: fit, filtered: true };
+  }, [suppliers, orderCategories, showAllSuppliers, anySupplierHasCategories, current?.supplierId]);
+
+  const supplierLabel = ({ sup, matched, total }) => {
+    if (!anySupplierHasCategories || total === 0) return sup.name;
+    if (matched === total) return `${sup.name} (đủ danh mục)`;
+    if (matched === 0) return `${sup.name} (không bán danh mục trong đơn)`;
+    return `${sup.name} (bán ${matched}/${total} danh mục)`;
+  };
+
+  // Danh mục trong đơn mà NCC đang chọn không bán
+  const mismatchedCategories = currentSupplier && anySupplierHasCategories
+    ? [...orderCategories.entries()].filter(([k]) => !supplierCats(currentSupplier).has(k)).map(([, c]) => c)
+    : [];
+  const unsoldCategories = anySupplierHasCategories
+    ? [...orderCategories.entries()].filter(([k]) => !suppliers.some((sup) => supplierCats(sup).has(k))).map(([, c]) => c)
+    : [];
 
   const saveLines = (nextLines) =>
     run(() =>
@@ -209,7 +265,13 @@ export default function PurchaseOrderPage() {
       render: (v, l) => (
         <div>
           <div>{v}</div>
-          <div className="mp-muted">{l.barcode}</div>
+          <div className="mp-muted">
+            {l.barcode}
+            {lineCategory(l) ? ` · ${lineCategory(l)}` : ''}
+            {currentSupplier && mismatchedCategories.some((c) => catKey(c) === catKey(lineCategory(l))) && (
+              <span style={{ color: 'var(--danger-600)' }}> · NCC đang chọn không bán danh mục này</span>
+            )}
+          </div>
           {l.forecastNote && (
             <div className="mp-muted" title="Lý do AI đề xuất">
               AI: {l.forecastNote}
@@ -383,8 +445,8 @@ export default function PurchaseOrderPage() {
                 </svg>
                 <strong>Chưa chọn đơn đặt hàng</strong>
                 <span>
-                  Chọn một đơn bên trái, hoặc bấm “Lập đơn từ đề xuất AI” để hệ thống gom các mặt hàng cần nhập theo nhà
-                  cung cấp gần nhất.
+                  Chọn một đơn bên trái, hoặc bấm “Lập đơn từ đề xuất AI” để hệ thống gom các mặt hàng cần nhập theo
+                  nhà cung cấp có bán đúng danh mục.
                 </span>
               </div>
             ) : (
@@ -414,12 +476,24 @@ export default function PurchaseOrderPage() {
                 <div className="mp-card-pad" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', borderTop: '1px solid var(--border-subtle)' }}>
                   <label className="mp-muted" htmlFor="po-supplier">Nhà cung cấp</label>
                   {editable ? (
-                    <select id="po-supplier" className="mp-select" value={current.supplierId || ''} onChange={(e) => e.target.value && setSupplier(e.target.value)}>
-                      <option value="">Chọn nhà cung cấp...</option>
-                      {suppliers.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
+                    <>
+                      <select id="po-supplier" className="mp-select" value={current.supplierId || ''} onChange={(e) => e.target.value && setSupplier(e.target.value)}>
+                        <option value="">
+                          {supplierChoices.filtered && supplierChoices.rows.length === 0
+                            ? 'Chưa có NCC nào bán danh mục trong đơn'
+                            : 'Chọn nhà cung cấp...'}
+                        </option>
+                        {supplierChoices.rows.map((r) => (
+                          <option key={r.sup.id} value={r.sup.id}>{supplierLabel(r)}</option>
+                        ))}
+                      </select>
+                      {anySupplierHasCategories && orderCategories.size > 0 && (
+                        <label className="mp-muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <input type="checkbox" checked={showAllSuppliers} onChange={(e) => setShowAllSuppliers(e.target.checked)} />
+                          Hiện tất cả NCC
+                        </label>
+                      )}
+                    </>
                   ) : (
                     <strong>{current.supplierName || '—'}</strong>
                   )}
@@ -430,6 +504,16 @@ export default function PurchaseOrderPage() {
                     <span>{current.expectedDate || '—'}</span>
                   )}
                   {current.sentAt && <span className="mp-muted">Gửi lúc {formatDateTime(current.sentAt)}</span>}
+                  {editable && unsoldCategories.length > 0 && (
+                    <span className="mp-muted" style={{ flexBasis: '100%' }}>
+                      Chưa NCC nào bán danh mục: {unsoldCategories.join(', ')}. Gán danh mục cho NCC ở trang Đối tác.
+                    </span>
+                  )}
+                  {editable && mismatchedCategories.length > 0 && (
+                    <span style={{ flexBasis: '100%', color: 'var(--danger-600)', fontSize: 13 }}>
+                      {currentSupplier.name} không bán: {mismatchedCategories.join(', ')}. Bỏ các mặt hàng này khỏi đơn hoặc chọn NCC khác.
+                    </span>
+                  )}
                 </div>
 
                 {editable && (

@@ -39,6 +39,10 @@ public class PurchaseOrderLine {
     @Column(length = 50)
     private String barcode;
 
+    /** Danh mục sản phẩm lúc thêm vào đơn, để gợi ý NCC có bán danh mục này */
+    @Column(length = 100)
+    private String category;
+
     @Column(name = "ordered_qty", nullable = false)
     private Integer orderedQty;
 

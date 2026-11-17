@@ -25,6 +25,13 @@ public class SupplierController {
         return ResponseEntity.ok(ApiResponse.ok(supplierService.getAllSuppliers()));
     }
 
+    @GetMapping("/categories")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @Operation(summary = "Danh mục sản phẩm để gán cho nhà cung cấp")
+    public ResponseEntity<ApiResponse<List<String>>> categories() {
+        return ResponseEntity.ok(ApiResponse.ok(supplierService.getCategoryOptions()));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Xem chi tiết nhà cung cấp theo ID")
@@ -37,5 +44,12 @@ public class SupplierController {
     @Operation(summary = "Tạo mới nhà cung cấp")
     public ResponseEntity<ApiResponse<Supplier>> create(@RequestBody Supplier supplier) {
         return ResponseEntity.ok(ApiResponse.ok("Tạo nhà cung cấp thành công", supplierService.createSupplier(supplier)));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @Operation(summary = "Sửa nhà cung cấp (tên, liên hệ, danh mục cung cấp)")
+    public ResponseEntity<ApiResponse<Supplier>> update(@PathVariable Long id, @RequestBody Supplier supplier) {
+        return ResponseEntity.ok(ApiResponse.ok("Cập nhật nhà cung cấp thành công", supplierService.updateSupplier(id, supplier)));
     }
 }

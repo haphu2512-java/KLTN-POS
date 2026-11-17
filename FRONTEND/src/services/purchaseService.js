@@ -25,4 +25,15 @@ export const purchaseService = {
     const res = await api.post('/suppliers', supplierData);
     return res?.data !== undefined ? res.data : res;
   },
+
+  async updateSupplier(id, supplierData) {
+    const res = await api.put(`/suppliers/${id}`, supplierData);
+    return res?.data !== undefined ? res.data : res;
+  },
+
+  /** Danh mục sản phẩm để gán cho nhà cung cấp */
+  async getSupplierCategories() {
+    const res = await api.get('/suppliers/categories');
+    return Array.isArray(res) ? res : (res?.data || []);
+  },
 };

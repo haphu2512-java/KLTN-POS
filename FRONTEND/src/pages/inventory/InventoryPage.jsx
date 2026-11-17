@@ -346,7 +346,7 @@ export default function InventoryPage({
       try {
         // Chi nhánh và người nhập do máy chủ lấy từ phiên đăng nhập
         const payload = {
-          supplierId: Number(newStockIn.supplierId) || 1,
+          supplierId: Number(newStockIn.supplierId) || null,
           note: newStockIn.note || '',
           clientRequestId: newStockIn.requestId || newRequestId(),
           items: newStockIn.items.map(it => ({

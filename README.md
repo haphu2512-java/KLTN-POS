@@ -188,7 +188,7 @@ cd AI_FORECAST && pip install -r requirements-dev.txt && python -m pytest   # xe
 - [x] Dockerfile đa giai đoạn (`maven:3.9-eclipse-temurin-21-alpine` → JRE 21) + `docker-compose.yml`
 - [x] Trang Tài khoản (`StaffPage.jsx`): tạo tài khoản, phân quyền 4 vai trò, phân công chi nhánh, khóa/mở, đổi mật khẩu
 - [x] Ca làm (`ShiftsPage.jsx`): lịch ca theo chi nhánh, xếp ca, mở/đóng ca, thu chi két, đối soát và duyệt ca lệch tiền
-- [x] Đối tác (`PartnerPage.jsx`): khách hàng thân thiết + tích điểm, nhà cung cấp
+- [x] Đối tác (`PartnerPage.jsx`): khách hàng thân thiết + tích điểm, nhà cung cấp kèm danh mục sản phẩm cung cấp
 - [x] App điện thoại (`MOBILE/`): quét mã gửi vào giỏ của quầy đã ghép, tra giá/tồn kho, hàng đợi ngoại tuyến, gán mã vạch cho sản phẩm
 
 ## Giai đoạn 6b — Vận hành, bảo mật & hoàn thiện nghiệp vụ ✅
@@ -197,7 +197,7 @@ cd AI_FORECAST && pip install -r requirements-dev.txt && python -m pytest   # xe
 - [x] **Nhật ký thao tác (audit log):** ghi ai làm gì, lúc nào, ở chi nhánh nào cho các thao tác nhạy cảm (đổi giá, giảm giá vượt hạn mức, duyệt PIN, hoàn trả, mở/đóng ca lệch tiền, nhập/điều chuyển/điều chỉnh kho, đơn đặt hàng, tài khoản, đăng nhập sai); trang **Nhật ký** lọc theo thời gian, loại, người làm
 - [x] **Trả hàng một phần:** trả từng món / từng số lượng, tiền hoàn chia theo tỉ lệ giảm giá của hóa đơn, hoàn và thu hồi điểm tương ứng, giới hạn số ngày được trả (`POS_RETURN_DAYS`), thu ngân cần quản lý nhập PIN duyệt; in phiếu hoàn trả; ca và báo cáo tính đúng doanh thu thuần
 - [x] **Kiểm kê kho:** tạo phiếu, quét mã để đếm, chênh lệch phải có lý do (hỏng, hết hạn, mất, đếm sai...), quản lý duyệt thì tồn được điều chỉnh; báo cáo hao hụt theo lý do
-- [x] **Đặt hàng nhà cung cấp từ đề xuất AI:** một nút lập đơn nháp theo đề xuất nhập hàng của dự báo (mỗi nhà cung cấp một đơn), sửa số lượng, gửi, nhận hàng đủ hoặc từng phần; mỗi lần nhận tạo phiếu nhập kho. Khép kín vòng *dự báo → đặt hàng → nhận hàng → tồn kho*
+- [x] **Đặt hàng nhà cung cấp từ đề xuất AI:** một nút lập đơn nháp theo đề xuất nhập hàng của dự báo (mỗi nhà cung cấp một đơn, mặt hàng chỉ vào đơn của NCC có bán đúng danh mục; mặt hàng chưa NCC nào bán gom vào đơn chưa chọn NCC), sửa số lượng, gửi, nhận hàng đủ hoặc từng phần; mỗi lần nhận tạo phiếu nhập kho. Khép kín vòng *dự báo → đặt hàng → nhận hàng → tồn kho*
 - [x] **Lô hàng và hạn sử dụng:** khai số lô, hạn dùng khi nhập; cảnh báo hàng cận date / hết hạn ở trang Kho (giả định bán theo FEFO); lập phiếu hủy hàng hết hạn qua kiểm kê
 - [x] **Xuất báo cáo Excel** (`GET /api/reports/export`, Apache POI)
 - [x] **Kiểm thử frontend** bằng Vitest (tính tiền trả hàng, công thức dự báo, in hóa đơn, phân quyền); **Flyway** (`db/migration/V1__baseline.sql`) cho môi trường thật với `JPA_DDL_AUTO=validate`
@@ -368,13 +368,15 @@ Mọi API (trừ đăng nhập và `/api/scanner/ping`) cần header `Authorizat
 | GET | `/api/stock-in?branchId=`, `/api/stock-in/{id}` | Phiếu nhập kho |
 | POST | `/api/stock-in` | Tạo phiếu nhập (cộng tồn kho) |
 | GET | `/api/suppliers`, `/api/suppliers/{id}` | Nhà cung cấp |
-| POST | `/api/suppliers` | Tạo nhà cung cấp |
+| POST | `/api/suppliers` | Tạo nhà cung cấp (kèm `categories`: danh mục cung cấp) |
+| PUT | `/api/suppliers/{id}` | Sửa nhà cung cấp và danh mục cung cấp |
+| GET | `/api/suppliers/categories` | Danh mục sản phẩm để gán cho nhà cung cấp |
 
 ### Purchase orders, kiểm kê, hạn dùng
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
 | GET / POST | `/api/purchase-orders` | Danh sách / tạo đơn đặt hàng tay |
-| POST | `/api/purchase-orders/from-forecast?days=` | Lập đơn nháp từ đề xuất AI, mỗi nhà cung cấp một đơn |
+| POST | `/api/purchase-orders/from-forecast?days=` | Lập đơn nháp từ đề xuất AI, mỗi nhà cung cấp một đơn theo danh mục NCC bán |
 | PUT | `/api/purchase-orders/{id}` | Sửa đơn nháp (NCC, số lượng, đơn giá, ngày giao) |
 | POST | `/api/purchase-orders/{id}/send`, `/receive`, `/cancel` | Gửi đơn, nhận hàng (đủ hoặc từng phần, tạo phiếu nhập), hủy |
 | GET / POST | `/api/stock-counts` | Danh sách / tạo phiếu kiểm kê |
