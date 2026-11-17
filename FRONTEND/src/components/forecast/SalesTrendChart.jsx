@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './SalesTrendChart.css';
 
 /**
@@ -13,13 +13,26 @@ export default function SalesTrendChart({
   title = 'Xu Hướng Bán Hàng & Dự Báo Nhu Cầu'
 }) {
   const [hoveredPoint, setHoveredPoint] = useState(null);
+  const containerRef = useRef(null);
+  const [width, setWidth] = useState(800);
+
+  // Vẽ theo đúng bề rộng thật của khung để chữ không bị kéo giãn
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(([entry]) => {
+      const w = Math.round(entry.contentRect.width);
+      if (w > 0) setWidth(w);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const totalPoints = actualData.length + forecastData.length;
   if (totalPoints === 0) return null;
 
   // Coordinate math
-  const width = 800;
-  const height = 200;
+  const height = 220;
   const paddingLeft = 45;
   const paddingRight = 30;
   const paddingTop = 20;
@@ -58,6 +71,9 @@ export default function SalesTrendChart({
     .join(' ');
 
   const allLabels = [...actualLabels, ...forecastLabels];
+  // Mỗi nhãn ngày cần ~50px; tính bước từ nhãn cuối ngược về để nhãn cuối không đè nhãn trước nó
+  const maxLabels = Math.max(2, Math.floor(chartWidth / 50));
+  const labelStep = Math.max(1, Math.ceil(totalPoints / maxLabels));
 
   return (
     <div className="chart-wrapper">
@@ -75,11 +91,10 @@ export default function SalesTrendChart({
         </div>
       </div>
 
-      <div className="chart-svg-container">
+      <div className="chart-svg-container" ref={containerRef}>
         <svg
           viewBox={`0 0 ${width} ${height}`}
           className="chart-svg"
-          preserveAspectRatio="none"
         >
           {/* Y Axis Grid Lines */}
           {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
@@ -157,9 +172,9 @@ export default function SalesTrendChart({
             );
           })}
 
-          {/* X Axis Labels (Every 2-3 points to prevent clutter) */}
+          {/* X Axis Labels (thưa ra theo bề rộng biểu đồ) */}
           {allLabels.map((lbl, idx) => {
-            if (idx % 2 !== 0 && idx !== allLabels.length - 1) return null;
+            if ((allLabels.length - 1 - idx) % labelStep !== 0) return null;
             return (
               <text
                 key={`x-${idx}`}
