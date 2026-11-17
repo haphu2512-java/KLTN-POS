@@ -190,10 +190,10 @@ class BranchLoginIntegrationTest {
                 .andExpect(jsonPath("$.code").value("BRANCH_MISMATCH"));
 
         mvc.perform(post("/api/stock-in").header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"branchId\":1,\"items\":[{\"productId\":1,\"quantity\":5}]}"))
+                        .content("{\"branchId\":1,\"supplierId\":1,\"items\":[{\"productId\":1,\"quantity\":5}]}"))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/stock-in").header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"items\":[{\"productId\":1,\"quantity\":5}]}"))
+                        .content("{\"supplierId\":1,\"items\":[{\"productId\":1,\"quantity\":5}]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.branch.id").value(2));
 

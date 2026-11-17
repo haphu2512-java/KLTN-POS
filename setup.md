@@ -191,6 +191,8 @@ Các file hiện có:
 |------|----------|
 | `V1__baseline.sql` | Toàn bộ bảng ban đầu |
 | `V2__merge_roles_into_staff.sql` | Gộp vai trò `CASHIER` và `WAREHOUSE` thành `STAFF`; cột `users.role` chỉ còn `ADMIN`, `MANAGER`, `STAFF` |
+| `V3__supplier_category.sql` | Bảng `supplier_category` (danh mục hàng mỗi NCC cung cấp), cột `purchase_order_line.category` |
+| `V4__stock_in_purchase_order.sql` | Cột `stock_in.purchase_order_id`: phiếu nhập sinh ra từ nhận hàng ghi lại mã đơn đặt hàng gốc |
 
 Database đang chạy với `JPA_DDL_AUTO=update` (không bật Flyway) mà còn tài khoản vai trò cũ thì chạy tay nội dung file V2 một lần, nếu không backend sẽ lỗi khi đọc các tài khoản đó:
 
@@ -272,6 +274,14 @@ Với MySQL cài tay:
 mysql -uroot -p pos_inventory < data/bhx/import_bhx_data.sql
 ```
 
+Cuối file có khối **nhà cung cấp và danh mục hàng cung cấp**: 18 NCC phủ đủ mọi danh mục sản phẩm, vì phiếu nhập kho, gửi đơn đặt hàng và lập đơn từ AI chỉ cho dùng NCC có bán danh mục của mặt hàng. Database đã nạp file này từ trước (chưa có khối đó) thì chạy riêng phần NCC, chạy lại nhiều lần không sao và không xóa danh mục đã gán tay ở trang Đối tác:
+
+```bash
+docker exec -i pos-mysql mysql -uroot -p"<DB_ROOT_PASSWORD>" pos_inventory < data/bhx/nha_cung_cap.sql
+```
+
+Lệnh in ra danh sách "Danh mục chưa có NCC"; danh sách rỗng là đủ.
+
 Sau khi nạp, **khởi động lại backend** để bước đồng bộ mã vạch chạy lại. Mã vạch trong file đã ở dạng mã nội bộ `20...` nên thường không đổi gì.
 
 Các file đi kèm trong `data/bhx/`: `bhx_products_scraped.json` là dữ liệu thô, `scrape_bhx.py` là script đã dùng để lấy dữ liệu (chạy trong thư mục đó). Không cần chạy lại chúng.
@@ -287,6 +297,7 @@ docker exec -i pos-mysql mysql -uroot -p"<DB_ROOT_PASSWORD>" pos_inventory < dat
 - Chỉ thêm dữ liệu có ghi chú `[DEMO]`. Chạy lại thì dữ liệu `[DEMO]` cũ được xóa rồi tạo lại.
 - Đặt lại số tồn kho của 120 sản phẩm đó để có hàng "Khẩn cấp", "Sắp hết" và "Còn đủ".
 - Xóa cache dự báo nên không cần khởi động lại backend.
+- Tạo thêm đơn đặt hàng và phiếu nhập mẫu đúng NCC theo danh mục: mỗi chi nhánh, mỗi NCC một đơn đã nhận đủ (phiếu nhập ghi mã đơn gốc) và một đơn "Đã gửi NCC" để thử nhận hàng. Cần chạy `data/bhx/nha_cung_cap.sql` trước nếu database cũ chưa có danh mục NCC, và backend bản mới đã chạy ít nhất một lần (có cột `stock_in.purchase_order_id`).
 - Muốn đổi số ngày hoặc số sản phẩm, sửa `@demo_days` và `@demo_max_products` ở đầu file.
 - Chạy mất khoảng 10 giây.
 

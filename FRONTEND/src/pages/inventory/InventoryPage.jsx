@@ -154,6 +154,8 @@ export default function InventoryPage({
               id: s.code || `NK-${s.id}`,
               supplierId: s.supplier?.id || s.supplierId,
               supplierName: s.supplier?.name || 'Nhà cung cấp',
+              // Phiếu sinh ra từ nhận hàng theo đơn đặt hàng thì có mã đơn gốc; null = nhập tự do
+              purchaseOrderId: s.purchaseOrderId || null,
               branchId: s.branch?.id || currentBranchId,
               branchName: s.branch?.name || `Chi nhánh ${currentBranchId}`,
               createdDate: created ? new Date(created).toLocaleString('vi-VN') : new Date().toLocaleString('vi-VN'),
@@ -361,6 +363,7 @@ export default function InventoryPage({
         if (created && created.id) {
           newStockIn.id = created.code || `NK-${created.id}`;
         }
+        newStockIn.purchaseOrderId = null;
       } catch (err) {
         // Server từ chối (ví dụ tài khoản thu ngân không có quyền nhập kho): không cộng kho giả trên giao diện
         if (err.response) {
@@ -626,6 +629,11 @@ export default function InventoryPage({
     }
   ];
 
+  const openPurchaseOrder = (orderId) => {
+    setSelectedSlip(null);
+    navigate('/purchase-orders', { state: { openOrderId: orderId } });
+  };
+
   // Table columns for Stock-in History
   const historyColumns = [
     {
@@ -637,6 +645,19 @@ export default function InventoryPage({
           {val}
         </span>
       )
+    },
+    {
+      key: 'purchaseOrderId',
+      title: 'Đơn đặt hàng gốc',
+      width: '130px',
+      render: (val) =>
+        val ? (
+          <Button size="sm" variant="ghost" onClick={() => openPurchaseOrder(val)} title="Mở đơn đặt hàng đã sinh ra phiếu này">
+            Đơn #{val}
+          </Button>
+        ) : (
+          <span className="text-muted" title="Phiếu lập trực tiếp ở trang Kho hàng, không theo đơn đặt hàng">Nhập tự do</span>
+        )
     },
     {
       key: 'supplierName',
@@ -993,6 +1014,8 @@ export default function InventoryPage({
         branchId={branchId}
         branchName={branchName}
         onSaveStockIn={handleSaveStockIn}
+        history={stockInHistory}
+        onOpenPartners={() => { closeStockIn(); navigate('/partners'); }}
       />
 
       <StockTransferModal
@@ -1009,6 +1032,7 @@ export default function InventoryPage({
         isOpen={!!selectedSlip}
         onClose={() => setSelectedSlip(null)}
         slip={selectedSlip}
+        onOpenPurchaseOrder={openPurchaseOrder}
       />
 
       <ProductFormModal

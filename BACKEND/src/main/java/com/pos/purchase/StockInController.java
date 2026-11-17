@@ -38,12 +38,12 @@ public class StockInController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    @Operation(summary = "Tạo phiếu nhập kho cho chi nhánh đang đăng nhập (tự động cộng tồn kho)")
+    @Operation(summary = "Tạo phiếu nhập tự do cho chi nhánh đang đăng nhập (NCC phải bán danh mục của mọi mặt hàng; tự cộng tồn kho)")
     public ResponseEntity<ApiResponse<StockIn>> create(@Valid @RequestBody StockInRequest req) {
         User actor = currentUserService.getCurrentUser();
         req.setBranchId(currentUserService.branchForWrite(req.getBranchId()));
         req.setEmployeeId(actor.getId());
-        StockIn created = stockInService.createStockIn(req);
+        StockIn created = stockInService.createManualStockIn(req);
         return ResponseEntity.ok(ApiResponse.ok("Tạo phiếu nhập kho thành công", created));
     }
 }

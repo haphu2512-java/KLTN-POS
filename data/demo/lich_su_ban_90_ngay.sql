@@ -6,7 +6,8 @@
 --   docker exec -i pos-mysql mysql -uroot -p"$DB_ROOT_PASSWORD" pos_inventory < data/demo/lich_su_ban_90_ngay.sql
 --
 -- Script này:
---   * CHỈ THÊM hóa đơn và ca làm mẫu (đánh dấu note/opening_note = '[DEMO]').
+--   * CHỈ THÊM hóa đơn, ca làm, đơn đặt hàng và phiếu nhập mẫu (đánh dấu
+--     note/opening_note bắt đầu bằng '[DEMO]').
 --     Không xóa sản phẩm, tài khoản, khách hàng hay hóa đơn thật.
 --   * Chạy lại nhiều lần được: lần sau sẽ xóa dữ liệu '[DEMO]' cũ rồi tạo lại.
 --   * Đặt lại số tồn kho của các sản phẩm được chọn để có đủ mức
@@ -16,6 +17,8 @@
 --
 -- Yêu cầu: backend đã chạy ít nhất 1 lần (đã có bảng, chi nhánh, ca làm,
 -- tài khoản và sản phẩm). Hôm nay không có dữ liệu, chuỗi kết thúc hôm qua.
+-- Đơn đặt hàng / phiếu nhập mẫu cần bảng supplier_category có dữ liệu
+-- (data/bhx/nha_cung_cap.sql) và cột stock_in.purchase_order_id (backend bản mới).
 -- Muốn đổi số ngày hoặc số sản phẩm: sửa @demo_days và @demo_max_products.
 -- =====================================================================
 
@@ -278,7 +281,97 @@ FROM (
 ON DUPLICATE KEY UPDATE quantity = VALUES(quantity);
 
 -- ---------------------------------------------------------------------
--- 9. Dọn bảng tạm và in tóm tắt
+-- 9. Đơn đặt hàng và phiếu nhập mẫu, đúng NCC theo danh mục
+--    Mỗi chi nhánh, mỗi NCC: một đơn đã nhận đủ cách đây ~3 tuần, phiếu nhập
+--    gắn mã đơn gốc (cột "Đơn đặt hàng gốc" ở lịch sử nhập kho). Thêm một đơn
+--    "Đã gửi NCC" 2 ngày trước để demo nhận hàng. NCC lấy theo bảng
+--    supplier_category (chạy data/bhx/nha_cung_cap.sql nếu database cũ chưa có).
+--    Không đổi tồn kho (đã đặt ở bước 8).
+-- ---------------------------------------------------------------------
+DELETE d FROM stock_in_detail d JOIN stock_in s ON s.id = d.stock_in_id WHERE s.note LIKE '[DEMO]%';
+DELETE FROM stock_in WHERE note LIKE '[DEMO]%';
+DELETE l FROM purchase_order_line l JOIN purchase_order o ON o.id = l.purchase_order_id WHERE o.note LIKE '[DEMO]%';
+DELETE FROM purchase_order WHERE note LIKE '[DEMO]%';
+DROP TABLE IF EXISTS demo_tmp_po_line, demo_tmp_po;
+
+-- NCC cho từng sản phẩm demo: NCC có id nhỏ nhất bán danh mục của sản phẩm
+CREATE TABLE demo_tmp_po_line AS
+SELECT b.bid, p.pid, pr.name AS pname, pr.barcode, pr.category,
+       (SELECT MIN(sc.supplier_id) FROM supplier_category sc WHERE sc.category = pr.category) AS sid,
+       20 + (p.pid % 5) * 10 AS qty,
+       p.cost
+FROM demo_tmp_branch b
+CROSS JOIN demo_tmp_prod p
+JOIN product pr ON pr.id = p.pid;
+DELETE FROM demo_tmp_po_line WHERE sid IS NULL;
+
+CREATE TABLE demo_tmp_po AS
+SELECT DISTINCT bid, sid, CAST(NULL AS SIGNED) AS po_id FROM demo_tmp_po_line;
+
+INSERT INTO purchase_order (branch_id, supplier_id, supplier_name, status, source, note, expected_date,
+                            created_by, created_at, sent_at, closed_at)
+SELECT t.bid, t.sid, s.name, 'RECEIVED', 'MANUAL', CONCAT('[DEMO] Đơn nhập mẫu ', t.bid, '-', t.sid),
+       CURDATE() - INTERVAL 18 DAY, b.emp_id,
+       TIMESTAMP(CURDATE() - INTERVAL 21 DAY, '09:00:00'),
+       TIMESTAMP(CURDATE() - INTERVAL 21 DAY, '10:00:00'),
+       TIMESTAMP(CURDATE() - INTERVAL 18 DAY, '08:30:00')
+FROM demo_tmp_po t
+JOIN supplier s ON s.id = t.sid
+JOIN demo_tmp_branch b ON b.bid = t.bid;
+
+UPDATE demo_tmp_po t
+JOIN purchase_order o ON o.note = CONCAT('[DEMO] Đơn nhập mẫu ', t.bid, '-', t.sid)
+SET t.po_id = o.id;
+
+INSERT INTO purchase_order_line (purchase_order_id, product_id, product_name, barcode, category,
+                                 ordered_qty, received_qty, unit_cost)
+SELECT t.po_id, l.pid, l.pname, l.barcode, l.category, l.qty, l.qty, l.cost
+FROM demo_tmp_po_line l
+JOIN demo_tmp_po t ON t.bid = l.bid AND t.sid = l.sid;
+
+-- Phiếu nhập sinh ra khi nhận đủ đơn, ghi lại mã đơn gốc
+INSERT INTO stock_in (branch_id, supplier_id, purchase_order_id, employee_id, total_cost, note, created_at)
+SELECT t.bid, t.sid, t.po_id, b.emp_id,
+       (SELECT SUM(l.qty * l.cost) FROM demo_tmp_po_line l WHERE l.bid = t.bid AND l.sid = t.sid),
+       CONCAT('[DEMO] Nhận hàng theo đơn đặt #', t.po_id),
+       TIMESTAMP(CURDATE() - INTERVAL 18 DAY, '08:30:00')
+FROM demo_tmp_po t
+JOIN demo_tmp_branch b ON b.bid = t.bid;
+
+INSERT INTO stock_in_detail (stock_in_id, product_id, quantity, unit_cost)
+SELECT si.id, l.pid, l.qty, l.cost
+FROM demo_tmp_po t
+JOIN stock_in si ON si.purchase_order_id = t.po_id AND si.note LIKE '[DEMO]%'
+JOIN demo_tmp_po_line l ON l.bid = t.bid AND l.sid = t.sid;
+
+-- Một đơn "Đã gửi NCC" mỗi chi nhánh (NCC có nhiều mặt hàng demo nhất, 5 mặt hàng) để demo nhận hàng
+INSERT INTO purchase_order (branch_id, supplier_id, supplier_name, status, source, note, expected_date,
+                            created_by, created_at, sent_at)
+SELECT x.bid, x.sid, s.name, 'SENT', 'MANUAL', CONCAT('[DEMO] Đơn chờ hàng về ', x.bid),
+       CURDATE() + INTERVAL 1 DAY, b.emp_id,
+       TIMESTAMP(CURDATE() - INTERVAL 2 DAY, '09:00:00'),
+       TIMESTAMP(CURDATE() - INTERVAL 2 DAY, '09:30:00')
+FROM (
+  SELECT bid, sid, ROW_NUMBER() OVER (PARTITION BY bid ORDER BY COUNT(*) DESC, sid) AS rn
+  FROM demo_tmp_po_line GROUP BY bid, sid
+) x
+JOIN supplier s ON s.id = x.sid
+JOIN demo_tmp_branch b ON b.bid = x.bid
+WHERE x.rn = 1;
+
+INSERT INTO purchase_order_line (purchase_order_id, product_id, product_name, barcode, category,
+                                 ordered_qty, received_qty, unit_cost)
+SELECT o.id, l.pid, l.pname, l.barcode, l.category, 24, 0, l.cost
+FROM purchase_order o
+JOIN (
+  SELECT l.*, ROW_NUMBER() OVER (PARTITION BY l.bid, l.sid ORDER BY l.pid) AS rn FROM demo_tmp_po_line l
+) l ON l.bid = o.branch_id AND l.sid = o.supplier_id AND l.rn <= 5
+WHERE o.note LIKE '[DEMO] Đơn chờ hàng về %';
+
+DROP TABLE IF EXISTS demo_tmp_po_line, demo_tmp_po;
+
+-- ---------------------------------------------------------------------
+-- 10. Dọn bảng tạm và in tóm tắt
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS demo_tmp_prod, demo_tmp_branch, demo_tmp_shift, demo_tmp_day,
                      demo_tmp_qty, demo_tmp_line, demo_tmp_inv;

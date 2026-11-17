@@ -107,4 +107,14 @@ class SplitByCategoryTest {
         assertThatThrownBy(() -> service.splitByCategory(40L)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("một danh mục");
     }
+
+    @Test
+    @DisplayName("Gửi đơn: NCC phải bán danh mục của mọi mặt hàng, cùng quy tắc với phiếu nhập tự do")
+    void sendRejectsSupplierNotSellingCategory() {
+        setup(1L);
+        assertThatThrownBy(() -> service.send(40L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getCode()).isEqualTo("SUPPLIER_CATEGORY_MISMATCH"))
+                .hasMessageContaining("Bánh gạo");
+    }
 }

@@ -33,6 +33,10 @@ public class StockIn {
     @JoinColumn(name = "supplier_id")
     private Supplier supplier;
 
+    /** Đơn đặt hàng sinh ra phiếu này (nhận hàng theo đơn); null = phiếu nhập tự do ở trang Kho hàng */
+    @Column(name = "purchase_order_id")
+    private Long purchaseOrderId;
+
     @Column(name = "employee_id")
     private Long employeeId;
 
