@@ -139,6 +139,8 @@ export default function ToastHost() {
           <ToastItem key={t.id} toast={t} onClose={() => remove(t.id)} />
         ))}
       </div>
+      {/* Hộp nhập luôn giữ nguyên khi có hộp xác nhận chen vào (xác nhận hiện đè lên trên), để không mất giá trị đang gõ */}
+      {currentPrompt && <PromptModal key={currentPrompt.id} prompt={currentPrompt} onDone={answerPrompt} />}
       {current && (
         <Modal
           isOpen
@@ -158,9 +160,6 @@ export default function ToastHost() {
         >
           <p className="confirm-message">{current.message}</p>
         </Modal>
-      )}
-      {!current && currentPrompt && (
-        <PromptModal key={currentPrompt.id} prompt={currentPrompt} onDone={answerPrompt} />
       )}
     </>
   );
