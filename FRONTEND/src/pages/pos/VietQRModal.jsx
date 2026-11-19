@@ -1,6 +1,17 @@
 import { Modal, Button } from '../../components/common';
 import { formatCurrency } from '../../utils/formatters';
 
+// Tài khoản nhận tiền VietQR, cấu hình trong FRONTEND/.env (xem .env.example).
+// Để trống thì dùng tài khoản mẫu bên dưới.
+const env = import.meta.env;
+const VIETQR_CONFIG = {
+  bankId: env.VITE_VIETQR_BANK_ID || 'MB',
+  accountNo: env.VITE_VIETQR_ACCOUNT_NO || '0388999888',
+  accountName: env.VITE_VIETQR_ACCOUNT_NAME || 'CUA HANG TIEN LOI POS',
+  bankLabel: env.VITE_VIETQR_BANK_LABEL || 'MB Bank (Quân Đội)',
+  template: env.VITE_VIETQR_TEMPLATE || 'compact2'
+};
+
 export default function VietQRModal({
   isOpen,
   onClose,
@@ -9,12 +20,10 @@ export default function VietQRModal({
   onConfirmSuccess
 }) {
   // Using QuickLink standard format: https://api.vietqr.io/image/970422-0908123456-compact2.jpg?amount=...&addInfo=...
-  const bankId = 'MB'; // MB Bank
-  const accountNo = '0388999888';
-  const accountName = 'CUA HANG TIEN LOI POS';
+  const { bankId, accountNo, accountName, bankLabel, template } = VIETQR_CONFIG;
   const transferContent = `POS ${orderId}`;
   
-  const qrUrl = `https://api.vietqr.io/image/${bankId}-${accountNo}-compact2.jpg?amount=${amount}&addInfo=${encodeURIComponent(
+  const qrUrl = `https://api.vietqr.io/image/${bankId}-${accountNo}-${template}.jpg?amount=${amount}&addInfo=${encodeURIComponent(
     transferContent
   )}&accountName=${encodeURIComponent(accountName)}`;
 
@@ -81,7 +90,7 @@ export default function VietQRModal({
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
             <span className="text-muted">Ngân hàng:</span>
-            <span className="font-medium">MB Bank (Quân Đội)</span>
+            <span className="font-medium">{bankLabel}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
             <span className="text-muted">Số tài khoản:</span>
