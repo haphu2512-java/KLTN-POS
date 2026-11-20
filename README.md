@@ -16,6 +16,7 @@
 
 | File | Nội dung |
 |------|----------|
+| [`docs/HANDOVER.md`](docs/HANDOVER.md) | **Ghi chú bàn giao**: đọc trước tiên khi tiếp quản dự án (trạng thái, quy ước, mốc nộp/bảo vệ) |
 | `README.md` | Tổng quan, cách chạy, kiến trúc, danh sách API |
 | [`setup.md`](setup.md) | Dựng lại toàn bộ hệ thống từ máy trắng, từng bước cho người mới |
 | [`AI_for_POS.md`](AI_for_POS.md) | Bài toán, công thức và kiến trúc module dự báo AI |
