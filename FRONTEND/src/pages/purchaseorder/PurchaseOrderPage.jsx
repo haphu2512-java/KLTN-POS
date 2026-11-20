@@ -22,6 +22,11 @@ const STATUS = {
 const errMsg = (err, fallback) => err?.response?.data?.message || fallback;
 const remainingOf = (l) => Math.max(0, (l.orderedQty || 0) - (l.receivedQty || 0));
 const catKey = (c) => (c || '').trim().toLowerCase();
+// Ngày hôm nay theo giờ máy (yyyy-mm-dd), dùng để chặn ngày giao dự kiến ở quá khứ
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const ORDER_STATUS_OPTIONS = Object.entries(STATUS).map(([value, v]) => ({ value, label: v.label }));
 // Đơn chưa đóng luôn hiện trong danh sách dù lập ngày nào (đơn đã gửi thường chờ hàng về vài ngày)
@@ -54,6 +59,9 @@ export default function PurchaseOrderPage() {
   const [busy, setBusy] = useState(false);
   // Mặc định ô NCC chỉ hiện NCC có bán danh mục của mặt hàng trong đơn; bật để chọn NCC bất kỳ
   const [showAllSuppliers, setShowAllSuppliers] = useState(false);
+  // Lỗi của ô Ngày giao dự kiến (thiếu hoặc ở quá khứ) khi bấm Gửi nhà cung cấp
+  const [expectedError, setExpectedError] = useState(null);
+  const expectedRef = useRef(null);
 
   // Bộ lọc danh sách đơn bên trái: mặc định hôm nay, đơn chưa đóng luôn hiện
   const filter = useDateRangeFilter(orders, { openStatuses: OPEN_ORDER_STATUSES, matchKeyword: matchOrder });
@@ -72,6 +80,7 @@ export default function PurchaseOrderPage() {
   const select = (order) => {
     if (order?.id !== current?.id) {
       setShowAllSuppliers(false);
+      setExpectedError(null);
       // Danh mục NCC có thể vừa sửa ở trang Đối tác: tải lại để gợi ý đúng
       purchaseService.getSuppliers().then(setSuppliers).catch(() => {});
     }
@@ -243,10 +252,42 @@ export default function PurchaseOrderPage() {
 
   const setSupplier = (supplierId) =>
     run(() => purchaseOrderService.update(current.id, { supplierId: Number(supplierId) })).then((o) => o && refreshWith(o));
-  const setExpected = (date) =>
-    run(() => purchaseOrderService.update(current.id, { expectedDate: date || null })).then((o) => o && refreshWith(o));
+  const setExpected = (date) => {
+    if (!date) return;
+    if (date < todayStr()) {
+      setExpectedError('Ngày giao dự kiến không được ở quá khứ');
+      return;
+    }
+    setExpectedError(null);
+    return run(() => purchaseOrderService.update(current.id, { expectedDate: date })).then((o) => o && refreshWith(o));
+  };
+
+  const removeLine = async (line) => {
+    const last = lines.length === 1;
+    const ok = await confirmDialog(
+      `Xóa "${line.productName}" khỏi đơn #${current.id}?`
+        + (last ? ' Đây là mặt hàng cuối cùng, đơn sẽ trống và chưa gửi được cho đến khi thêm hàng.' : ''),
+      { title: 'Xóa mặt hàng khỏi đơn', confirmText: 'Xóa', cancelText: 'Không', danger: true }
+    );
+    if (!ok) return;
+    const o = await run(() => purchaseOrderService.removeLine(current.id, line.productId), `Đã xóa ${line.productName} khỏi đơn`);
+    if (o) await refreshWith(o);
+  };
 
   const send = async () => {
+    // Bắt buộc có ngày giao dự kiến, không ở quá khứ, trước khi gửi NCC
+    const err = !current.expectedDate
+      ? 'Chọn ngày giao dự kiến trước khi gửi đơn cho nhà cung cấp'
+      : current.expectedDate < todayStr()
+        ? 'Ngày giao dự kiến đã qua, chọn lại ngày từ hôm nay trở đi'
+        : null;
+    if (err) {
+      setExpectedError(err);
+      setMessage({ error: true, text: err });
+      expectedRef.current?.focus();
+      return;
+    }
+    setExpectedError(null);
     const o = await run(() => purchaseOrderService.send(current.id), 'Đã chuyển sang Đã gửi nhà cung cấp');
     if (o) await refreshWith(o);
   };
@@ -348,8 +389,11 @@ export default function PurchaseOrderPage() {
             onBlur={(e) => {
               const n = Math.max(0, Math.floor(Number(e.target.value) || 0));
               if (n !== v) {
-                if (n === 0) saveLines(lines.filter((x) => x.productId !== l.productId));
-                else patchLine(l, { orderedQty: n });
+                if (n === 0) {
+                  // Đặt 0 coi như muốn bỏ mặt hàng: hỏi lại, không đồng ý thì trả số cũ
+                  e.target.value = v;
+                  removeLine(l);
+                } else patchLine(l, { orderedQty: n });
               }
             }}
           />
@@ -383,6 +427,27 @@ export default function PurchaseOrderPage() {
         ),
     },
     { key: 'amount', title: 'Thành tiền', align: 'right', width: 120, render: (_, l) => formatCurrency((l.orderedQty || 0) * (Number(l.unitCost) || 0)) },
+    ...(editable
+      ? [{
+          key: 'remove',
+          title: '',
+          align: 'center',
+          width: 48,
+          render: (_, l) => (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => removeLine(l)}
+              title="Xóa mặt hàng khỏi đơn"
+              aria-label={`Xóa ${l.productName} khỏi đơn`}
+              style={{ color: 'var(--danger-600)' }}
+            >
+              ×
+            </Button>
+          ),
+        }]
+      : []),
     ...(current && current.status !== 'DRAFT'
       ? [{ key: 'receivedQty', title: 'Đã nhận', align: 'right', width: 90, render: (v) => v || 0 }]
       : []),
@@ -568,9 +633,29 @@ export default function PurchaseOrderPage() {
                   ) : (
                     <strong>{current.supplierName || '—'}</strong>
                   )}
-                  <label className="mp-muted" htmlFor="po-expected">Ngày giao dự kiến</label>
+                  <label className="mp-muted" htmlFor="po-expected">
+                    Ngày giao dự kiến{editable && <span style={{ color: 'var(--danger-600)' }}> *</span>}
+                  </label>
                   {editable ? (
-                    <input id="po-expected" type="date" className="mp-input" value={current.expectedDate || ''} onChange={(e) => setExpected(e.target.value)} />
+                    <>
+                      <input
+                        id="po-expected"
+                        ref={expectedRef}
+                        type="date"
+                        className="mp-input"
+                        min={todayStr()}
+                        value={current.expectedDate || ''}
+                        onChange={(e) => setExpected(e.target.value)}
+                        aria-invalid={!!expectedError}
+                        aria-describedby={expectedError ? 'po-expected-error' : undefined}
+                        style={expectedError ? { borderColor: 'var(--danger-600)', boxShadow: '0 0 0 2px rgba(220, 38, 38, 0.15)' } : undefined}
+                      />
+                      {expectedError && (
+                        <span id="po-expected-error" role="alert" style={{ color: 'var(--danger-600)', fontSize: 13 }}>
+                          {expectedError}
+                        </span>
+                      )}
+                    </>
                   ) : (
                     <span>{current.expectedDate || '—'}</span>
                   )}

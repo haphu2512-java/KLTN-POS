@@ -46,6 +46,12 @@ public class PurchaseOrderController {
         return ApiResponse.ok(service.update(id, req));
     }
 
+    @DeleteMapping("/{id}/lines/{productId}")
+    @Operation(summary = "Xóa một mặt hàng khỏi đơn nháp")
+    public ApiResponse<PurchaseOrder> removeLine(@PathVariable Long id, @PathVariable Long productId) {
+        return ApiResponse.ok("Đã xóa mặt hàng khỏi đơn", service.removeLine(id, productId));
+    }
+
     @PostMapping("/{id}/send")
     public ApiResponse<PurchaseOrder> send(@PathVariable Long id) {
         return ApiResponse.ok("Đã chuyển sang Đã gửi", service.send(id));
