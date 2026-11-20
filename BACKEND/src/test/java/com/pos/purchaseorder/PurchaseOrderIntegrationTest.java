@@ -20,6 +20,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -84,10 +85,27 @@ class PurchaseOrderIntegrationTest {
                         .content("{\"supplierId\":" + supplierId + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.supplierName").value("NCC đặt hàng test"));
+        // Chưa chọn ngày giao dự kiến thì không gửi được; ngày ở quá khứ bị từ chối
+        mvc.perform(post("/api/purchase-orders/" + id + "/send").header("Authorization", admin))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PO_EXPECTED_DATE_REQUIRED"));
+        mvc.perform(put("/api/purchase-orders/" + id).header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedDate\":\"" + java.time.LocalDate.now().minusDays(1) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PO_EXPECTED_DATE_PAST"));
+        mvc.perform(put("/api/purchase-orders/" + id).header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedDate\":\"" + java.time.LocalDate.now().plusDays(2) + "\"}"))
+                .andExpect(status().isOk());
+        // Xóa mặt hàng không có trong đơn thì báo không tìm thấy
+        mvc.perform(delete("/api/purchase-orders/" + id + "/lines/999999").header("Authorization", admin))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PO_LINE_NOT_FOUND"));
         mvc.perform(post("/api/purchase-orders/" + id + "/send").header("Authorization", admin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SENT"));
-        // Đã gửi thì không sửa được
+        // Đã gửi thì không xóa mặt hàng, không sửa được
+        mvc.perform(delete("/api/purchase-orders/" + id + "/lines/" + productId).header("Authorization", admin))
+                .andExpect(status().isConflict());
         mvc.perform(put("/api/purchase-orders/" + id).header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"note\":\"x\"}"))
                 .andExpect(status().isConflict());
@@ -116,6 +134,32 @@ class PurchaseOrderIntegrationTest {
                 .andExpect(status().isConflict());
         mvc.perform(get("/api/purchase-orders").header("Authorization", tokenFor("cashier")))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Đơn nháp: xóa được từng mặt hàng lỡ thêm nhầm, xóa hết thì đơn trống")
+    void removeLineFromDraft() throws Exception {
+        String admin = tokenFor("admin");
+        long a = JsonPath.<Integer>read(mvc.perform(post("/api/products").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"SP xóa dòng A\",\"salePrice\":20000,\"costPrice\":10000}"))
+                .andReturn().getResponse().getContentAsString(), "$.data.id").longValue();
+        long b = JsonPath.<Integer>read(mvc.perform(post("/api/products").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"SP xóa dòng B\",\"salePrice\":20000,\"costPrice\":5000}"))
+                .andReturn().getResponse().getContentAsString(), "$.data.id").longValue();
+        String created = mvc.perform(post("/api/purchase-orders").header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lines\":[{\"productId\":" + a + ",\"orderedQty\":2},{\"productId\":" + b + ",\"orderedQty\":4}]}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long id = JsonPath.<Integer>read(created, "$.data.id").longValue();
+
+        mvc.perform(delete("/api/purchase-orders/" + id + "/lines/" + a).header("Authorization", admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.lines.length()").value(1))
+                .andExpect(jsonPath("$.data.lines[0].productId").value((int) b))
+                .andExpect(jsonPath("$.data.totalAmount").value(20000.0));
+        mvc.perform(delete("/api/purchase-orders/" + id + "/lines/" + b).header("Authorization", admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DRAFT"))
+                .andExpect(jsonPath("$.data.lines.length()").value(0));
     }
 
     @Test

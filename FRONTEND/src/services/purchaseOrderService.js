@@ -24,6 +24,10 @@ export const purchaseOrderService = {
   async update(id, req) {
     return unwrap(await api.put(`/purchase-orders/${id}`, req));
   },
+  /** Xóa một mặt hàng khỏi đơn nháp, trả về đơn sau khi xóa */
+  async removeLine(id, productId) {
+    return unwrap(await api.delete(`/purchase-orders/${id}/lines/${productId}`));
+  },
   async send(id) {
     return unwrap(await api.post(`/purchase-orders/${id}/send`));
   },

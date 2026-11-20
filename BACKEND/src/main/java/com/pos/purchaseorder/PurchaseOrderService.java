@@ -292,6 +292,20 @@ public class PurchaseOrderService {
         return repository.save(o);
     }
 
+    /** Bỏ một mặt hàng khỏi đơn nháp (lỡ thêm nhầm). Xóa hết thì đơn vẫn là nháp rỗng, chưa gửi được. */
+    @Transactional
+    public PurchaseOrder removeLine(Long id, Long productId) {
+        PurchaseOrder o = find(id);
+        checkBranch(o, currentUserService.getCurrentUser());
+        if (o.getStatus() != PurchaseOrderStatus.DRAFT) {
+            throw new BusinessException("PO_LOCKED", "Chỉ xóa được mặt hàng khi đơn còn nháp", HttpStatus.CONFLICT);
+        }
+        if (!o.getLines().removeIf(l -> Objects.equals(l.getProductId(), productId))) {
+            throw new BusinessException("PO_LINE_NOT_FOUND", "Mặt hàng không có trong đơn", HttpStatus.NOT_FOUND);
+        }
+        return repository.save(o);
+    }
+
     @Transactional
     public PurchaseOrder send(Long id) {
         PurchaseOrder o = find(id);
@@ -304,6 +318,12 @@ public class PurchaseOrderService {
         }
         if (o.getLines().isEmpty()) {
             throw new BusinessException("PO_EMPTY", "Đơn chưa có mặt hàng nào");
+        }
+        if (o.getExpectedDate() == null) {
+            throw new BusinessException("PO_EXPECTED_DATE_REQUIRED", "Chọn ngày giao dự kiến trước khi gửi đơn");
+        }
+        if (o.getExpectedDate().isBefore(LocalDate.now())) {
+            throw new BusinessException("PO_EXPECTED_DATE_PAST", "Ngày giao dự kiến đã qua, chọn lại ngày từ hôm nay trở đi");
         }
         Supplier supplier = supplierRepository.findById(o.getSupplierId())
                 .orElseThrow(() -> new BusinessException("SUPPLIER_NOT_FOUND", "Nhà cung cấp không tồn tại"));
@@ -413,7 +433,12 @@ public class PurchaseOrderService {
             o.setSupplierName(s.getName());
         }
         if (req.note() != null) o.setNote(StringUtils.hasText(req.note()) ? truncate(req.note().trim(), 255) : null);
-        if (req.expectedDate() != null) o.setExpectedDate(req.expectedDate());
+        if (req.expectedDate() != null) {
+            if (req.expectedDate().isBefore(LocalDate.now())) {
+                throw new BusinessException("PO_EXPECTED_DATE_PAST", "Ngày giao dự kiến không được ở quá khứ");
+            }
+            o.setExpectedDate(req.expectedDate());
+        }
         if (req.lines() != null) {
             Map<Long, PurchaseOrderLine> existing = new HashMap<>();
             o.getLines().forEach(l -> existing.put(l.getProductId(), l));

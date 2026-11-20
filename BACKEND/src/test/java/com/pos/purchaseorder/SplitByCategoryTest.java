@@ -111,7 +111,7 @@ class SplitByCategoryTest {
     @Test
     @DisplayName("Gửi đơn: NCC phải bán danh mục của mọi mặt hàng, cùng quy tắc với phiếu nhập tự do")
     void sendRejectsSupplierNotSellingCategory() {
-        setup(1L);
+        setup(1L).setExpectedDate(java.time.LocalDate.now().plusDays(1));
         assertThatThrownBy(() -> service.send(40L))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getCode()).isEqualTo("SUPPLIER_CATEGORY_MISMATCH"))
