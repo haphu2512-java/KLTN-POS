@@ -286,21 +286,50 @@ Sau khi nạp, **khởi động lại backend** để bước đồng bộ mã v
 
 Các file đi kèm trong `data/bhx/`: `bhx_products_scraped.json` là dữ liệu thô, `scrape_bhx.py` là script đã dùng để lấy dữ liệu (chạy trong thư mục đó). Không cần chạy lại chúng.
 
-## Nạp lịch sử bán hàng 90 ngày để demo (tùy chọn)
+## Nạp dữ liệu mẫu đầy đủ để demo (tùy chọn)
 
-Trang Dự báo AI cần lịch sử bán để vẽ biểu đồ và đề xuất nhập hàng. File `data/demo/lich_su_ban_90_ngay.sql` tạo khoảng 15.000 hóa đơn trong 90 ngày gần nhất (đến hôm qua) cho 120 sản phẩm đầu tiên, ở mọi chi nhánh đang hoạt động, kèm ca làm đã đóng và khớp tiền.
+File `data/demo/du_lieu_mau_day_du.sql` sinh khoảng 6 tháng kinh doanh của cả 2 chi nhánh, **kết thúc đúng lúc chạy lệnh** (hôm nay có dữ liệu của các ca đã kết thúc). Vì mọi ngày tháng tính theo `CURDATE()`/`NOW()`, hãy **chạy lại vào tối hôm trước buổi báo cáo** (ví dụ tối 05/12 và tối 22/12/2026) để biểu đồ kéo tới đúng ngày.
+
+Điều kiện: backend đã chạy ít nhất một lần, đã nạp `data/bhx/import_bhx_data.sql` và `data/bhx/nha_cung_cap.sql` (bước 5).
 
 ```bash
-docker exec -i pos-mysql mysql -uroot -p"<DB_ROOT_PASSWORD>" pos_inventory < data/demo/lich_su_ban_90_ngay.sql
+docker exec -i pos-mysql mysql -uroot -p"<DB_ROOT_PASSWORD>" --default-character-set=utf8mb4 pos_inventory < data/demo/du_lieu_mau_day_du.sql
 ```
 
-- Chỉ thêm dữ liệu có ghi chú `[DEMO]`. Chạy lại thì dữ liệu `[DEMO]` cũ được xóa rồi tạo lại.
-- Đặt lại số tồn kho của 120 sản phẩm đó để có hàng "Khẩn cấp", "Sắp hết" và "Còn đủ".
-- Xóa cache dự báo nên không cần khởi động lại backend.
-- Tạo thêm đơn đặt hàng và phiếu nhập mẫu đúng NCC theo danh mục: mỗi chi nhánh, mỗi NCC một đơn đã nhận đủ (phiếu nhập ghi mã đơn gốc) và một đơn "Đã gửi NCC" để thử nhận hàng. Cần chạy `data/bhx/nha_cung_cap.sql` trước nếu database cũ chưa có danh mục NCC, và backend bản mới đã chạy ít nhất một lần (có cột `stock_in.purchase_order_id`).
-- Muốn đổi số ngày hoặc số sản phẩm, sửa `@demo_days` và `@demo_max_products` ở đầu file.
-- Chạy mất khoảng 10 giây.
+PowerShell trên Windows không hỗ trợ dấu `<`. Dùng cách chép file vào container (chạy được ở mọi shell, lấy sẵn mật khẩu root của container):
 
+```bash
+docker cp data/demo/du_lieu_mau_day_du.sql pos-mysql:/tmp/seed.sql
+docker exec pos-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --default-character-set=utf8mb4 pos_inventory < /tmp/seed.sql'
+```
+
+Chạy mất khoảng 1 phút, cuối cùng in số dòng mẫu của từng bảng và tổng doanh thu. Không cần khởi động lại backend (file xóa cache dự báo).
+
+Dữ liệu sinh ra (khoảng 48.000 hóa đơn, 6,3 tỷ đồng doanh thu):
+
+| Màn hình | Dữ liệu |
+|---|---|
+| Báo cáo, Excel | Hóa đơn theo giờ cao điểm (7h, 11-12h, 17-20h), cuối tuần đông hơn, đầu tháng nhận lương, ngày lễ (2/9, 20/10, 20/11, Noel...), cửa hàng tăng trưởng dần; VietQR tăng dần so với tiền mặt |
+| Dự báo AI | ~240 mặt hàng (4 mỗi danh mục) có lịch sử: bán chạy / vừa / chậm, ~12% đang tăng, ~6% đang giảm, mùa vụ theo danh mục (nước giải khát mùa hè, bánh kẹo cuối năm, mì mùa mưa), vài mặt hàng mới về giữa kỳ |
+| Kho hàng | Tồn cuối theo số ngày đủ bán: ~15% cần nhập gấp, ~20% sắp hết, còn lại đủ hàng |
+| Hạn sử dụng | Mọi phiếu nhập có số lô và hạn dùng theo loại hàng; 2 mặt hàng đã quá hạn, vài mặt hàng sắp hết hạn |
+| Đặt hàng, Nhập kho | Mỗi tuần mỗi NCC một đơn (số đặt ≈ số bán tuần trước, làm tròn theo lốc), đúng danh mục NCC; ~1/3 lập từ AI; có đơn đã gửi chờ giao, 1 đơn giao thiếu, 1 đơn bị hủy, đơn nháp từ AI hôm nay; phiếu nhập ghi đơn gốc; nhập rau củ tự do |
+| Ca làm | Mọi ca đã kết thúc đều đã đóng, tiền két khớp với hóa đơn, hoàn tiền và thu chi (chi vặt, nộp quỹ khi két vượt 5 triệu, nhận tiền lẻ); ~4% ca lệch tiền nhỏ đã được duyệt, ca lệch gần đây chờ duyệt |
+| Lịch phân ca | 5 nhân viên mỗi chi nhánh xoay ca, xếp sẵn tới `@plan_until` (31/12/2026) |
+| Khách hàng, Sổ điểm | 420 khách thành viên đăng ký rải rác, tích điểm và đổi điểm đúng quy tắc (1 điểm / 10.000đ, dùng tối đa 50% đơn), số dư khớp sổ điểm |
+| Khuyến mãi | 11 chương trình theo dịp năm 2026 (hè, 2/9, 20/10, 20/11, Black Friday, Giáng sinh, năm mới, thành viên), hóa đơn trong thời gian chạy được áp chương trình giảm nhiều nhất |
+| Trả hàng, Kiểm kê, Điều chuyển, Nhật ký | Trả hàng một phần / toàn bộ có quản lý duyệt; kiểm kê cuối mỗi tháng đã duyệt + 1 phiếu chờ duyệt; điều chuyển giữa chi nhánh; nhật ký mở/đóng ca, nhập kho, hoàn tiền... |
+
+Tài khoản thêm (mật khẩu giống tài khoản `cashier`, tức `SEED_DEFAULT_PASSWORD`): `quanly` (quản lý, mọi chi nhánh) và `thungan.cn<id>` cho chi nhánh chưa có tài khoản thu ngân.
+
+Chạy lại an toàn:
+- Mọi dòng file tạo ra được ghi id vào bảng `demo_seed_rows`. Lần chạy sau xóa đúng các dòng đó rồi tạo lại; hóa đơn, phiếu nhập, ca làm thật không bị đụng tới. Dữ liệu `[DEMO]` của file cũ `lich_su_ban_90_ngay.sql` (đã bỏ) cũng được dọn.
+- Tài khoản, nhân viên và khách hàng mẫu được giữ lại; điểm khách được tính lại từ sổ điểm.
+- Tồn kho của các mặt hàng có lịch sử bán được đặt lại.
+
+Đổi tham số ở đầu file: `@demo_days` (số ngày lịch sử, mặc định 180), `@per_category` (số mặt hàng mỗi danh mục), `@inv_per_day` (số hóa đơn/ngày ở chi nhánh chính), `@member_rate`, `@n_customers`, `@plan_until`.
+
+Ca đang diễn ra lúc chạy lệnh không được tạo, để có thể mở ca và bán thử ngay trên POS.
 ---
 
 ## Bước 6. Chạy ứng dụng quầy (FRONTEND)

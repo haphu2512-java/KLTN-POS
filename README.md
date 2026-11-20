@@ -93,14 +93,14 @@ Database mới chỉ có 8 sản phẩm mẫu. Muốn có 1.949 sản phẩm Bá
 docker exec -i pos-mysql mysql -uroot -p"$DB_ROOT_PASSWORD" pos_inventory < data/bhx/import_bhx_data.sql
 ```
 
-### Dữ liệu bán hàng mẫu 90 ngày (để demo Dự báo AI)
-Database mới chưa có hóa đơn nên trang Dự báo AI, nút "Lập đơn từ đề xuất AI", Báo cáo và file Excel đều trống. Nạp lịch sử bán 90 ngày (có xu hướng tăng/giảm và cuối tuần bán nhiều hơn) bằng:
+### Dữ liệu mẫu đầy đủ ~6 tháng (để demo, bảo vệ khóa luận)
+Database mới chưa có giao dịch nên Báo cáo, Dự báo AI, Ca làm, Đặt hàng... đều trống. Nạp bộ dữ liệu mẫu chạy liên tục tới đúng lúc chạy lệnh (hóa đơn có giờ cao điểm, cuối tuần, ngày lễ, mùa vụ; khách thành viên tích/đổi điểm; khuyến mãi theo dịp; trả hàng; ca làm khớp két; đặt hàng NCC + phiếu nhập có hạn dùng; kiểm kê; lịch phân ca tới 31/12; nhật ký):
 
 ```bash
-docker exec -i pos-mysql mysql -uroot -p"$DB_ROOT_PASSWORD" pos_inventory < data/demo/lich_su_ban_90_ngay.sql
+docker exec -i pos-mysql mysql -uroot -p"$DB_ROOT_PASSWORD" --default-character-set=utf8mb4 pos_inventory < data/demo/du_lieu_mau_day_du.sql
 ```
 
-Script chỉ thêm hóa đơn và ca làm có ghi chú `[DEMO]`, không xóa sản phẩm, tài khoản hay hóa đơn thật, chạy lại nhiều lần được. Nó đặt lại tồn kho của 120 sản phẩm được chọn để có đủ mức "Khẩn cấp / sắp hết / còn đủ", và xóa cache dự báo để trang Dự báo tính lại ngay. Chạy sau khi backend đã chạy lần đầu (và sau khi nạp BHX nếu có).
+Chạy sau khi backend đã chạy lần đầu và đã nạp BHX + NCC. Chạy lại nhiều lần được, chỉ thay dữ liệu mẫu, không đụng giao dịch thật. Chạy lại vào tối hôm trước buổi báo cáo để số liệu kéo tới đúng ngày. Chi tiết ở [`setup.md`](setup.md#nạp-dữ-liệu-mẫu-đầy-đủ-để-demo-tùy-chọn).
 
 Quy tắc mã vạch (`BarcodeRules.java`):
 - Mã EAN-8/UPC-A/EAN-13/ITF-14 thật in trên bao bì (đúng số kiểm tra) được giữ nguyên.

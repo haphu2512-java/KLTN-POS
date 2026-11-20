@@ -9,6 +9,9 @@ import ReturnModal from '../pos/ReturnModal';
 import './ReportPage.css';
 import { toast } from '../../components/common/toastStore';
 
+/** Tab lịch sử hóa đơn chỉ tải các hóa đơn mới nhất (phân trang ở server), không tải toàn bộ lịch sử */
+const RECENT_INVOICE_LIMIT = 300;
+
 export default function ReportPage({
   currentUser,
   branchId,
@@ -76,7 +79,7 @@ export default function ReportPage({
 
   const fetchInvoices = async () => {
     try {
-      const data = await saleService.getInvoices(selectedBranchId);
+      const data = await saleService.getRecentInvoices(selectedBranchId, RECENT_INVOICE_LIMIT);
       setInvoices(data || []);
     } catch (err) {
       console.error('Lỗi khi tải danh sách hóa đơn từ cơ sở dữ liệu:', err);
@@ -87,7 +90,7 @@ export default function ReportPage({
     if (viewMode !== 'invoices') return;
     let isMounted = true;
     saleService
-      .getInvoices(selectedBranchId)
+      .getRecentInvoices(selectedBranchId, RECENT_INVOICE_LIMIT)
       .then((data) => {
         if (isMounted) setInvoices(data || []);
       })
@@ -399,7 +402,7 @@ export default function ReportPage({
             className={`report-period-btn ${viewMode === 'invoices' ? 'active' : ''}`}
             onClick={() => setViewMode('invoices')}
           >
-            Lịch Sử Hóa Đơn & Trả Hàng ({invoices.length})
+            Lịch Sử Hóa Đơn & Trả Hàng ({invoices.length >= RECENT_INVOICE_LIMIT ? `${RECENT_INVOICE_LIMIT} gần nhất` : invoices.length})
           </button>
         </div>
 
